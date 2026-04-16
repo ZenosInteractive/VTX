@@ -1,0 +1,3 @@
+// VTX Inspector application icon
+// Place your .ico file at vtx_tool/resources/inspector.ico
+IDI_ICON1 ICON "../resources/inspector.ico"

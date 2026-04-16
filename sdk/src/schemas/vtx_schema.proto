@@ -1,0 +1,264 @@
+syntax = "proto3";
+
+package cppvtx;
+
+
+option optimize_for = SPEED;
+
+// ==========================================================
+// 1. BASIC MATH TYPES
+// ==========================================================
+
+message Vector {
+  double x = 1;
+  double y = 2;
+  double z = 3;
+}
+
+message Quat {
+  float x = 1;
+  float y = 2;
+  float z = 3;
+  float w = 4;
+}
+
+message Transform {
+  Vector translation = 1;
+  Quat rotation = 2;
+  Vector scale = 3;
+}
+
+message FloatRange {
+  float min = 1;
+  float max = 2;
+  float value_normalized = 3; // Ale
+}
+
+// ==========================================================
+// 2. FLAT ARRAY CONTAINERS (SoA - Structure of Arrays)
+// ==========================================================
+// Optimized storage for massive amounts of similar data.
+// 'Offsets' allow mapping sparse data or associating indices.
+
+message FlatBoolArray { repeated bool data = 1; repeated uint32 offsets = 2; }
+message FlatBytesArray { repeated bytes data = 1; repeated uint32 offsets = 2; }
+message FlatIntArray { repeated sint32 data = 1; repeated uint32 offsets = 2; }
+message FlatInt64Array { repeated sint64 data = 1; repeated uint32 offsets = 2; }
+message FlatFloatArray { repeated float data = 1; repeated uint32 offsets = 2; }
+message FlatDoubleArray { repeated double data = 1; repeated uint32 offsets = 2; }
+message FlatStringArray { repeated string data = 1; repeated uint32 offsets = 2; }
+message FlatVectorArray { repeated Vector data = 1; repeated uint32 offsets = 2; }
+message FlatQuatArray { repeated Quat data = 1; repeated uint32 offsets = 2; }
+message FlatTransformArray { repeated Transform data = 1; repeated uint32 offsets = 2; }
+message FlatRangeArray { repeated FloatRange data = 1; repeated uint32 offsets = 2; }
+
+// Recursive and Map types
+message FlatPropertyContainerArray { repeated PropertyContainer data = 1; repeated uint32 offsets = 2; }
+message FlatMapArray { repeated MapContainer data = 1; repeated uint32 offsets = 2; }
+
+message MapContainer {
+  repeated string keys = 1;
+  repeated PropertyContainer values = 2;
+}
+
+// ==========================================================
+// 3. PROPERTY CONTAINER (Core Data Structure)
+// ==========================================================
+// Generic container capable of holding any game property.
+
+message PropertyContainer {
+
+  int32 type_id = 1;
+  repeated bool bool_properties = 2;
+  // 1. SIGNED 32-BIT (Handles int8, int16, int32)
+  // Use for: Health, Ammo, Score, Grid Coordinates.
+  // Protobuf will compress small numbers (like byte values) automatically.
+  repeated sint32 int32_properties = 3;
+
+  // 3. SIGNED 64-BIT
+  // Use for: Unix Timestamps, Large Offsets.
+  repeated sint64 int64_properties = 4;
+
+
+  // Use for: Health, Mana, Speed, Rotations, small Timers.
+  // Cost: 4 bytes per value.
+  repeated float float_properties = 5;
+
+  // Use for: Precise UTC Timestamps, Large World Positions (Planets/Space), Astronomy.
+  // Cost: 8 bytes per value.
+  repeated double double_properties = 6;
+
+  repeated string string_properties = 7;
+
+  // --- Math Properties ---
+  repeated Transform transform_properties = 8;
+  repeated Vector vector_properties = 9;
+  repeated Quat quat_properties = 10;
+  repeated FloatRange range_properties = 11;
+
+
+  // ==========================================
+  // OPTIMIZED FLAT ARRAYS (SoA)
+  // ==========================================
+
+  // 1. RAW BYTES (formerly UInt8Arrays)
+  // Use for: Raw buffers, Images, Serialized Structs, Byte arrays.
+  // Type: bytes
+  FlatBytesArray byte_array_properties = 12;
+
+  // 2. SIGNED 32-BIT ARRAYS (Merges Int8, Int16, Int32)
+  // Use for: Arrays of HP, Ammo, Scores, IDs.
+  FlatIntArray int32_arrays = 13;
+
+  // 4. 64-BIT ARRAYS
+  FlatInt64Array int64_arrays = 14;
+
+  // 5. FLOATING POINT
+  FlatFloatArray float_arrays = 15;   // Standard gameplay arrays
+  FlatDoubleArray double_arrays = 16; // High precision arrays
+
+  // 6. VECTORS & TRANSFORMS (Math types)
+  FlatVectorArray vector_arrays = 17;
+  FlatQuatArray quat_arrays = 18;
+  FlatTransformArray transform_arrays = 19;
+  FlatRangeArray range_arrays = 20;
+
+  // 7. BOOLEANS
+  FlatBoolArray bool_arrays = 21;
+
+  // 8. STRINGS (Merges Name and String)
+  // Use Manifest to decide if it loads as FName or FString.
+  FlatStringArray string_arrays = 22;
+
+  // --- Recursive & Complex Types ---
+  repeated PropertyContainer any_struct_properties = 23;
+  FlatPropertyContainerArray any_struct_arrays = 24;
+
+  repeated MapContainer map_properties = 25;
+  FlatMapArray map_arrays = 26;
+
+  //content_hash is used for first diff check, if the content has not change between  two frames, the hash will be the same
+  uint64 content_hash = 27;
+
+}
+// ==========================================================
+// 4. FRAME & ACTOR DATA
+// ==========================================================
+message EntityRange {
+  int32 start_index = 1;
+  int32 count = 2;
+}
+// Standard Gameplay Data
+message Bucket {
+  repeated string unique_ids = 1; // Ale
+  repeated PropertyContainer entities = 2; // Ale
+  repeated EntityRange type_ranges = 3; // Ale
+}
+
+// The Unified Frame
+// Represents a single simulation tick.
+message Frame {
+  repeated Bucket data = 1;  // Ale
+}
+
+
+// ==========================================================
+// 5. METADATA & VERSIONING
+// ==========================================================
+
+message VersionInfo {
+  // Controls the binary file structure (Header -> Chunks)
+  uint32 format_major = 1;
+  uint32 format_minor = 2;
+
+  // Controls the logic of the gameplay data (schema)
+  uint32 schema_version = 3;
+}
+
+// 
+message ContextualSchema {
+  string data_indentifier = 1;
+  int32 data_version = 2;
+  string data_version_string = 3;
+  string schema  = 4;
+}
+
+// ==========================================================
+// 6. TIMELINE EVENTS
+// ==========================================================
+// Stored in the Footer for instant UI access without parsing the whole file.
+
+message TimelineEvent {
+  float game_time = 1;          // When it happened
+  string event_type = 2;        // "Kill", "Goal", "Error", "Checkpoint"
+  string label = 3;             // Readable description: "Player1 killed Player2"
+  Vector location = 4;          // 3D World position (for camera jumps)
+  string entity_unique_id = 5; // ID of the actor involved
+}
+
+// ==========================================================
+// 7. TOP LEVEL MESSAGES (File Structure)
+// ==========================================================
+
+// [HEADER] Written once at the START of the file.
+message FileHeader {
+  VersionInfo version = 2;
+  ContextualSchema prop_schema = 3;
+
+  // Replay Identification
+  string replay_uuid = 4;
+  string replay_name = 5;
+  int64 recorded_utc_timestamp = 6;
+
+  // Game Context
+  string custom_json_metadata = 7; // Unstructured extra data // Ale
+}
+
+// [CHUNK] Written REPEATEDLY during the recording stream.
+message FrameChunk {
+  int32 chunk_index = 1;
+
+  // If true, the entire 'frames' payload is compressed (LZ4/Zstd)
+  // and stored in 'compressed_data'.
+  bool is_compressed = 2;
+  bytes compressed_data = 3;
+
+  // If false (uncompressed), frames are stored here directly.
+  repeated Frame frames = 4;
+  repeated bytes compressed_frames = 5;
+}
+
+// [INDEX ENTRY] Helper for the Footer.
+message ChunkIndexEntry {
+  int32 chunk_index = 1;
+  int32 start_frame = 2;
+  int32 end_frame = 3;
+
+  uint64 file_offset = 4;      // Byte offset where the chunk starts
+  uint32 chunk_size_bytes = 5; // Size of the serialized chunk
+}
+
+message ReplayTimeData{
+  repeated uint64 game_time = 1;
+  repeated uint64 created_utc = 2;
+  repeated uint32 gaps = 3;
+  repeated uint32 segments = 4;
+}
+
+// [FOOTER] Written once at the END of the file.
+message FileFooter {
+  int32 total_frames = 1;
+
+  float duration_seconds = 2;
+
+  ReplayTimeData times = 3;
+
+  // Random Access Table (Scrubbing)
+  repeated ChunkIndexEntry chunk_index = 4;
+
+  // UI Events
+  repeated TimelineEvent events = 5;
+
+  // Integrity Check
+  uint64 payload_checksum = 6; // XXHash or CRC64 of the entire payload
+}

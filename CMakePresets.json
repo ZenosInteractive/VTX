@@ -1,0 +1,73 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 25,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "windows-base",
+      "hidden": true,
+      "generator": "Visual Studio 17 2022",
+      "architecture": {
+        "value": "x64",
+        "strategy": "set"
+      },
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/dist"
+      }
+    },
+    {
+      "name": "windows-release",
+      "displayName": "Windows Release",
+      "description": "Full SDK + tools, Release configuration",
+      "inherits": "windows-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "BUILD_VTX_TOOL": "ON"
+      }
+    },
+    {
+      "name": "windows-debug",
+      "displayName": "Windows Debug",
+      "description": "Full SDK + tools, Debug configuration",
+      "inherits": "windows-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "BUILD_VTX_TOOL": "ON"
+      }
+    },
+    {
+      "name": "windows-sdk-only",
+      "displayName": "Windows SDK Only",
+      "description": "SDK libraries only, no tools",
+      "inherits": "windows-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "BUILD_VTX_TOOL": "OFF"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "windows-release",
+      "displayName": "Release Build",
+      "configurePreset": "windows-release",
+      "configuration": "Release"
+    },
+    {
+      "name": "windows-debug",
+      "displayName": "Debug Build",
+      "configurePreset": "windows-debug",
+      "configuration": "Debug"
+    },
+    {
+      "name": "windows-sdk-only",
+      "displayName": "SDK Only Build",
+      "configurePreset": "windows-sdk-only",
+      "configuration": "Release"
+    }
+  ]
+}

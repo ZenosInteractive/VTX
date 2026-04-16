@@ -1,0 +1,55 @@
+# Build output
+build/
+dist/
+out/
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+install_manifest.txt
+CMakeUserPresets.json
+
+# Generated code (rebuilt by CMake from schemas/)
+sdk/src/vtx_common/src/generated/
+
+# Sample content (large binary replay data, should not be tracked)
+#samples/content/
+
+# Build intermediates
+*.obj
+*.o
+*.pdb
+*.exp
+*.ilk
+
+# ImGui runtime config
+imgui.ini
+
+# Visual Studio
+.vs/
+*.vcxproj.user
+*.suo
+*.sdf
+*.opensdf
+
+# JetBrains
+.idea/
+
+# VS Code
+.vscode/
+
+# Vim/Neovim
+*.swp
+*.swo
+*~
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store

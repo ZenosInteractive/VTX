@@ -1,0 +1,3937 @@
+{
+  "version": "1.0.0",
+  "buckets": [
+    "entity"
+  ],
+  "property_mapping": [
+    {
+      "struct": "Object",
+      "values": [
+        {
+          "name": "UniqueId",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Object",
+            "displayName": "UniqueId",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "Name",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Object",
+            "displayName": "Name",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        }
+      ]
+    },
+    {
+      "struct": "Entity",
+      "values": [
+        {
+          "name": "UniqueId",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Entity",
+            "displayName": "UniqueId",
+            "tooltip": "Use memory ptr",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "ActorId",
+          "structType": "",
+          "typeId": "Int64",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "int64",
+            "keyType": "",
+            "category": "Entity",
+            "displayName": "ActorId",
+            "tooltip": "Actor IDs taken from GObjects table",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "Identifier",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Entity",
+            "displayName": "Identifier",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "ClassIdentifier",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Entity",
+            "displayName": "ClassIdentifier",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "DisplayName",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Entity",
+            "displayName": "DisplayName",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "OwnerId",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Entity",
+            "displayName": "OwnerId",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "Hidden",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "Entity",
+            "displayName": "Hidden",
+            "tooltip": "NOT USED YET",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "Transform",
+          "structType": "",
+          "typeId": "Transform",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "transform",
+            "keyType": "",
+            "category": "Entity",
+            "displayName": "Transform",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "ArcheIdentifier",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Entity",
+            "displayName": "ArcheIdentifier",
+            "tooltip": "Can be often related to the asset name",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        }
+      ]
+    },
+    {
+      "struct": "Material",
+      "values": [
+        {
+          "name": "UniqueId",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Material",
+            "displayName": "UniqueId",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "ActorId",
+          "structType": "",
+          "typeId": "Int64",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "int64",
+            "keyType": "",
+            "category": "Material",
+            "displayName": "ActorId",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "Identifier",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Material",
+            "displayName": "Identifier",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "ClassIdentifier",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Material",
+            "displayName": "ClassIdentifier",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "DisplayName",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Material",
+            "displayName": "DisplayName",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "OwnerId",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Material",
+            "displayName": "OwnerId",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "Hidden",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "Material",
+            "displayName": "Hidden",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "ScalarParams",
+          "structType": "",
+          "typeId": "Float",
+          "keyId": "None",
+          "containerType": "array",
+          "meta": {
+            "type": "float",
+            "keyType": "",
+            "category": "Material",
+            "displayName": "ScalarParams",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "TextureParams",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "array",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Material",
+            "displayName": "TextureParams",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "VectorParams",
+          "structType": "",
+          "typeId": "Vector",
+          "keyId": "None",
+          "containerType": "array",
+          "meta": {
+            "type": "vector",
+            "keyType": "",
+            "category": "Material",
+            "displayName": "VectorParams",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "Name",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Material",
+            "displayName": "Name",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "ArcheIdentifier",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Material",
+            "displayName": "ArcheIdentifier",
+            "tooltip": "Can be often related to the asset name",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        }
+      ]
+    },
+    {
+      "struct": "CarSkin",
+      "values": [
+        {
+          "name": "BodyAsset",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "CarSkin",
+            "displayName": "BodyAsset",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "SkinAsset",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "CarSkin",
+            "displayName": "SkinAsset",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "WheelAsset",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "CarSkin",
+            "displayName": "WheelAsset",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "Wheels",
+          "structType": "Entity",
+          "typeId": "Struct",
+          "keyId": "None",
+          "containerType": "array",
+          "meta": {
+            "type": "struct",
+            "keyType": "",
+            "category": "CarSkin",
+            "displayName": "Wheels",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "Antennas",
+          "structType": "Entity",
+          "typeId": "Struct",
+          "keyId": "None",
+          "containerType": "array",
+          "meta": {
+            "type": "struct",
+            "keyType": "",
+            "category": "CarSkin",
+            "displayName": "Antennas",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        }
+      ]
+    },
+    {
+      "struct": "FX_Ball",
+      "values": [
+        {
+          "name": "UniqueId",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "FX_Ball",
+            "displayName": "UniqueId",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "ActorId",
+          "structType": "",
+          "typeId": "Int64",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "int64",
+            "keyType": "",
+            "category": "FX_Ball",
+            "displayName": "ActorId",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "Identifier",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "FX_Ball",
+            "displayName": "Identifier",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "ClassIdentifier",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "FX_Ball",
+            "displayName": "ClassIdentifier",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "DisplayName",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "FX_Ball",
+            "displayName": "DisplayName",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "OwnerId",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "FX_Ball",
+            "displayName": "OwnerId",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "Hidden",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "FX_Ball",
+            "displayName": "Hidden",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "Transform",
+          "structType": "",
+          "typeId": "Transform",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "transform",
+            "keyType": "",
+            "category": "Entity",
+            "displayName": "Transform",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "bStatic",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "FX_Ball",
+            "displayName": "bStatic",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "bHidden",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "FX_Ball",
+            "displayName": "bHidden",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "bHiddenSelf",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "FX_Ball",
+            "displayName": "bHiddenSelf",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "bNoDelete",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "FX_Ball",
+            "displayName": "bNoDelete",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "bDeleteMe",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "FX_Ball",
+            "displayName": "bDeleteMe",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "bIsMoving",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "FX_Ball",
+            "displayName": "bIsMoving",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "SuperSonicSpeed",
+          "structType": "",
+          "typeId": "Float",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "float",
+            "keyType": "",
+            "category": "FX_Ball",
+            "displayName": "SuperSonicSpeed",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "MaxGoalProximityDistance",
+          "structType": "",
+          "typeId": "Float",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "float",
+            "keyType": "",
+            "category": "FX_Ball",
+            "displayName": "MaxGoalProximityDistance",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "BallFadeInSpeed",
+          "structType": "",
+          "typeId": "Float",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "float",
+            "keyType": "",
+            "category": "FX_Ball",
+            "displayName": "BallFadeInSpeed",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "BallFadeOutSpeed",
+          "structType": "",
+          "typeId": "Float",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "float",
+            "keyType": "",
+            "category": "FX_Ball",
+            "displayName": "BallFadeOutSpeed",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "TrailOpacityLerpSpeed",
+          "structType": "",
+          "typeId": "Float",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "float",
+            "keyType": "",
+            "category": "FX_Ball",
+            "displayName": "TrailOpacityLerpSpeed",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "CurrentTrailOpacity",
+          "structType": "",
+          "typeId": "Float",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "float",
+            "keyType": "",
+            "category": "FX_Ball",
+            "displayName": "CurrentTrailOpacity",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "BallFadeSpeed",
+          "structType": "",
+          "typeId": "Float",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "float",
+            "keyType": "",
+            "category": "FX_Ball",
+            "displayName": "BallFadeSpeed",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "BallFadeOpacity",
+          "structType": "",
+          "typeId": "Float",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "float",
+            "keyType": "",
+            "category": "FX_Ball",
+            "displayName": "BallFadeOpacity",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "ShockwaveParamMin",
+          "structType": "",
+          "typeId": "Float",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "float",
+            "keyType": "",
+            "category": "FX_Ball",
+            "displayName": "ShockwaveParamMin",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "ShockwaveParamMax",
+          "structType": "",
+          "typeId": "Float",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "float",
+            "keyType": "",
+            "category": "FX_Ball",
+            "displayName": "ShockwaveParamMax",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "ShockwaveParamTime",
+          "structType": "",
+          "typeId": "Float",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "float",
+            "keyType": "",
+            "category": "FX_Ball",
+            "displayName": "ShockwaveParamTime",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "TouchingWorldTime",
+          "structType": "",
+          "typeId": "Float",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "float",
+            "keyType": "",
+            "category": "FX_Ball",
+            "displayName": "TouchingWorldTime",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "bInAir",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "FX_Ball",
+            "displayName": "bInAir",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "bSuperSonic",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "FX_Ball",
+            "displayName": "bSuperSonic",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "CurrentTrailDilation",
+          "structType": "",
+          "typeId": "Float",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "float",
+            "keyType": "",
+            "category": "FX_Ball",
+            "displayName": "CurrentTrailDilation",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "MaxTrailDilation",
+          "structType": "",
+          "typeId": "Float",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "float",
+            "keyType": "",
+            "category": "FX_Ball",
+            "displayName": "MaxTrailDilation",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "ArcheIdentifier",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "FX_Ball",
+            "displayName": "ArcheIdentifier",
+            "tooltip": "Can be often related to the asset name",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        }
+      ]
+    },
+    {
+      "struct": "FX_Car",
+      "values": [
+        {
+          "name": "UniqueId",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "FX_Car",
+            "displayName": "UniqueId",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "ActorId",
+          "structType": "",
+          "typeId": "Int64",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "int64",
+            "keyType": "",
+            "category": "FX_Car",
+            "displayName": "ActorId",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "Identifier",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "FX_Car",
+            "displayName": "Identifier",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "ClassIdentifier",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "FX_Car",
+            "displayName": "ClassIdentifier",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "DisplayName",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "FX_Car",
+            "displayName": "DisplayName",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "OwnerId",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "FX_Car",
+            "displayName": "OwnerId",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "Hidden",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "FX_Car",
+            "displayName": "Hidden",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "Transform",
+          "structType": "",
+          "typeId": "Transform",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "transform",
+            "keyType": "",
+            "category": "Entity",
+            "displayName": "Transform",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "ContactPhysMat",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "FX_Car",
+            "displayName": "ContactPhysMat",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "bThrottle",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "FX_Car",
+            "displayName": "bThrottle",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "bInAir",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "FX_Car",
+            "displayName": "bInAir",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "bBrake",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "FX_Car",
+            "displayName": "bBrake",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "bWasBoosting",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "FX_Car",
+            "displayName": "bWasBoosting",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "bWasBoostFlying",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "FX_Car",
+            "displayName": "bWasBoostFlying",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "bWasSuperSonic",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "FX_Car",
+            "displayName": "bWasSuperSonic",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "bWasOnWall",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "FX_Car",
+            "displayName": "bWasOnWall",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "bEnabled",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "FX_Car",
+            "displayName": "bEnabled",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "bPreferSimulatedState",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "FX_Car",
+            "displayName": "bPreferSimulatedState",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "bHidden",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "FX_Car",
+            "displayName": "bHidden",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "bIsMoving",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "FX_Car",
+            "displayName": "bIsMoving",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "WheelEffectsParticle",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "FX_Car",
+            "displayName": "WheelEffectsParticle",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "BoostGlow",
+          "structType": "",
+          "typeId": "Float",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "float",
+            "keyType": "",
+            "category": "FX_Car",
+            "displayName": "BoostGlow",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "ArcheIdentifier",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "FX_Car",
+            "displayName": "ArcheIdentifier",
+            "tooltip": "Can be often related to the asset name",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        }
+      ]
+    },
+    {
+      "struct": "Ball",
+      "values": [
+        {
+          "name": "UniqueId",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Ball",
+            "displayName": "UniqueId",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "ActorId",
+          "structType": "",
+          "typeId": "Int64",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "int64",
+            "keyType": "",
+            "category": "Ball",
+            "displayName": "ActorId",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "Identifier",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Ball",
+            "displayName": "Identifier",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "ClassIdentifier",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Ball",
+            "displayName": "ClassIdentifier",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "DisplayName",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Ball",
+            "displayName": "DisplayName",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "OwnerId",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Ball",
+            "displayName": "OwnerId",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "Hidden",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "Ball",
+            "displayName": "Hidden",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "Transform",
+          "structType": "",
+          "typeId": "Transform",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "transform",
+            "keyType": "",
+            "category": "Ball",
+            "displayName": "Transform",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "Touching",
+          "structType": "Object",
+          "typeId": "Struct",
+          "keyId": "None",
+          "containerType": "array",
+          "meta": {
+            "type": "struct",
+            "keyType": "",
+            "category": "Ball",
+            "displayName": "Touching",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "ArcheIdentifier",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Ball",
+            "displayName": "ArcheIdentifier",
+            "tooltip": "Can be often related to the asset name",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        }
+      ]
+    },
+    {
+      "struct": "VehiclePickup_Boost",
+      "values": [
+        {
+          "name": "UniqueId",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "VehiclePickup_Boost",
+            "displayName": "UniqueId",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "ActorId",
+          "structType": "",
+          "typeId": "Int64",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "int64",
+            "keyType": "",
+            "category": "VehiclePickup_Boost",
+            "displayName": "ActorId",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "Identifier",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "VehiclePickup_Boost",
+            "displayName": "Identifier",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "ClassIdentifier",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "VehiclePickup_Boost",
+            "displayName": "ClassIdentifier",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "DisplayName",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "VehiclePickup_Boost",
+            "displayName": "DisplayName",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "OwnerId",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "VehiclePickup_Boost",
+            "displayName": "OwnerId",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "Hidden",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "VehiclePickup_Boost",
+            "displayName": "Hidden",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "Transform",
+          "structType": "",
+          "typeId": "Transform",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "transform",
+            "keyType": "",
+            "category": "VehiclePickup_Boost",
+            "displayName": "Transform",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "NoPickup",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "VehiclePickup_Boost",
+            "displayName": "NoPickup",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "NetRelevant",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "VehiclePickup_Boost",
+            "displayName": "NetRelevant",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "BoostAmount",
+          "structType": "",
+          "typeId": "Float",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "float",
+            "keyType": "",
+            "category": "VehiclePickup_Boost",
+            "displayName": "BoostAmount",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "ArcheIdentifier",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "VehiclePickup_Boost",
+            "displayName": "ArcheIdentifier",
+            "tooltip": "Can be often related to the asset name",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        }
+      ]
+    },
+    {
+      "struct": "Car",
+      "values": [
+        {
+          "name": "UniqueId",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Car",
+            "displayName": "UniqueId",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "ActorId",
+          "structType": "",
+          "typeId": "Int64",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "int64",
+            "keyType": "",
+            "category": "Car",
+            "displayName": "ActorId",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "Identifier",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Car",
+            "displayName": "Identifier",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "ClassIdentifier",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Car",
+            "displayName": "ClassIdentifier",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "DisplayName",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Car",
+            "displayName": "DisplayName",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "Transform",
+          "structType": "",
+          "typeId": "Transform",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "transform",
+            "keyType": "",
+            "category": "Entity",
+            "displayName": "Transform",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "OwnerId",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Car",
+            "displayName": "OwnerId",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "Hidden",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "Car",
+            "displayName": "Hidden",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "Vector",
+          "structType": "",
+          "typeId": "Vector",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "vector",
+            "keyType": "",
+            "category": "Car",
+            "displayName": "Vector",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "CarSkin",
+          "structType": "CarSkin",
+          "typeId": "Struct",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "struct",
+            "keyType": "",
+            "category": "Car",
+            "displayName": "CarSkin",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "Loadout",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "array",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Car",
+            "displayName": "Loadout",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "ArcheIdentifier",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Car",
+            "displayName": "ArcheIdentifier",
+            "tooltip": "Can be often related to the asset name",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "Boost",
+          "structType": "CarBoost",
+          "typeId": "Struct",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "struct",
+            "keyType": "",
+            "category": "Car",
+            "displayName": "Boost",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "LocalCollisionOffset",
+          "structType": "",
+          "typeId": "Vector",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "vector",
+            "keyType": "",
+            "category": "Car",
+            "displayName": "LocalCollisionOffset",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "LocalCollisionExtent",
+          "structType": "",
+          "typeId": "Vector",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "vector",
+            "keyType": "",
+            "category": "Car",
+            "displayName": "LocalCollisionExtent",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "LastBallTouchFrame",
+          "structType": "",
+          "typeId": "Int32",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "int32",
+            "keyType": "",
+            "category": "Car",
+            "displayName": "LastBallTouchFrame",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "LastBallImpactFrame",
+          "structType": "",
+          "typeId": "Int32",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "int32",
+            "keyType": "",
+            "category": "Car",
+            "displayName": "LastBallImpactFrame",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        }
+      ]
+    },
+    {
+      "struct": "Player",
+      "values": [
+        {
+          "name": "UniqueId",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Player",
+            "displayName": "UniqueId",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "ActorId",
+          "structType": "",
+          "typeId": "Int64",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "int64",
+            "keyType": "",
+            "category": "Player",
+            "displayName": "ActorId",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "Identifier",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Player",
+            "displayName": "Identifier",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "ClassIdentifier",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Player",
+            "displayName": "ClassIdentifier",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "DisplayName",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Player",
+            "displayName": "DisplayName",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "OwnerId",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Player",
+            "displayName": "OwnerId",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "Hidden",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "Player",
+            "displayName": "Hidden",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "MatchScore",
+          "structType": "",
+          "typeId": "Int32",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "int32",
+            "keyType": "",
+            "category": "Player",
+            "displayName": "MatchScore",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "MatchGoals",
+          "structType": "",
+          "typeId": "Int32",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "int32",
+            "keyType": "",
+            "category": "Player",
+            "displayName": "MatchGoals",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "MatchOwnGoals",
+          "structType": "",
+          "typeId": "Int32",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "int32",
+            "keyType": "",
+            "category": "Player",
+            "displayName": "MatchOwnGoals",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "MatchAssists",
+          "structType": "",
+          "typeId": "Int32",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "int32",
+            "keyType": "",
+            "category": "Player",
+            "displayName": "MatchAssists",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "MatchSaves",
+          "structType": "",
+          "typeId": "Int32",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "int32",
+            "keyType": "",
+            "category": "Player",
+            "displayName": "MatchSaves",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "MatchShots",
+          "structType": "",
+          "typeId": "Int32",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "int32",
+            "keyType": "",
+            "category": "Player",
+            "displayName": "MatchShots",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "MatchDemolishes",
+          "structType": "",
+          "typeId": "Int32",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "int32",
+            "keyType": "",
+            "category": "Player",
+            "displayName": "MatchDemolishes",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "MatchBonusXP",
+          "structType": "",
+          "typeId": "Int32",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "int32",
+            "keyType": "",
+            "category": "Player",
+            "displayName": "MatchBonusXP",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "MatchBreakoutDamage",
+          "structType": "",
+          "typeId": "Int32",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "int32",
+            "keyType": "",
+            "category": "Player",
+            "displayName": "MatchBreakoutDamage",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "PlayerName",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Player",
+            "displayName": "PlayerName",
+            "tooltip": "wstring",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "CarUniqueId",
+          "structType": "",
+          "typeId": "Int64",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "int64",
+            "keyType": "",
+            "category": "Player",
+            "displayName": "CarUniqueId",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "IsAlive",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "Player",
+            "displayName": "IsAlive",
+            "tooltip": "Infer from CarUniqueId ptr?",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "TeamUniqueId",
+          "structType": "",
+          "typeId": "Int64",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "int64",
+            "keyType": "",
+            "category": "Player",
+            "displayName": "TeamUniqueId",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "ArcheIdentifier",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Player",
+            "displayName": "ArcheIdentifier",
+            "tooltip": "Can be often related to the asset name",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "PlayerGoalExplosion",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Player",
+            "displayName": "PlayerGoalExplosion",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        }
+      ]
+    },
+    {
+      "struct": "Team",
+      "values": [
+        {
+          "name": "UniqueId",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Team",
+            "displayName": "UniqueId",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "ActorId",
+          "structType": "",
+          "typeId": "Int64",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "int64",
+            "keyType": "",
+            "category": "Team",
+            "displayName": "ActorId",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "Identifier",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Team",
+            "displayName": "Identifier",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "ClassIdentifier",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Team",
+            "displayName": "ClassIdentifier",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "DisplayName",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Team",
+            "displayName": "DisplayName",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "Hidden",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "Team",
+            "displayName": "Hidden",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "OwnerId",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Team",
+            "displayName": "OwnerId",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "Score",
+          "structType": "",
+          "typeId": "Int32",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "int32",
+            "keyType": "",
+            "category": "Team",
+            "displayName": "Score",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "Index",
+          "structType": "",
+          "typeId": "Int32",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "int32",
+            "keyType": "",
+            "category": "Team",
+            "displayName": "Index",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "CarColorSet",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Team",
+            "displayName": "CarColorSet",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "CustomName",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Team",
+            "displayName": "CustomName",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "ClubId",
+          "structType": "",
+          "typeId": "Int64",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "int64",
+            "keyType": "",
+            "category": "Team",
+            "displayName": "ClubId",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "Logo",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Team",
+            "displayName": "Logo",
+            "tooltip": "Placeholder",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "Forfeited",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "Team",
+            "displayName": "Forfeited",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "ArcheIdentifier",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Team",
+            "displayName": "ArcheIdentifier",
+            "tooltip": "Can be often related to the asset name",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        }
+      ]
+    },
+    {
+      "struct": "Game",
+      "values": [
+        {
+          "name": "UniqueId",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Game",
+            "displayName": "UniqueId",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "ActorId",
+          "structType": "",
+          "typeId": "Int64",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "int64",
+            "keyType": "",
+            "category": "Game",
+            "displayName": "ActorId",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "Identifier",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Game",
+            "displayName": "Identifier",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "ClassIdentifier",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Game",
+            "displayName": "ClassIdentifier",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "DisplayName",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Game",
+            "displayName": "DisplayName",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "Hidden",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "Game",
+            "displayName": "Hidden",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "OwnerId",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Game",
+            "displayName": "OwnerId",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "RealTimeSeconds",
+          "structType": "",
+          "typeId": "Float",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "float",
+            "keyType": "",
+            "category": "TFrame",
+            "displayName": "RealTimeSeconds",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "RealDeltaSeconds",
+          "structType": "",
+          "typeId": "Float",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "float",
+            "keyType": "",
+            "category": "TFrame",
+            "displayName": "RealDeltaSeconds",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "TimeSeconds",
+          "structType": "",
+          "typeId": "Float",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "float",
+            "keyType": "",
+            "category": "TFrame",
+            "displayName": "TimeSeconds",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "GameTimeRemaining",
+          "structType": "",
+          "typeId": "Float",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "float",
+            "keyType": "",
+            "category": "Game",
+            "displayName": "GameTimeRemaining",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "SecondsRemaining",
+          "structType": "",
+          "typeId": "Int32",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "int32",
+            "keyType": "",
+            "category": "Game",
+            "displayName": "SecondsRemaining",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "WaitTimeRemaining",
+          "structType": "",
+          "typeId": "Float",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "float",
+            "keyType": "",
+            "category": "Game",
+            "displayName": "WaitTimeRemaining",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "TotalGameTimePlayed",
+          "structType": "",
+          "typeId": "Float",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "float",
+            "keyType": "",
+            "category": "Game",
+            "displayName": "TotalGameTimePlayed",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "OvertimeTimePlayed",
+          "structType": "",
+          "typeId": "Float",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "float",
+            "keyType": "",
+            "category": "Game",
+            "displayName": "OvertimeTimePlayed",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "ScoringPlayerUniqueId",
+          "structType": "",
+          "typeId": "Int64",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "int64",
+            "keyType": "",
+            "category": "Game",
+            "displayName": "ScoringPlayerUniqueId",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "RoundNum",
+          "structType": "",
+          "typeId": "Int32",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "int32",
+            "keyType": "",
+            "category": "Game",
+            "displayName": "RoundNum",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "ShouldSpawnGoalIndicator",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "Game",
+            "displayName": "ShouldSpawnGoalIndicator",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "RandomBallSpawnPoint",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "Game",
+            "displayName": "RandomBallSpawnPoint",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "RoundActive",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "Game",
+            "displayName": "RoundActive",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "PlayReplays",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "Game",
+            "displayName": "PlayReplays",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "BallHasBeenHit",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "Game",
+            "displayName": "BallHasBeenHit",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "OverTime",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "Game",
+            "displayName": "OverTime",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "UnlimitedTime",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "Game",
+            "displayName": "UnlimitedTime",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "GoalsEnabled",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "Game",
+            "displayName": "GoalsEnabled",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "NoContest",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "Game",
+            "displayName": "NoContest",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "DisableGoalDelay",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "Game",
+            "displayName": "DisableGoalDelay",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "ShowNoScorerGoalMessage",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "Game",
+            "displayName": "ShowNoScorerGoalMessage",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "MatchEnded",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "Game",
+            "displayName": "MatchEnded",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "FullMatchWinnerDecided",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "Game",
+            "displayName": "FullMatchWinnerDecided",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "DisableCrowdSound",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "Game",
+            "displayName": "DisableCrowdSound",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "ShowIntroScene",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "Game",
+            "displayName": "ShowIntroScene",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "ReadyToStartGame",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "Game",
+            "displayName": "ReadyToStartGame",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "ClubMatch",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "Game",
+            "displayName": "ClubMatch",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "FullClubMatch",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "Game",
+            "displayName": "FullClubMatch",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "MatchCreatorAdminEnabled",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "Game",
+            "displayName": "MatchCreatorAdminEnabled",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "CanDropOnlineRewards",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "Game",
+            "displayName": "CanDropOnlineRewards",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "AllowHonorDuels",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "Game",
+            "displayName": "AllowHonorDuels",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "ThistleMatch",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "Game",
+            "displayName": "ThistleMatch",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "ArcheIdentifier",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Game",
+            "displayName": "ArcheIdentifier",
+            "tooltip": "Can be often related to the asset name",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        }
+      ]
+    },
+    {
+      "struct": "CarBoost",
+      "values": [
+        {
+          "name": "UniqueId",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "CarBoost",
+            "displayName": "UniqueId",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "ActorId",
+          "structType": "",
+          "typeId": "Int64",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "int64",
+            "keyType": "",
+            "category": "CarBoost",
+            "displayName": "ActorId",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "Identifier",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "CarBoost",
+            "displayName": "Identifier",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "ClassIdentifier",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "CarBoost",
+            "displayName": "ClassIdentifier",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "DisplayName",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "CarBoost",
+            "displayName": "DisplayName",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "OwnerId",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "CarBoost",
+            "displayName": "OwnerId",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "Hidden",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "CarBoost",
+            "displayName": "Hidden",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "ArcheIdentifier",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "CarBoost",
+            "displayName": "ArcheIdentifier",
+            "tooltip": "Can be often related to the asset name",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "MaxBoostAmount",
+          "structType": "",
+          "typeId": "Float",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "float",
+            "keyType": "",
+            "category": "CarBoost",
+            "displayName": "MaxBoostAmount",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "CurrentBoostAmount",
+          "structType": "",
+          "typeId": "Float",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "float",
+            "keyType": "",
+            "category": "CarBoost",
+            "displayName": "CurrentBoostAmount",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "BoostUsed",
+          "structType": "",
+          "typeId": "Float",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "float",
+            "keyType": "",
+            "category": "CarBoost",
+            "displayName": "BoostUsed",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        }
+      ]
+    },
+    {
+      "struct": "Explosion",
+      "values": [
+        {
+          "name": "UniqueId",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Explosion",
+            "displayName": "UniqueId",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "ActorId",
+          "structType": "",
+          "typeId": "Int64",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "int64",
+            "keyType": "",
+            "category": "Explosion",
+            "displayName": "ActorId",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "Identifier",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Explosion",
+            "displayName": "Identifier",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "ClassIdentifier",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Explosion",
+            "displayName": "ClassIdentifier",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "DisplayName",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Explosion",
+            "displayName": "DisplayName",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "OwnerId",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Explosion",
+            "displayName": "OwnerId",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "Hidden",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "Explosion",
+            "displayName": "Hidden",
+            "tooltip": "Inlined from Entity",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "ArcheIdentifier",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "string",
+            "keyType": "",
+            "category": "Explosion",
+            "displayName": "ArcheIdentifier",
+            "tooltip": "Can be often related to the asset name",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "Transform",
+          "structType": "",
+          "typeId": "Transform",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "transform",
+            "keyType": "",
+            "category": "Entity",
+            "displayName": "Transform",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "Scale",
+          "structType": "",
+          "typeId": "Vector",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "vector",
+            "keyType": "",
+            "category": "Explosion",
+            "displayName": "Scale",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "ScoringPriTAUniqueId",
+          "structType": "",
+          "typeId": "Int64",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "int64",
+            "keyType": "",
+            "category": "Explosion",
+            "displayName": "ScoringPriTAUniqueId",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "StartRadius",
+          "structType": "",
+          "typeId": "Float",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "float",
+            "keyType": "",
+            "category": "Explosion",
+            "displayName": "StartRadius",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "EndRadius",
+          "structType": "",
+          "typeId": "Float",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "float",
+            "keyType": "",
+            "category": "Explosion",
+            "displayName": "EndRadius",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "Speed",
+          "structType": "",
+          "typeId": "Float",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "float",
+            "keyType": "",
+            "category": "Explosion",
+            "displayName": "Speed",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "Falloff",
+          "structType": "",
+          "typeId": "Float",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "float",
+            "keyType": "",
+            "category": "Explosion",
+            "displayName": "Falloff",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "PassThroughWorldGeometry",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "bool",
+            "keyType": "",
+            "category": "Explosion",
+            "displayName": "PassThroughWorldGeometry",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "LifeTime",
+          "structType": "",
+          "typeId": "Float",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "float",
+            "keyType": "",
+            "category": "Explosion",
+            "displayName": "LifeTime",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        },
+        {
+          "name": "LifeSpan",
+          "structType": "",
+          "typeId": "Float",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": {
+            "type": "float",
+            "keyType": "",
+            "category": "Explosion",
+            "displayName": "LifeSpan",
+            "tooltip": "",
+            "defaultValue": "",
+            "version": 1,
+            "fixedArrayDim": 1
+          }
+        }
+      ]
+    }
+  ]
+}

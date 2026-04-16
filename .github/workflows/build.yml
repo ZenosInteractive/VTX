@@ -1,0 +1,22 @@
+name: Build SDK
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure CMake
+        run: cmake -S . -B build -A x64 -DBUILD_VTX_TOOL=OFF
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Install
+        run: cmake --install build --config Release --prefix dist

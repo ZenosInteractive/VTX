@@ -1,0 +1,225 @@
+// vtx_schema.fbs
+namespace fbsvtx;
+
+struct Vector {
+  x: double;
+  y: double;
+  z: double;
+}
+
+struct Quat {
+  x: float;
+  y: float;
+  z: float;
+  w: float;
+}
+
+struct Transform {
+  translation: Vector;
+  rotation: Quat;
+  scale: Vector;
+}
+
+struct FloatRange {
+  min: float;
+  max: float;
+  value_normalized: float;
+}
+
+// ==========================================================
+// 2. FLAT ARRAY CONTAINERS (SoA)
+// ==========================================================
+
+table FlatBoolArray      { data: [bool];   offsets: [uint]; }
+table FlatBytesArray     { data: [ubyte];  offsets: [uint]; }
+table FlatIntArray       { data: [int];    offsets: [uint]; } // sint32 -> int
+table FlatInt64Array     { data: [long];   offsets: [uint]; } // sint64 -> long
+table FlatFloatArray     { data: [float];  offsets: [uint]; }
+table FlatDoubleArray    { data: [double]; offsets: [uint]; }
+table FlatStringArray    { data: [string]; offsets: [uint]; }
+
+// Arrays de tipos matemáticos (usando los structs definidos arriba)
+table FlatVectorArray    { data: [Vector];    offsets: [uint]; }
+table FlatQuatArray      { data: [Quat];      offsets: [uint]; }
+table FlatTransformArray { data: [Transform]; offsets: [uint]; }
+table FlatRangeArray     { data: [FloatRange];offsets: [uint]; }
+
+table FlatPropertyContainerArray { data: [PropertyContainer]; offsets: [uint]; }
+table FlatMapArray               { data: [MapContainer];      offsets: [uint]; }
+
+table MapContainer {
+  keys: [string];
+  values: [PropertyContainer];
+}
+
+// ==========================================================
+// 3. PROPERTY CONTAINER (Core Data Structure)
+// ==========================================================
+
+table PropertyContainer {
+
+  type_id:int;
+  
+  bool_properties: [bool];
+  
+  // 1. SIGNED 32-BIT (Handles int8, int16, int32)
+  int32_properties: [int];
+  
+  // 3. SIGNED 64-BIT
+  int64_properties: [long];
+  
+  // Floating Point
+  float_properties: [float];
+  double_properties: [double];
+  
+  string_properties: [string];
+  
+  // --- Math Properties (Structs) ---
+  transform_properties: [Transform];
+  vector_properties: [Vector];
+  quat_properties: [Quat];
+  range_properties: [FloatRange];
+
+  // ==========================================
+  // OPTIMIZED FLAT ARRAYS (SoA)
+  // ==========================================
+  
+  // 1. RAW BYTES
+  byte_array_properties: FlatBytesArray;
+
+  // 2. NUMERIC ARRAYS
+  int32_arrays: FlatIntArray;
+  int64_arrays: FlatInt64Array;
+  
+  // 5. FLOATING POINT ARRAYS
+  float_arrays: FlatFloatArray;
+  double_arrays: FlatDoubleArray;
+
+  // 6. VECTORS & TRANSFORMS
+  vector_arrays: FlatVectorArray;
+  quat_arrays: FlatQuatArray;
+  transform_arrays: FlatTransformArray;
+  range_arrays: FlatRangeArray;
+
+  // 7. BOOLEANS
+  bool_arrays: FlatBoolArray;
+
+  // 8. STRINGS
+  string_arrays: FlatStringArray;
+
+  // --- Recursive & Complex Types ---
+  any_struct_properties: [PropertyContainer];
+  any_struct_arrays: FlatPropertyContainerArray;
+
+  map_properties: [MapContainer];
+  map_arrays: FlatMapArray;
+  
+    //content_hash is used for first diff check, if the content has not change between  two frames, the hash will be the same
+  content_hash:ulong;
+}
+
+// ==========================================================
+// 4. FRAME & ACTOR DATA
+// ==========================================================
+
+struct EntityRange {
+    start_index: int32;
+    count: int32;
+}
+
+table Bucket {
+  unique_ids: [string];
+  entities: [PropertyContainer];
+  type_ranges: [EntityRange];
+}
+
+// The Unified Frame
+table Frame {
+  data: [Bucket];
+}
+
+// ==========================================================
+// 5. METADATA & VERSIONING
+// ==========================================================
+
+table VersionInfo {
+  format_major: uint;
+  format_minor: uint;
+  schema_version: uint;
+}
+
+table ContextualSchema{
+    data_identifier: string;
+    data_version : int; // 0
+    data_version_string : string; //data_version 0 = 15.23 prod
+    schema : string ; //This is the full schema in json format
+}
+
+// ==========================================================
+// 6. TIMELINE EVENTS
+// ==========================================================
+
+table TimelineEvent {
+  game_time: float;
+  event_type: string;
+  label: string;
+  location: Vector; // Struct inline
+  entity_unique_id: string;
+}
+
+// ==========================================================
+// 7. TOP LEVEL MESSAGES (File Structure)
+// ==========================================================
+
+// [HEADER]
+table FileHeader {
+  version: VersionInfo;
+  contextual_schema: ContextualSchema;
+  replay_uuid: string;
+  replay_name: string;
+  recorded_utc_timestamp: long;
+  custom_json_metadata: string;
+}
+
+// [CHUNK]
+table Chunk {
+  chunk_index: int;
+  is_compressed: bool;
+  compressed_data: [ubyte]; // bytes en Proto es vector de ubyte en FBS
+  
+  frames: [Frame];
+  compressed_frames: [ubyte]; // array de bytes crudos
+}
+
+// [INDEX ENTRY]
+table ChunkIndexEntry {
+  chunk_index: int;
+  start_frame: int;
+  end_frame: int;
+  file_offset: ulong;
+  chunk_size_bytes: uint;
+}
+
+table ReplayTimeData {
+  game_time: [long];
+  created_utc: [long];
+  gaps: [int];
+  segments: [int];
+}
+
+// [FOOTER]
+table FileFooter {
+  total_frames: int;
+  duration_seconds: float;
+  
+  times: ReplayTimeData;
+  chunk_index: [ChunkIndexEntry];
+  events: [TimelineEvent];
+  
+  payload_checksum: ulong;
+}
+
+// Indica cual es la tabla raíz por defecto (normalmente el Header o el Footer)
+// En sistemas de streaming como este, a veces no hay un solo root, 
+// pero definimos el Header como punto de entrada común.
+root_type FileHeader;

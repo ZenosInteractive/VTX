@@ -1,0 +1,3 @@
+// VTX CLI application icon
+// Place your .ico file at vtx_tool/resources/cli.ico
+IDI_ICON1 ICON "../resources/cli.ico"
