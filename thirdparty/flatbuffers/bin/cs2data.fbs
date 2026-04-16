@@ -1,0 +1,108 @@
+namespace CS2.Replay;
+
+struct Vec3 {
+	x:float;
+	y:float;
+	z:float;
+}
+
+struct Quat {
+	x:float;
+	y:float;
+	z:float;
+	w:float;
+}
+
+table Prop {
+    origin:Vec3;
+    rotation:Vec3;
+    entity_handle:ulong;
+    mesh_path:string;
+}
+
+table Grenade {
+	origin:Vec3;
+	rotation:Vec3;
+	entity_handle:ulong;
+	object_type:int; //0, smoke, 1, he, 2, molotov, 3, incendiary, 4, decoy, 5, flash
+}
+
+table BoneData {
+	pos:Vec3;
+	rot:Quat;
+	scale:float;
+}
+
+table WeaponProperties {
+    weapon_id:ushort;
+    skin_id:int;
+}
+
+table Equipment {
+    active_weapon:uint8;
+    weapons:[WeaponProperties];
+}
+
+table Entity {
+	entity_id:int;
+	steam_id:ulong;
+	user_name:string;
+	team:int;
+	health:int;
+	origin:Vec3;
+	mesh_name:string;
+	bone_data:[BoneData];
+	
+	player_equipment:Equipment;
+}
+
+table ParticleEntity {
+    entity_id:int;
+    origin:Vec3;
+    rotation:Quat;
+    vfx_path:string;
+}
+
+table WeaponEntity {
+    entity_id:int;
+    origin:Vec3;
+    mesh_name:string;
+    bone_data:[BoneData];
+    weapon_id:ushort;
+    skin_id:int;
+    skin_seed:float;
+    wear_float:float;
+    stattrak:int;
+}
+
+table C4Entity {
+    entity_id:int;
+    origin:Vec3;
+    rotation:Vec3;
+}
+
+table MatchInfo {
+    map_name:string;
+    game_timer:float64;
+    is_bomb_planted:bool = false;
+    is_freeze_time:bool = false;
+    team_1_name:string;
+    team_1_score:int;
+    team_2_name:string;
+    team_2_score:int;
+}
+
+table Frame {
+	tick:int;
+	game_time:float64;
+    match_info:MatchInfo;
+	player_data:[Entity];
+	weapon_data:[WeaponEntity];
+	grenades_vfx:[Grenade];
+	grenades_thrown:[Grenade];
+	vfx_entities:[ParticleEntity];
+	c4_data:C4Entity;
+	props:[Prop];
+}
+
+root_type Frame;

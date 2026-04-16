@@ -1,0 +1,226 @@
+syntax = "proto3";
+
+package RL;
+
+// Note: All bytes contain a wstring unless noted otherwise
+
+message TActor {
+    int64 UniqueId = 1;     // Use memory ptr
+    int64 ActorId = 2;		// Actor IDs taken from GObjects table
+    int64 OwnerId = 3;
+	bool Hidden = 4;		// NOT USED YET
+	bytes Identifier = 5;	
+}
+
+message TQuaternion {
+	float X = 1;
+	float Y = 2;
+	float Z = 3;
+	float W = 4;
+}
+
+message TVectorInt {
+    int32 Pitch = 1;
+    int32 Yaw = 2;
+    int32 Roll = 3;
+}
+
+message TVector {
+    float X = 1;
+    float Y = 2;
+    float Z = 3;
+}
+
+message TStaticMeshComponent_TA {
+	TActor Actor = 1;
+	TVector Translation = 2;
+	TVectorInt Rotation = 3;
+}
+
+message TObjInfo {
+    int64 UniqueId = 1;
+    bytes Name = 2;
+}
+
+message TFXActor_Ball_TA {
+	TActor Actor = 1;
+	
+	bool bStatic = 2;
+	bool bHidden = 3;
+	bool bHiddenSelf = 4;
+	bool bNoDelete = 5;
+	bool bDeleteMe = 6;
+	bool bIsMoving = 7;
+	
+	float SuperSonicSpeed = 8;
+	float MaxGoalProximityDistance = 9;
+	float BallFadeInSpeed = 10;
+	float BallFadeOutSpeed = 11;
+	float TrailOpacityLerpSpeed = 12;
+	float CurrentTrailOpacity = 13;
+	float BallFadeSpeed = 14;
+	float BallFadeOpacity = 15;
+	float ShockwaveParamMin = 16;
+	float ShockwaveParamMax = 17;
+	float ShockwaveParamTime = 18;
+	float TouchingWorldTime = 19;
+	
+	bool bInAir = 20;
+	bool bSuperSonic = 21;
+	
+	float CurrentTrailDilation = 22;
+	float MaxTrailDilation = 23;
+}
+
+message TBall {
+    TActor Actor = 1;
+    TVector Location = 2;
+    TVectorInt Rotation = 3;
+    repeated TObjInfo Touching = 4;
+	TFXActor_Ball_TA FXActor = 5;
+} 
+
+message TVehiclePickup_Boost_TA {
+	TActor Actor = 1;
+	TVector Location = 2;
+	TVectorInt Rotation = 3;
+	bool NoPickup = 4;
+	bool NetRelevant = 5;
+	float BoostAmount = 6;
+}
+
+message TMaterial_Param {	// Yet unused
+	
+}
+
+message TMaterial {			// Yet unused
+	TActor Actor = 1;
+	repeated float ScalarParams = 2;
+	repeated bytes TextureParams = 3;
+	repeated TVector VectorParams = 4;
+	bytes Name = 5;
+}
+
+message TAntennaComponent_TA {
+	TActor Actor = 1;		
+	TVector Displacement = 2;
+	TVector MassLocation = 3;
+	TVector MassVelocity = 4;
+}
+
+message TCarMeshComponent_TA {
+	TActor Actor = 1;			
+	TVector Translation = 2;
+	TVectorInt Rotation = 3;
+	bytes BodyAsset = 4;
+	bytes SkinAsset = 5;
+	bytes WheelAsset = 6;
+	repeated TStaticMeshComponent_TA Wheels = 7;
+	repeated TAntennaComponent_TA Antennas = 8;
+}
+
+message TFXActor_Car_TA {
+    TActor Actor = 1;
+    bytes ContactPhysMat = 2;
+	
+	bool bThrottle = 3;
+	bool bInAir = 4;
+	bool bBrake = 5;
+	bool bWasBoosting = 6;
+	bool bWasBoostFlying = 7;
+	bool bWasSuperSonic = 8;
+	bool bWasOnWall = 9;
+	bool bEnabled = 10;
+	bool bPreferSimulatedState = 11;
+	
+	bool bHidden = 12;
+	bool bIsMoving = 13;
+	
+	bytes WheelEffectsParticle = 14;
+	float BoostGlow = 15;
+}
+
+message TCar_TA {
+    TActor Actor = 1;
+    TVector Location = 2;
+    TVectorInt Rotation = 3;
+	TVector Velocity = 4;
+	TFXActor_Car_TA FXActor = 5;
+	TCarMeshComponent_TA CarMeshComponent = 6;
+	repeated bytes Loadout = 7;
+}
+
+message TPRI_TA {
+	TActor Actor = 1;
+    int32 MatchScore = 2;
+    int32 MatchGoals = 3;
+    int32 MatchOwnGoals = 4;
+    int32 MatchAssists = 5;
+    int32 MatchSaves = 6;
+    int32 MatchShots = 7;
+    int32 MatchDemolishes = 8;
+    int32 MatchBonusXP = 9;
+    int32 MatchBreakoutDamage = 10;
+	bytes PlayerName = 11;			// wstring
+	int64 CarUniqueId = 12;
+	bool IsAlive = 13;		// Infer from CarUniqueId ptr?
+	int64 TeamUniqueId = 14;
+}
+
+message TGameEvent_Soccar_TA {
+	TActor Actor = 1;
+	float GameTimeRemaining = 2;
+	int32 SecondsRemaining = 3;
+	float WaitTimeRemaining = 4;
+	float TotalGameTimePlayed = 5;
+	float OvertimeTimePlayed = 6;
+	int64 ScoringPlayerUniqueId = 7;
+	int32 RoundNum = 8;
+	bool ShouldSpawnGoalIndicator = 9;
+	bool RandomBallSpawnPoint = 10;
+	bool RoundActive = 11;
+	bool PlayReplays = 12;
+	bool BallHasBeenHit = 13; 
+	bool OverTime = 14;
+	bool UnlimitedTime = 15;
+	bool GoalsEnabled = 16;
+	bool NoContest = 17;
+	bool DisableGoalDelay = 18;
+	bool ShowNoScorerGoalMessage = 19;
+	bool MatchEnded = 20;
+	bool FullMatchWinnerDecided = 21;
+	bool DisableCrowdSound = 22;
+	bool ShowIntroScene = 23;
+	bool ReadyToStartGame = 24;
+	bool ClubMatch = 25;
+	bool FullClubMatch = 26;
+	bool MatchCreatorAdminEnabled = 27;
+	bool CanDropOnlineRewards = 28;
+	bool AllowHonorDuels = 29;
+	bool ThistleMatch = 30;
+}
+
+message TTeam_Soccar_TA {
+	TActor Actor = 1;
+	int32 Score = 2;
+	int32 Index = 3;
+	bytes CarColorSet = 4;	
+	bytes CustomName = 5;
+	int64 ClubId = 6;
+	bytes Logo = 7;			// Placeholder
+	bool Forfeited = 8;
+}
+
+message TFrame {
+    int64 Frame = 1;
+    int64 LocalTimeUtc = 2;		// Unix time at which this frame was recorded locally
+    TBall Ball = 3;
+    repeated TCar_TA Car = 4;
+    repeated TVehiclePickup_Boost_TA Boost = 5;
+    repeated TPRI_TA PRI_TA = 6;
+	TGameEvent_Soccar_TA Game = 7;
+	repeated TTeam_Soccar_TA Team = 8;
+	float RealTimeSeconds = 9;
+	float RealDeltaSeconds = 10;
+	float TimeSeconds = 11;
+}
