@@ -3,7 +3,6 @@
 #include <memory>
 #include <string>
 
-#include "services/inspector_replay_service.h"
 #include "services/schema_view_service.h"
 
 InspectorSession::~InspectorSession() = default;
@@ -18,6 +17,9 @@ bool InspectorSession::LoadReplay(const std::string& filepath) {
         return false;
     }
 
+    header_ = reader_context_->GetHeader();
+    footer_ = reader_context_->GetFooter();
+    contextual_schema_ = reader_context_->GetContextualSchema();
 
     current_file_path_ = filepath;
     current_frame_ = 0;

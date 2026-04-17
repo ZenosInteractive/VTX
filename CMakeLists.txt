@@ -23,6 +23,7 @@ option(VTX_BUILD_READER "Build vtx_reader module" ON)
 option(VTX_BUILD_DIFFER "Build vtx_differ module" ON)
 option(BUILD_VTX_TOOL "Build tool suite (tools/)" ON)
 option(BUILD_VTX_SAMPLES "Build sample programs (samples/)" ON)
+option(VTX_BUILD_TESTS "Build unit test suite (tests/)" ON)
 
 # --- SDK Modules ---
 add_subdirectory(sdk/src)

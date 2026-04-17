@@ -22,7 +22,7 @@ public:
     void CloseReplay();
     void RequestSchemaHighlight(const std::string& struct_n, const std::string& prop_n);
 
-    bool HasLoadedReplay() const { return is_file_loaded_; }
+    bool HasLoadedReplay() const { return (reader_context_.Loaded() && is_file_loaded_); }
     float GetFileSizeMb() const { return reader_context_.size_in_mb; }
     VTX::VtxFormat GetFormat() const { return reader_context_.format; }
     int32_t GetCurrentFrame() const { return current_frame_; }
@@ -35,9 +35,9 @@ public:
     void SetTimeDisplayFormat(TimeDisplayFormat format) { time_display_format_ = format; }
 
     VTX::IVtxReaderFacade* GetReader() const { return reader_context_.operator->(); }
-    const VTX::FileHeader& GetHeader() const { return reader_context_->GetHeader(); }
-    const VTX::FileFooter& GetFooter() const { return reader_context_->GetFooter(); }
-    const VTX::ContextualSchema& GetContextualSchema() const { return reader_context_->GetContextualSchema(); }
+    const VTX::FileHeader& GetHeader() const { return header_; }
+    const VTX::FileFooter& GetFooter() const { return footer_; }
+    const VTX::ContextualSchema& GetContextualSchema() const { return contextual_schema_; }
 
     const VtxServices::SchemaHighlightState& GetSchemaHighlight() const { return schema_highlight_; }
     VtxServices::SchemaHighlightState& MutableSchemaHighlight() { return schema_highlight_; }
@@ -54,6 +54,9 @@ public:
 
 private:
     VTX::ReaderContext reader_context_;
+    VTX::FileHeader header_;
+    VTX::FileFooter footer_;
+    VTX::ContextualSchema contextual_schema_;
 
     int32_t current_frame_ = -1;
     bool is_scrubbing_timeline_ = false;

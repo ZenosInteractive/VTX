@@ -1,27 +1,63 @@
-// basic_diff.cpp — Open a replay and diff two consecutive frames.
+// basic_diff.cpp -- Structural diff between two consecutive frames.
 //
-// Build:
-//   Link against vtx_reader, vtx_differ, and vtx_common.
-//   See samples/CMakeLists.txt for a full example.
+// Uses the real VtxDiff::IVtxDifferFacade.  The differ takes the raw
+// serialized frame bytes (one span per frame) and walks both binary trees in
+// parallel, emitting Add / Remove / Replace / ReplaceRange operations keyed
+// by binary path and entity unique_id.
+//
+// Default input
+//   content/reader/arena/arena_from_fbs_ds.vtx
+//   (produced by: vtx_sample_generate -> vtx_sample_advance_write)
+//
+// Build
+//   Link against vtx_reader and vtx_differ (vtx_common is transitive).
 
 #include "vtx/reader/core/vtx_reader_facade.h"
+#include "vtx/differ/core/vtx_differ_facade.h"
 #include "vtx/differ/core/vtx_diff_types.h"
 #include "vtx/common/vtx_types.h"
 
+#include <cstddef>
+#include <span>
 #include <string>
+#include <vector>
+
+namespace {
+
+const char* OpName(VtxDiff::DiffOperation op) {
+    switch (op) {
+        case VtxDiff::DiffOperation::Add:          return "Add";
+        case VtxDiff::DiffOperation::Remove:       return "Remove";
+        case VtxDiff::DiffOperation::Replace:      return "Replace";
+        case VtxDiff::DiffOperation::ReplaceRange: return "ReplaceRange";
+    }
+    return "?";
+}
+
+std::string PathToString(const VtxDiff::DiffIndexPath& p) {
+    std::string s = "[";
+    for (size_t i = 0; i < p.count; ++i) {
+        if (i > 0) s += ",";
+        s += std::to_string(p.indices[i]);
+    }
+    s += "]";
+    return s;
+}
+
+} // namespace
 
 int main(int argc, char* argv[])
 {
     const std::string filepath = (argc > 1)
         ? argv[1]
-        : "content/reader/rl/rl_proto.vtx";
+        : "content/reader/arena/arena_from_fbs_ds.vtx";
 
+    // ---- Open the replay -------------------------------------------------
     auto result = VTX::OpenReplayFile(filepath);
     if (!result) {
         VTX_ERROR("Failed to open: {}", result.error);
         return 1;
     }
-
     auto& reader = result.reader;
 
     if (reader->GetTotalFrames() < 2) {
@@ -29,46 +65,52 @@ int main(int argc, char* argv[])
         return 1;
     }
 
-    // Read two consecutive frames.
-    const VTX::Frame* frame_a = reader->GetFrameSync(0);
-    const VTX::Frame* frame_b = reader->GetFrameSync(1);
-    if (!frame_a || !frame_b) {
-        VTX_ERROR("Could not read frames.");
+    // ---- Create a differ matching the wire format ------------------------
+    auto differ = VtxDiff::CreateDifferFacade(result.format);
+    if (!differ) {
+        VTX_ERROR("Unsupported format for differ.");
         return 1;
     }
 
-    // Compare bucket counts.
-    VTX_INFO("Frame 0 buckets: {}", frame_a->GetBuckets().size());
-    VTX_INFO("Frame 1 buckets: {}", frame_b->GetBuckets().size());
+    // ---- Grab raw bytes of frames 0 and 1 --------------------------------
+    // Copy frame A's bytes because loading frame B may evict A's chunk from
+    // the reader's sliding-window cache.
+    std::span<const std::byte> raw_a = reader->GetRawFrameBytes(0);
+    if (raw_a.empty()) {
+        VTX_ERROR("Frame 0 raw bytes unavailable.");
+        return 1;
+    }
+    std::vector<std::byte> bytes_a(raw_a.begin(), raw_a.end());
 
-    // Walk each bucket and compare entity counts.
-    for (const auto& [name, idx] : frame_a->bucket_map) {
-        const auto& bucket_a = frame_a->GetBuckets()[idx];
+    std::span<const std::byte> raw_b = reader->GetRawFrameBytes(1);
+    if (raw_b.empty()) {
+        VTX_ERROR("Frame 1 raw bytes unavailable.");
+        return 1;
+    }
 
-        auto it_b = frame_b->bucket_map.find(name);
-        if (it_b == frame_b->bucket_map.end()) {
-            VTX_WARN("[{}] removed in frame 1", name);
-            continue;
-        }
+    // ---- Run the diff ----------------------------------------------------
+    VtxDiff::DiffOptions opts;
+    opts.compare_floats_with_epsilon = true;
+    opts.float_epsilon               = 1e-5f;
 
-        const auto& bucket_b = frame_b->GetBuckets()[it_b->second];
+    VtxDiff::PatchIndex patch = differ->DiffRawFrames(bytes_a, raw_b, opts);
 
-        // Quick content hash comparison per entity.
-        int changed = 0;
-        size_t common = std::min(bucket_a.entities.size(), bucket_b.entities.size());
-        for (size_t i = 0; i < common; ++i) {
-            if (bucket_a.entities[i].content_hash != bucket_b.entities[i].content_hash) {
-                ++changed;
-            }
-        }
+    // ---- Report ----------------------------------------------------------
+    VTX_INFO("Diff frame 0 -> 1: {} operation(s)", patch.operations.size());
 
-        int added   = static_cast<int>(bucket_b.entities.size()) - static_cast<int>(common);
-        int removed = static_cast<int>(bucket_a.entities.size()) - static_cast<int>(common);
-
-        VTX_INFO("[{}] entities: {} -> {} | changed: {}", name,
-                 bucket_a.entities.size(), bucket_b.entities.size(), changed);
-        if (added > 0)   VTX_INFO("  added: {}", added);
-        if (removed > 0) VTX_INFO("  removed: {}", removed);
+    // Show the first few ops in detail; summarise the rest by container type.
+    constexpr size_t kDetailLimit = 20;
+    for (size_t i = 0; i < patch.operations.size() && i < kDetailLimit; ++i) {
+        const auto& op = patch.operations[i];
+        VTX_INFO("  {:>12} container={} path={} actor='{}'",
+                 OpName(op.Operation),
+                 VtxDiff::TypeToFieldName(op.ContainerType),
+                 PathToString(op.Path),
+                 op.ActorId);
+    }
+    if (patch.operations.size() > kDetailLimit) {
+        VTX_INFO("  ... {} more operation(s) suppressed",
+                 patch.operations.size() - kDetailLimit);
     }
 
     return 0;

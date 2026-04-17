@@ -444,7 +444,11 @@ namespace VTX {
                 cc.index = idx;
                 SerializerPolicy::ProcessChunkData(idx, compressed_blob, stop_token, cc.native_frames, cc.decompressed_blob, cc.raw_frames_spans);
                 return cc;
+            } catch (const std::exception& e) {
+                VTX_ERROR("[READER] Chunk {} deserialization failed: {}", idx, e.what());
+                return {};
             } catch (...) {
+                VTX_ERROR("[READER] Chunk {} deserialization failed: unknown exception", idx);
                 return {};
             }
         }
