@@ -737,12 +737,17 @@ namespace VTX
             }
 
             // --- Constructor ---
+            //
+            // start_utc_ is intentionally left at 0.  It gets overwritten
+            // either by SetStartUtc()/reset paths, or implicitly when the
+            // first frame arrives via AddTimeRegistry (historical or live).
+            // Initialising it to system_clock::now() here used to reject any
+            // replay whose timestamps predate the writer process.
             VTXGameTimes()
                 : fps_(0), fps_inverse_(0), is_increasing_(true), start_utc_(0), offset_(0),
                   type_(EGameTimeType::None), add_used_(false), resolve_success_(false), chunk_start_index_(0)
             {
                 SetFPS(30);
-                start_utc_ = GetUtcNowTicks();
             }
 
 
@@ -788,7 +793,7 @@ namespace VTX
                 sorted_game_time_indexes_.clear();
                 timeline_gaps_.clear();
                 game_segments_.clear();
-                start_utc_ = GetUtcNowTicks();
+                start_utc_ = 0;  // set when the first real frame arrives
                 offset_ = 0;
                 type_ = EGameTimeType::None;
                 SetFPS(30);
@@ -827,23 +832,37 @@ namespace VTX
 
             bool AddTimeRegistry(const GameTimeRegister& time_registry)
             {
-                if (time_registry.created_utc_time.has_value() && time_registry.created_utc_time <= LastCreatedUtc()) {
-                    VTX_WARN("CreatedUTC is %lld (new) is <= to %lld (last)!", *time_registry.created_utc_time, LastCreatedUtc());
+                // UTC regression check only makes sense once we already have a
+                // prior frame.  Comparing against start_utc_ (system_clock::now
+                // at construction time) was wrong -- it rejected valid
+                // historical replays whose first timestamp predates the writer
+                // process.  See samples/generate_replay.cpp for the bug this
+                // fixes.
+                if (time_registry.created_utc_time.has_value() && !created_utc_.empty() &&
+                    *time_registry.created_utc_time <= created_utc_.back()) {
+                    VTX_WARN("CreatedUTC {} (new) is <= {} (last)",
+                             *time_registry.created_utc_time, created_utc_.back());
                     return false;
                 }
 
                 if (time_registry.game_time.has_value()){
 
+                    // Monotonicity filters only apply once we already have a
+                    // prior frame -- the first frame is always accepted,
+                    // otherwise a replay that legitimately starts at t=0 would
+                    // be rejected against the default-constructed "last" of 0.
+                    const bool has_prior_game_time = !game_time_.empty();
+
                     switch (time_registry.FrameFilterType) {
                     case EFilterType::OnlyIncreasing:
-                        if (time_registry.game_time <= GetLastGameTimeSeconds()) {
-                            VTX_WARN("OnlyIncreasing Filter is enabled and %f (new) is <= to %f (last)!", *time_registry.game_time, GetLastGameTimeSeconds());
+                        if (has_prior_game_time && time_registry.game_time <= GetLastGameTimeSeconds()) {
+                            VTX_WARN("OnlyIncreasing filter rejected game_time {} (new) <= {} (last)", *time_registry.game_time, GetLastGameTimeSeconds());
                             return false;
                         }
                         break;
                     case EFilterType::OnlyDecreasing:
-                        if (time_registry.game_time >= GetLastGameTimeSeconds()) {
-                            VTX_WARN("OnlyDecreasing Filter is enabled and %f (new) is >= to %f (last)!", *time_registry.game_time, GetLastGameTimeSeconds());
+                        if (has_prior_game_time && time_registry.game_time >= GetLastGameTimeSeconds()) {
+                            VTX_WARN("OnlyDecreasing filter rejected game_time {} (new) >= {} (last)", *time_registry.game_time, GetLastGameTimeSeconds());
                             return false;
                         }
                         break;

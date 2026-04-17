@@ -31,7 +31,7 @@ message Transform {
 message FloatRange {
   float min = 1;
   float max = 2;
-  float value_normalized = 3; // Ale
+  float value_normalized = 3;
 }
 
 // ==========================================================
@@ -150,15 +150,15 @@ message EntityRange {
 }
 // Standard Gameplay Data
 message Bucket {
-  repeated string unique_ids = 1; // Ale
-  repeated PropertyContainer entities = 2; // Ale
-  repeated EntityRange type_ranges = 3; // Ale
+  repeated string unique_ids = 1;
+  repeated PropertyContainer entities = 2;
+  repeated EntityRange type_ranges = 3;
 }
 
 // The Unified Frame
 // Represents a single simulation tick.
 message Frame {
-  repeated Bucket data = 1;  // Ale
+  repeated Bucket data = 1;
 }
 
 
@@ -211,7 +211,7 @@ message FileHeader {
   int64 recorded_utc_timestamp = 6;
 
   // Game Context
-  string custom_json_metadata = 7; // Unstructured extra data // Ale
+  string custom_json_metadata = 7; // Unstructured extra data
 }
 
 // [CHUNK] Written REPEATEDLY during the recording stream.

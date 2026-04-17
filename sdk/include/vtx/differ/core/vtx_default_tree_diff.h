@@ -6,8 +6,11 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
-#define XXH_INLINE_ALL
-#include <xxhash.h>
+
+// xxh3.h defines XXH_INLINE_ALL internally, which emits all xxhash symbols
+// as static inline.  Keep consistent with vtx_types_helpers.h so translation
+// units that pull in both headers link cleanly.
+#include <xxh3.h>
 
 #include "vtx/differ/core/vtx_diff_types.h"
 #include "vtx/differ/core/interfaces/vtx_binary_view_node.h"

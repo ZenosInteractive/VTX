@@ -39,6 +39,7 @@ Records live frame data into `.vtx` replay files.
 - **Factory**: `CreateFlatBuffersWriterFacade()`, `CreateProtobuffWriterFacade()`
 - **Config**: `WriterFacadeConfig` — output path, chunk size, compression, schema JSON path
 - **Policy**: Template-parameterized writer policies select FlatBuffers or Protobuf serialization at compile time
+- **Data-source interface**: `IFrameDataSource` (`Initialize()` / `GetNextFrame()` / `GetExpectedTotalFrames()`) — streaming contract for adapters that convert third-party replay formats into VTX frames. See `samples/advance_write.cpp` for JSON / Protobuf / FlatBuffers implementations, and `tools/integrations/rl/rl15/rl15_data_source.h` for a production example.
 
 ### vtx_reader
 
@@ -96,9 +97,19 @@ Each module exposes a single abstract interface (`IVtxReaderFacade`, `IVtxWriter
 
 | Namespace | Module | Contents |
 |---|---|---|
-| `VTX` | vtx_common, vtx_reader, vtx_writer | Core types, reader/writer facades, format detection |
+| `VTX` | vtx_common, vtx_reader, vtx_writer | Core types, reader/writer facades, format detection, integration primitives (`JsonMapping<T>`, `ProtoBinding<T>`, `FlatBufferBinding<T>`, `IFrameDataSource`) |
 | `VtxDiff` | vtx_differ | Diff engine, patch types, binary view adapters |
 | `VtxDiff::Flatbuffers` | vtx_differ | FlatBuffers binary view adapter |
 | `VtxDiff::Protobuf` | vtx_differ | Protobuf binary view adapter |
 | `VtxServices` | tools (inspector) | UI-level presentation services |
 | `VtxCli` | tools (CLI) | CLI session and command infrastructure |
+
+## Samples and Integrations
+
+The `samples/` directory illustrates the same architectural layers used by real integrations under `tools/integrations/`. See [SAMPLES.md](SAMPLES.md) for the full walkthrough.
+
+| Sample | Patterns demonstrated |
+|---|---|
+| `basic_read` / `basic_write` / `basic_diff` | Facade APIs of the three SDK modules |
+| `generate_replay` | Data-source producer (synthesising raw game telemetry) |
+| `advance_write` | Three `IFrameDataSource` adapters + three mapping styles (`JsonMapping<T>`, `ProtoBinding<T>`, `FlatBufferBinding<T>`) driving the writer |

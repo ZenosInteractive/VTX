@@ -1,5 +1,9 @@
 # Build Guide
 
+> Looking for runnable example programs? See [SAMPLES.md](SAMPLES.md) -- five
+> targets shipped under `samples/`, from a 30-line reader demo to a full
+> arena-data pipeline using `IFrameDataSource`.
+
 ## Requirements
 
 | Requirement | Version |
@@ -58,7 +62,7 @@ Available presets are defined in `CMakePresets.json`.
 | `VTX_BUILD_READER` | `ON` | Build the vtx_reader module |
 | `VTX_BUILD_DIFFER` | `ON` | Build the vtx_differ module |
 | `BUILD_VTX_TOOL` | `ON` | Build the tool suite (requires reader + writer) |
-| `BUILD_VTX_SAMPLES` | `ON` | Build sample programs |
+| `BUILD_VTX_SAMPLES` | `ON` | Build sample programs (five targets -- see [SAMPLES.md](SAMPLES.md)) |
 
 ### SDK Only (No Tools)
 
@@ -96,6 +100,11 @@ dist/
     vtx_inspector.exe   GUI inspector (if tools enabled)
     vtx_cli.exe         CLI inspector (if tools enabled)
     vtx_schema_creator.exe  Schema tool (if tools enabled)
+    vtx_sample_read.exe         reader smoke test       (if samples enabled)
+    vtx_sample_write.exe        writer smoke test       (if samples enabled)
+    vtx_sample_diff.exe         hash-based frame diff   (if samples enabled)
+    vtx_sample_generate.exe     arena simulator         (if samples enabled)
+    vtx_sample_advance_write.exe  arena data-source pipeline (if samples enabled)
     zstd.dll            Runtime dependency
   scripts/
     vtx_codegen.py      Code generation utility
@@ -149,10 +158,27 @@ VTX/
     schema_creator/       Interactive schema definition tool
     shared/               Shared UI utilities (session base, logger sink)
   thirdparty/             Pre-built dependencies (Windows x64)
-  samples/                Example programs (basic_read, basic_write, basic_diff)
+  samples/                Five example programs -- see docs/SAMPLES.md
+    schemas/              Arena wire schemas (.proto + .fbs) used by advanced samples
+    content/              VTX schema + runtime-generated data sources + .vtx outputs
   scripts/                Code generation (vtx_codegen.py)
   docs/                   Documentation
 ```
+
+## Running the Samples
+
+After a successful build (samples default to `ON`), the five sample executables land in `build/bin/Release/`. The full arena pipeline runs end-to-end with:
+
+```bat
+cd samples
+
+..\build\bin\Release\vtx_sample_generate.exe        REM simulate -> 3 data sources
+..\build\bin\Release\vtx_sample_advance_write.exe   REM data sources -> 3 .vtx replays
+..\build\bin\Release\vtx_sample_read.exe            REM inspect the default replay
+..\build\bin\Release\vtx_sample_diff.exe            REM diff frames 0 vs 1
+```
+
+Each sample sets its VS debugger working directory to `samples/`, so relative paths like `content/reader/arena/arena_from_fbs_ds.vtx` resolve correctly when running from an IDE. See [SAMPLES.md](SAMPLES.md) for a per-target walkthrough.
 
 ## Troubleshooting
 

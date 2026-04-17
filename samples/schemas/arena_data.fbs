@@ -1,0 +1,76 @@
+// arena_data.fbs — Arena game data schema (FlatBuffers).
+//
+// Defines the serialization format for the arena game's OWN data model.
+// This is NOT the VTX format — it represents what a game engine would produce
+// as raw replay data before it gets mapped into VTX PropertyContainers.
+
+namespace arena_fb;
+
+// ---- Math types (structs = fixed-size, zero-copy) ----
+
+struct Vec3 {
+    x: double;
+    y: double;
+    z: double;
+}
+
+struct Rotation {
+    x: float;
+    y: float;
+    z: float;
+    w: float;
+}
+
+// ---- Game entities ----
+
+table Player {
+    unique_id: string;
+    name:      string;
+    team:      int;
+    health:    float;
+    armor:     float;
+    position:  Vec3;
+    rotation:  Rotation;
+    velocity:  Vec3;
+    is_alive:  bool = true;
+    score:     int;
+    deaths:    int;
+}
+
+table Projectile {
+    unique_id: string;
+    owner_id:  string;
+    position:  Vec3;
+    velocity:  Vec3;
+    damage:    float = 25.0;
+    type:      string;
+}
+
+table MatchState {
+    score_team1:    int;
+    score_team2:    int;
+    round:          int = 1;
+    phase:          string;
+    time_remaining: float;
+}
+
+// ---- Frame & replay ----
+
+table FrameData {
+    frame_index: int;
+    game_time:   float;
+    utc_ticks:   long;
+    players:     [Player];
+    projectiles: [Projectile];
+    match_state: MatchState;
+}
+
+table ArenaReplay {
+    replay_name:      string;
+    total_frames:     int;
+    fps:              int = 60;
+    duration_seconds: double;
+    frames:           [FrameData];
+}
+
+root_type ArenaReplay;

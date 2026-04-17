@@ -1,8 +1,21 @@
-// basic_read.cpp — Open a .vtx replay file and print frame/entity info.
+// basic_read.cpp -- Open a .vtx replay file and print header/footer/first frame.
 //
-// Build:
-//   Link against vtx_reader and vtx_common.
-//   See samples/CMakeLists.txt for a full example.
+// Purpose
+//   Minimal reader demo: uses VTX::OpenReplayFile() to detect the wire format,
+//   loads metadata, and inspects bucket contents of frame 0.
+//
+// Default input
+//   content/reader/arena/arena_from_fbs_ds.vtx
+//
+//   That file is produced by running, in order:
+//     1. vtx_sample_generate       (creates arena data-source files)
+//     2. vtx_sample_advance_write  (creates arena_from_{json,proto,fbs}_ds.vtx)
+//
+//   Any .vtx file can be passed as argv[1] instead.
+//
+// Build
+//   Link against vtx_reader (vtx_common is transitive).
+//   See samples/CMakeLists.txt.
 
 #include "vtx/reader/core/vtx_reader_facade.h"
 #include "vtx/common/vtx_types.h"
@@ -13,7 +26,7 @@ int main(int argc, char* argv[])
 {
     const std::string filepath = (argc > 1)
         ? argv[1]
-        : "content/reader/rl/rl_proto.vtx";
+        : "content/reader/arena/arena_from_fbs_ds.vtx";
 
 
     auto result = VTX::OpenReplayFile(filepath);

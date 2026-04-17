@@ -1,5 +1,14 @@
 # SDK API Reference
 
+> **See [SAMPLES.md](SAMPLES.md)** for runnable examples of every API surface
+> documented below. In particular:
+> - `basic_read.cpp` -- the reader snippets in "Reading Replays"
+> - `basic_write.cpp` -- the writer snippets in "Writing Replays"
+> - `basic_diff.cpp` -- a minimal hash-based delta (the `vtx_differ` facade
+>   API itself is covered here in "Diffing Frames")
+> - `advance_write.cpp` -- `IFrameDataSource` + integration-style mapping
+>   (JSON / Protobuf / FlatBuffers) feeding the writer
+
 ## Reading Replays
 
 ### Opening a File
@@ -263,3 +272,131 @@ bucket.entities.push_back(VTX::PropertyContainer{});
 - Reader methods return `nullptr` or `false` on invalid frame indices.
 - Writer and differ factory functions return `nullptr` for unsupported formats.
 - Internal errors are logged via `VTX_ERROR(...)` to the thread-safe logger.
+
+---
+
+## Integration Primitives
+
+For ingesting third-party data formats into `.vtx` replays, the SDK exposes
+three template extension points plus a streaming `IFrameDataSource` interface.
+Full worked examples live in `samples/advance_write.cpp` (arena) and
+`tools/integrations/` (Rocket League, League of Legends, Street Fighter).
+
+### IFrameDataSource
+
+```cpp
+#include "vtx/writer/core/vtx_data_source.h"
+
+class MyDataSource : public VTX::IFrameDataSource {
+public:
+    bool   Initialize() override;                   // open/parse the source
+    bool   GetNextFrame(VTX::Frame& out_frame,
+                        VTX::GameTime::GameTimeRegister& out_time) override;
+    size_t GetExpectedTotalFrames() const override; // 0 if unknown / streaming
+};
+```
+
+Drive it manually against an `IVtxWriterFacade`:
+
+```cpp
+my_source.Initialize();
+VTX::Frame frame;
+VTX::GameTime::GameTimeRegister time;
+while (my_source.GetNextFrame(frame, time)) {
+    writer->RecordFrame(frame, time);
+}
+writer->Flush();
+writer->Stop();
+```
+
+### JsonMapping\<T\> (compile-time JSON reflection)
+
+```cpp
+#include "vtx/common/adapters/json/json_policy.h"
+#include "vtx/common/readers/frame_reader/type_traits.h"
+#include "vtx/common/readers/frame_reader/universal_deserializer.h"
+#include "vtx/common/adapters/json/json_adapter.h"
+
+struct MyPlayer { std::string id; int score; };
+
+template <> struct VTX::JsonMapping<MyPlayer> {
+    static constexpr auto GetFields() {
+        return std::make_tuple(
+            MakeField("id",    &MyPlayer::id),
+            MakeField("score", &MyPlayer::score)
+        );
+    }
+};
+
+auto node   = nlohmann::json::parse(raw);
+auto player = VTX::UniversalDeserializer<>::Load<MyPlayer>(VTX::JsonAdapter(node));
+```
+
+`UniversalDeserializer` recurses through `std::vector<T>`, `std::map<K,V>`, and nested mapped types. The only thing you supply is the `GetFields()` tuple.
+
+### ProtoBinding\<T\>  -- Protobuf into PropertyContainer
+
+```cpp
+#include "vtx/common/readers/frame_reader/protobuff_loader.h"
+
+template <> struct VTX::ProtoBinding<my_pb::Player> {
+    static void Transfer(const my_pb::Player& src,
+                         VTX::PropertyContainer& dest,
+                         VTX::GenericProtobufLoader& loader,
+                         const std::string& schema_name) {
+        loader.LoadField (dest, schema_name, "UniqueID", src.id());
+        loader.LoadField (dest, schema_name, "Score",    src.score());
+        loader.LoadStruct(dest, schema_name, "Position", src.position());   // nested msg
+        loader.LoadArray (dest, schema_name, "Inventory", src.inventory()); // repeated
+    }
+};
+template <> struct VTX::ProtoBinding<my_pb::Frame> {
+    static void TransferToFrame(const my_pb::Frame& src,
+                                VTX::Frame& dest,
+                                VTX::GenericProtobufLoader& loader,
+                                const std::string& schema_name) {
+        auto& bucket = dest.GetBucket("entity");
+        loader.AppendActorList(bucket, "Player", src.players(),
+            [](const my_pb::Player& p) { return p.id(); });
+    }
+};
+
+// At runtime:
+VTX::SchemaRegistry schema;
+schema.LoadFromJson("schema.json");
+VTX::GenericProtobufLoader loader(schema);
+loader.LoadFrame(proto_frame, vtx_frame, "MyFrameSchema");
+```
+
+Field names resolve against the VTX property schema at load time.
+
+### FlatBufferBinding\<T\>  -- FlatBuffers into PropertyContainer
+
+```cpp
+#include "vtx/common/readers/frame_reader/flatbuffer_loader.h"
+
+template <> struct VTX::FlatBufferBinding<my_fb::Player> {
+    static void Transfer(const my_fb::Player* src,
+                         VTX::PropertyContainer& dest,
+                         VTX::GenericFlatBufferLoader& loader,
+                         const std::string& schema_name) {
+        if (src->id())   loader.LoadField(dest, schema_name, "UniqueID", src->id()->str());
+        loader.LoadField(dest, schema_name, "Score", src->score());
+    }
+};
+
+// At runtime:
+VTX::GenericFlatBufferLoader loader(schema.GetPropertyCache());
+loader.LoadFrame(fb_frame_ptr, vtx_frame, "MyFrameSchema");
+```
+
+Unlike `ProtoBinding`, FlatBuffer field addresses are resolved once per field name through the `PropertyAddressCache` and cached inside the loader -- subsequent frames hit O(1) lookups keyed by `entity_type_id`.
+
+### Which primitive should I use?
+
+| Source format | Use | Why |
+|---|---|---|
+| JSON with stable field names | `JsonMapping<T>` + `UniversalDeserializer` | Cleanest -- one tuple per type |
+| Protobuf message | `ProtoBinding<T>` + `GenericProtobufLoader` | Handles `has_*`/`set_*` + repeated fields |
+| FlatBuffers table | `FlatBufferBinding<T>` + `GenericFlatBufferLoader` | Zero-copy reads, cached addresses |
+| Completely custom wire format | Hand-build `VTX::PropertyContainer` inside your `GetNextFrame()` | No bindings needed |

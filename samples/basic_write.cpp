@@ -1,8 +1,17 @@
-// basic_write.cpp — Record synthetic frames into a .vtx replay file.
+// basic_write.cpp -- Record synthetic frames into a .vtx replay file.
 //
-// Build:
-//   Link against vtx_writer and vtx_common.
-//   See samples/CMakeLists.txt for a full example.
+// Purpose
+//   Minimal writer demo: builds 100 VTX::Frame objects in memory (no external
+//   data source) and feeds them to a FlatBuffers writer facade.  Useful as a
+//   smoke test for the writer API and as a template when hand-crafting
+//   PropertyContainers.
+//
+// Args
+//   argv[1] -- schema JSON path       (default: content/writer/arena/arena_schema.json)
+//   argv[2] -- output .vtx path       (default: sample_output.vtx)
+//
+// Build
+//   Link against vtx_writer (vtx_common is transitive).
 
 #include "vtx/writer/core/vtx_writer_facade.h"
 #include "vtx/common/vtx_types.h"
@@ -13,7 +22,7 @@ int main(int argc, char* argv[])
 {
     const std::string schema_path = (argc > 1)
         ? argv[1]
-        : "content/writer/rl/rl_schema.json";
+        : "content/writer/arena/arena_schema.json";
     const std::string output_path = (argc > 2)
         ? argv[2]
         : "sample_output.vtx";
