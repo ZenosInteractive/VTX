@@ -47,13 +47,17 @@ TEST(TimeUtils, ConvertToUeTicksSupportsNumericFormats)
 {
     using namespace VTX::TimeUtils;
 
-    EXPECT_EQ(ConvertToUeTicks(TimeFormat::UeUTC, 123456789LL), 123456789LL);
-    EXPECT_EQ(ConvertToUeTicks(TimeFormat::UnixUTC, 0LL), TICKS_AT_UNIX_EPOCH);
-    EXPECT_EQ(ConvertToUeTicks(TimeFormat::UnixMsUTC, 1LL),
+    // Use int64{N} (not N##LL) to pick the int64 overload unambiguously.
+    // On Linux x86_64 int64_t == long int, so LL literals are ambiguous
+    // between the int64 and float overloads.  On MSVC int64_t == long long
+    // so LL matches exactly -- this only bites us cross-platform.
+    EXPECT_EQ(ConvertToUeTicks(TimeFormat::UeUTC, int64{123456789}), 123456789LL);
+    EXPECT_EQ(ConvertToUeTicks(TimeFormat::UnixUTC, int64{0}), TICKS_AT_UNIX_EPOCH);
+    EXPECT_EQ(ConvertToUeTicks(TimeFormat::UnixMsUTC, int64{1}),
               TICKS_AT_UNIX_EPOCH + TICKS_PER_MILLISECOND);
     EXPECT_EQ(ConvertToUeTicks(TimeFormat::Seconds, 1.5f), 15'000'000LL);
 
-    EXPECT_EQ(ConvertToUeTicks(TimeFormat::Seconds, 7LL), 0LL);
+    EXPECT_EQ(ConvertToUeTicks(TimeFormat::Seconds, int64{7}), 0LL);
 }
 
 TEST(TimeUtils, ConvertToUeTicksParsesIso8601AndRejectsInvalidStrings)
