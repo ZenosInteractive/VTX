@@ -2,16 +2,14 @@ name: CI
 
 # Full build + test matrix for every push to main and every pull request.
 #
-# Matrix (active jobs):
+# Matrix (6 jobs total):
 #
 #   Windows Release static    <- bundled thirdparty on Windows, fast baseline
 #   Windows Release shared    <- validates DLL + import-lib path
 #   Windows Debug   static    <- catches debug-only issues (asserts, iterator debug)
-#
-# Linux jobs (Release static, Release shared, Debug static) are scaffolded
-# below but commented out -- they land in the follow-up commit that makes
-# the VTX sources actually build on Linux.  Uncomment that block to expand
-# to the full six-job matrix.
+#   Linux   Release static    <- system protobuf via apt; flatbuffers + zstd from FetchContent
+#   Linux   Release shared    <- validates .so + RPATH install layout
+#   Linux   Debug   static    <- catches UBsan-friendly issues under Debug asserts
 #
 # GUI tools (vtx_inspector, vtx_schema_creator) are disabled in CI -- they
 # fetch ImGui + GLFW, take ~2x as long to build, and still contain Windows-only
@@ -126,32 +124,23 @@ jobs:
             extra_cmake: -A x64
 
           # ---- Linux --------------------------------------------------------
-          # Linux jobs land in the follow-up commit that wires
-          # cmake/VtxDependencies.cmake, splits MSVC-only settings in the
-          # root CMakeLists.txt, and port tools/shared/src/gui/gui_app.cpp
-          # off GLFW_EXPOSE_NATIVE_WIN32.  Until then the VTX sources only
-          # build on Windows, so running Linux jobs in CI would be a
-          # guaranteed red herring.  Re-enable in the same commit that
-          # makes `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release` succeed
-          # on Ubuntu.
-          #
-          # - label: Linux / Release / static
-          #   os: ubuntu-latest
-          #   build_type: Release
-          #   vtx_shared: "OFF"
-          #   extra_cmake: -DCMAKE_BUILD_TYPE=Release
-          #
-          # - label: Linux / Release / shared
-          #   os: ubuntu-latest
-          #   build_type: Release
-          #   vtx_shared: "ON"
-          #   extra_cmake: -DCMAKE_BUILD_TYPE=Release
-          #
-          # - label: Linux / Debug / static
-          #   os: ubuntu-latest
-          #   build_type: Debug
-          #   vtx_shared: "OFF"
-          #   extra_cmake: -DCMAKE_BUILD_TYPE=Debug
+          - label: Linux / Release / static
+            os: ubuntu-latest
+            build_type: Release
+            vtx_shared: "OFF"
+            extra_cmake: -DCMAKE_BUILD_TYPE=Release
+
+          - label: Linux / Release / shared
+            os: ubuntu-latest
+            build_type: Release
+            vtx_shared: "ON"
+            extra_cmake: -DCMAKE_BUILD_TYPE=Release
+
+          - label: Linux / Debug / static
+            os: ubuntu-latest
+            build_type: Debug
+            vtx_shared: "OFF"
+            extra_cmake: -DCMAKE_BUILD_TYPE=Debug
 
     steps:
       - name: Checkout

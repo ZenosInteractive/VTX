@@ -38,6 +38,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A4 -- `vtx_reader.h` `SetEvents()` + callback call-sites**: `events_` was read (via `events_.OnChunkLoadFinished` etc.) without synchronisation while `SetEvents()` could overwrite it from another thread.  Reading a `std::function` while another thread writes is UB.  Introduced `events_mutex_` + a `GetEventsSnapshot()` helper used at every callback site; the actual callback invocations happen on the local snapshot outside the lock
 - **A5 -- `vtx_writer_facade.cpp` `WriterFacadeImpl`**: `RecordFrame`, `Flush`, and subsequent `Stop` calls after the initial `Stop()` could overwrite the already-finalised file and truncate previously-recorded frames.  `WriterFacadeImpl` now tracks a `stopped_` flag and silently no-ops all three methods after `Stop()`.  `Stop()` itself is idempotent
 
+## [Unreleased] - 2026-04-18
+
+### Added
+
+- **build**: cross-platform support for Linux and macOS.  Core SDK (vtx_common, vtx_writer, vtx_reader, vtx_differ), CLI tool (vtx_cli), all five sample programs, and the full test suite now build and run on Linux.  macOS builds the SDK + CLI; GUI tools (inspector, schema_creator) remain Windows-only until their INI-based settings persistence is ported to XDG
+- **build**: `cmake/VtxDependencies.cmake` -- central dependency resolution module exposing `VTX::deps::protobuf`, `VTX::deps::flatbuffers`, `VTX::deps::zstd` imported targets plus `VTX_PROTOC_EXE` / `VTX_FLATC_EXE` cache variables and the `vtx_copy_runtime_deps()` helper.  On Windows, `VTX_DEPENDENCY_SOURCE` (`AUTO` / `PACKAGE_MANAGER` / `BUNDLED`) picks between the vcpkg manifest and the legacy `thirdparty/protobuf/` bundle; on Linux/macOS, Protobuf comes from the system package manager (with a CONFIG-then-MODULE fallback -- Ubuntu 22.04's `libprotobuf-dev` doesn't ship `ProtobufConfig.cmake`).  FlatBuffers + zstd are unconditionally fetched from pinned source (`FetchContent`: `v24.12.23` and `v1.5.6`) so the wire format version and compression library are identical on every platform
+- **build**: `VTX_BUILD_SHARED` option (default `OFF`) -- when enabled the four SDK libraries build as shared libraries (`.dll` / `.so` / `.dylib`) instead of static.  The generated protobuf/flatbuffers sources live in an OBJECT library (`vtx_generated_code`) that each Windows DLL embeds, because `CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS` cannot re-export protobuf's `_default_instance_` data globals -- letting each SDK DLL compile its own copy makes each a self-contained linking unit.  Includes `RUNTIME DESTINATION bin` in the install export and a static-vs-shared comparison in `docs/BUILD.md`
+- **build**: `vcpkg.json` manifest for Windows package-manager builds.  Currently lists only `protobuf`; FlatBuffers and zstd never need vcpkg because FetchContent covers them
+- **build**: `build_sdk.sh` -- Linux/macOS counterpart to `build_sdk.bat`.  Honours `BUILD_TYPE`, `CLEAN`, `SKIP_TESTS`, `JOBS`, `INSTALL_PREFIX` env overrides.  Runs the full pipeline: configure -> build -> ctest -> install
+- **build**: `clean.sh` -- Linux/macOS counterpart to `clean.bat`
+- **docs/BUILD.md**: Linux / macOS dependency lists per distro (Ubuntu/Debian/Fedora/macOS), environment-variable-driven script usage, `VTX_DEPENDENCY_SOURCE` documentation, and platform-specific troubleshooting
+
+### Changed
+
+- **build**: root `CMakeLists.txt` is now platform-aware.  MSVC-specific settings (`CMAKE_MSVC_RUNTIME_LIBRARY`, `PROTOBUF_STATIC_LIBRARY`) are gated by `if(MSVC)` + `VTX_NEEDS_PROTOBUF_STATIC_DEFINE`.  Non-MSVC builds enable `CMAKE_POSITION_INDEPENDENT_CODE` and set `$ORIGIN/../lib` (Linux) / `@loader_path/../lib` (macOS) RPATH so installed binaries find bundled shared libraries
+- **build**: per-target hardcoded `thirdparty/protobuf/include` / `thirdparty/flatbuffers/include` entries removed -- headers now reach every consumer transitively through `vtx_common`'s PUBLIC interface and `VTX::deps::*` imported targets
+- **build**: generated protobuf / FlatBuffers C++ code now lives under `${CMAKE_CURRENT_BINARY_DIR}/generated` (build tree) instead of `sdk/src/vtx_common/src/generated` (source tree).  The old location caused cross-platform crashes when the source tree got shared between machines with different `flatc` versions -- sharing between Windows (`flatc 25.x`) and Linux (`flatc 2.x` from apt) produced headers that hardcoded `FLATBUFFERS_VERSION_MAJOR == 25` and static-assert-failed against libflatbuffers 2.x.  Consumers (`vtx_reader`, `vtx_writer`, `vtx_differ`, `samples`, `tests`, `tools/cli`, `tools/shared`) reference the `VTX_COMMON_GENERATED_DIR` INTERNAL cache variable instead of hardcoding the old path
+- **build**: FlatBuffers is now consumed **header-only via FetchContent** (pinned `v24.12.23`) on every platform.  Previously Windows linked a static `flatbuffers.lib` from `thirdparty/flatbuffers/`, while Linux tried `find_package(flatbuffers)` against `libflatbuffers-dev` (v2.x on Ubuntu 22.04) -- a version mismatch that produced "Non-compatible flatbuffers version included" static-assert failures.  `flatc` is built from source as part of the CMake graph (`$<TARGET_FILE:flatc>`).  Removed `thirdparty/flatbuffers/bin/` and `thirdparty/flatbuffers/lib/` (dead code).  Ubuntu no longer needs `flatbuffers-compiler` or `libflatbuffers-dev` apt packages
+- **build**: zstd is consumed via **FetchContent** (pinned `v1.5.6`, `facebook/zstd`), built as a static library and linked into the SDK modules.  No runtime DLL / `.so` dependency on any platform; no `libzstd-dev` / Homebrew `zstd` requirement.  `thirdparty/zstd/` stays in the repo for now as an unused fallback that a later cleanup commit will delete
+- **build**: `target_link_libraries(vtx_common ... $<BUILD_INTERFACE:VTX::deps::...>)` keeps bundled thirdparty imports out of the install export, so `find_package(VTX)` consumers are expected to bring their own protobuf (documented in `docs/BUILD.md`)
+- **build**: per-target zstd DLL copy commands replaced with the central `vtx_copy_runtime_deps(target)` helper.  With zstd now statically linked from FetchContent, the helper is effectively a no-op stub -- kept at all call sites so reintroducing a runtime dep is a one-line change in `VtxDependencies.cmake`
+- **tools**: `BUILD_VTX_INSPECTOR` and `BUILD_VTX_SCHEMA_CREATOR` default to `OFF` on Linux/macOS (Windows-only glue around INI settings persistence and dialog integration).  `BUILD_VTX_CLI` stays `ON` everywhere
+- **tools**: `tools/CMakeLists.txt` only fetches ImGui + GLFW (and only adds `tools/shared`) when at least one GUI tool is enabled.  Headless Linux builds no longer pull in X11 as a build requirement -- `docs/BUILD.md` lists the X11 packages needed if you opt the GUI tools back in
+- **tools/shared**: platform link libraries -- `opengl32` on Windows, `GL/dl/pthread` on Linux, `-framework OpenGL` on macOS.  `NOMINMAX` / `WIN32_LEAN_AND_MEAN` now gated to Windows
+- **tools/shared/src/gui/gui_app.cpp**: previously-unguarded `#define GLFW_EXPOSE_NATIVE_WIN32` + `#include <GLFW/glfw3native.h>` wrapped in `#if defined(_WIN32)` so the file compiles on Linux
+- **ci**: `.github/workflows/build.yml` Linux jobs (Release static, Release shared, Debug static) are now active -- they were scaffolded but commented out in the previous push because the VTX sources didn't yet build on Linux.  Workflow apt install now covers just `cmake g++ ninja-build protobuf-compiler libprotobuf-dev` (FlatBuffers + zstd via FetchContent)
+- **README.md**: requirements row lists Windows + Linux + macOS; adds a "Using vcpkg on Windows" quick-start block; `thirdparty/` described as "Header-only deps + legacy Windows binary fallback"
+
+## [Unreleased] - 2026-04-17
+
+### Added
+
+- **samples**: `vtx_sample_generate` target -- simulates a 5v5 arena match (3600 frames @ 60 FPS) and exports three data-source files (`arena_replay_data.{json,proto.bin,fbs.bin}`) representing raw game telemetry
+- **samples**: `vtx_sample_advance_write` target -- demonstrates the full data-source pipeline with three `IFrameDataSource` implementations (JSON / Protobuf / FlatBuffers) driving the writer through SDK-native mapping primitives
+- **samples**: `arena_mappings.h` (JSON data model + `VTX::JsonMapping<T>` specialisations), `arena_generated.h` (autogenerated schema-field constants + typed views), `schemas/arena_data.proto` + `schemas/arena_data.fbs` (arena game-side schemas in `arena_pb::` / `arena_fb::`)
+- **samples**: CMake codegen rules for `protoc` + `flatc --gen-object-api`, wired into `samples/CMakeLists.txt` so schema edits rebuild automatically
+- **docs**: new `docs/SAMPLES.md` -- per-sample walkthrough, folder layout, mapping-strategy comparison, codegen explanation
+- **docs/SDK_API.md**: new "Integration Primitives" section documenting `IFrameDataSource`, `JsonMapping<T>`, `ProtoBinding<T>`, `FlatBufferBinding<T>`
+
+### Changed
+
+- **samples/basic_read.cpp**, **samples/basic_diff.cpp**: default replay path updated to `content/reader/arena/arena_from_fbs_ds.vtx`
+- **samples/basic_diff.cpp**: rewritten to exercise `VtxDiff::IVtxDifferFacade::DiffRawFrames` instead of manually hash-comparing entities (the target named "diff" previously never touched the differ module it links against)
+- **samples/generate_replay.cpp**: removed the `+30s` UTC workaround now that the underlying SDK bug is fixed; replaced with a fixed historical timestamp (2025-04-19) for reproducible output
+- **content/ layout**: arena schema + three data sources live under `content/writer/arena/`; generated `.vtx` replays land under `content/reader/arena/`
+- **sdk/include/vtx/differ/core/vtx_default_tree_diff.h**: standardised xxhash include to `<xxh3.h>` -- now consistent with `vtx_types_helpers.h`
+- **docs/ARCHITECTURE.md**, **docs/BUILD.md**: `IFrameDataSource` documented in the writer section; build outputs list all five sample executables; cross-reference to `SAMPLES.md`
+
+### Fixed
+
+- **vtx_common** (`vtx_types.h`): `VTXGameTimes::AddTimeRegistry` no longer rejects valid historical UTC timestamps -- the regression check now correctly requires a prior frame to exist before flagging a repeat
+- **vtx_common** (`vtx_types.h`): `VTXGameTimes()` constructor no longer seeds `start_utc_` with `GetUtcNowTicks()`; field starts at 0 and is populated when real data arrives.  `Clear()` updated for consistency
+- **vtx_common** (`vtx_types.h`): `OnlyIncreasing` / `OnlyDecreasing` game-time filters no longer reject the very first frame of a replay whose `game_time` is 0
+- **vtx_common** (`vtx_types.h`): three warning messages in `AddTimeRegistry` used printf specifiers (`%lld`, `%f`) inside `std::format` calls -- the values were never printed.  Converted to `{}` placeholders
+- **vtx_reader** (`vtx_reader_facade.h`): swapped member declaration order in `ReaderContext` so `reader` is destroyed before `chunk_state`.  The reader's async chunk-load callbacks capture a raw pointer into `chunk_state`; the previous order created a potential use-after-free during context teardown
+- **vtx_reader** (`vtx_reader.h`): `PerformHeavyLoading` no longer silently swallows deserialization exceptions -- logs the exception message before returning an empty chunk
+- **sdk/src/schemas/vtx_schema.proto**: removed six stray `// Ale` author comments from the public Protobuf schema
+
 ## [0.0.1] - 2026-04-16
 
 ### Added

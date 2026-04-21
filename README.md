@@ -24,16 +24,19 @@ All four modules are static libraries. Enable or disable each with CMake options
 |---|---|
 | C++ Standard | C++20 |
 | CMake | >= 3.15 |
-| Compiler | MSVC (Visual Studio 2022 recommended) |
-| Platform | Windows (x64) |
+| Compiler | MSVC / clang / gcc with C++20 support |
+| Platform | Windows, Linux, macOS |
 
-Third-party dependencies are bundled in `thirdparty/`:
+Preferred dependency flow:
 
-- **Protocol Buffers** -- serialization format
-- **FlatBuffers** -- serialization format
-- **zstd** -- frame/chunk compression
-- **nlohmann/json** -- schema parsing (header-only)
-- **xxHash** -- fast content hashing (header-only)
+- **Windows**: use the provided `vcpkg.json` manifest with `-DVTX_DEPENDENCY_SOURCE=PACKAGE_MANAGER`
+- **Linux / macOS**: use system packages / package manager installs
+- **Legacy fallback**: the prebuilt binaries under `thirdparty/` still work on Windows via `-DVTX_DEPENDENCY_SOURCE=BUNDLED`, but they are no longer the only supported path
+
+Header-only dependencies remain bundled in `thirdparty/`:
+
+- **nlohmann/json** -- schema parsing
+- **xxHash** -- fast content hashing
 
 ## Quick Start
 
@@ -51,6 +54,16 @@ This configures, builds (Release), and installs to `dist/`.
 cmake -S . -B build -A x64
 cmake --build build --config Release --parallel
 cmake --install build --config Release --prefix dist
+```
+
+### Using vcpkg on Windows
+
+```bat
+vcpkg install
+cmake -S . -B build -A x64 ^
+  -DCMAKE_TOOLCHAIN_FILE=%VCPKG_ROOT%\scripts\buildsystems\vcpkg.cmake ^
+  -DVTX_DEPENDENCY_SOURCE=PACKAGE_MANAGER
+cmake --build build --config Release --parallel
 ```
 
 ### Using CMake Presets (VS 2022)
@@ -172,7 +185,8 @@ tools/
   inspector/           GUI inspector (ImGui + GLFW)
   schema_creator/      Schema definition tool
   shared/              Shared UI library
-thirdparty/            Pre-built dependencies (Windows x64)
+thirdparty/            Header-only deps + legacy Windows binary fallback
+vcpkg.json             Optional manifest for reproducible Windows package-manager builds
 scripts/               Code generation (vtx_codegen.py)
 cmake/                 CMake package config for downstream projects
 samples/               Example code and sample replay data

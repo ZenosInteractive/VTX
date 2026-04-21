@@ -122,8 +122,8 @@ The advanced samples depend on generated C++ code for the two arena wire schemas
 
 | Source | Tool | Namespace | Output |
 |---|---|---|---|
-| `samples/schemas/arena_data.proto` | `thirdparty/protobuf/bin/protoc.exe` | `arena_pb::` | `${build}/samples/arena_generated/arena_data.pb.{h,cc}` |
-| `samples/schemas/arena_data.fbs` | `thirdparty/flatbuffers/bin/flatc.exe --gen-object-api` | `arena_fb::` | `${build}/samples/arena_generated/arena_data_generated.h` |
+| `samples/schemas/arena_data.proto` | `${VTX_PROTOC_EXE}` (`thirdparty/protobuf/bin/protoc.exe` on Windows bundled; system `protoc` on Linux/macOS) | `arena_pb::` | `${build}/samples/arena_generated/arena_data.pb.{h,cc}` |
+| `samples/schemas/arena_data.fbs` | `$<TARGET_FILE:flatc>` (FlatBuffers built from FetchContent source) | `arena_fb::` | `${build}/samples/arena_generated/arena_data_generated.h` |
 
 Both codegen steps are declared in `samples/CMakeLists.txt` as `add_custom_command` rules, so re-editing either schema triggers a rebuild automatically.
 
@@ -169,5 +169,5 @@ Run `vtx_sample_generate` and then `vtx_sample_advance_write` first, from the `s
 **Schema-registry warnings about field counts**
 Regenerate `arena_generated.h` after editing `content/writer/arena/arena_schema.json`.
 
-**zstd.dll not found**
-Each sample target post-build-copies `zstd.dll` next to its exe. If you relocate the executable, copy the DLL alongside.
+**zstd at runtime**
+There is no runtime zstd dependency. The library is linked statically from the FetchContent build, so no DLL / `.so` sits next to the sample executables.
