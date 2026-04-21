@@ -91,12 +91,6 @@ target_link_libraries(vtx_tests PRIVATE
 target_include_directories(vtx_tests PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}"
     "${VTX_COMMON_GENERATED_DIR}"
-    # vtx_common currently keeps protobuf / flatbuffers headers PRIVATE, so
-    # external targets that reach into its public headers need to surface the
-    # same thirdparty paths themselves.  A later Push migrates these to
-    # PUBLIC / interface targets (VTX::deps::*) -- this block becomes a no-op.
-    "${CMAKE_SOURCE_DIR}/thirdparty/protobuf/include"
-    "${CMAKE_SOURCE_DIR}/thirdparty/flatbuffers/include"
 )
 
 target_compile_definitions(vtx_tests PRIVATE
@@ -109,21 +103,8 @@ set_target_properties(vtx_tests PROPERTIES
     VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
 )
 
-# On Windows the test exe lives in build/bin/$<CONFIG> but vtx_common's
-# POST_BUILD lands zstd.dll in build/lib (STATIC target_file_dir).  Copy
-# it alongside the test binary so tests can actually run.  This block
-# goes away in a later cleanup that moves zstd to a static FetchContent
-# library -- until then, we duplicate the copy here.
-if(WIN32)
-    set(_vtx_zstd_dll_dir "${CMAKE_SOURCE_DIR}/thirdparty/zstd/bin")
-    add_custom_command(TARGET vtx_tests POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "$<IF:$<CONFIG:Debug>,${_vtx_zstd_dll_dir}/Debug/zstd.dll,${_vtx_zstd_dll_dir}/Release/zstd.dll>"
-            "$<TARGET_FILE_DIR:vtx_tests>"
-        COMMENT "Copying zstd.dll next to vtx_tests"
-        VERBATIM
-    )
-endif()
+# Copy runtime DLLs on Windows; no-op on Linux.
+vtx_copy_runtime_deps(vtx_tests)
 
 # Ensure the test_output directory exists at build time.
 add_custom_command(TARGET vtx_tests PRE_BUILD

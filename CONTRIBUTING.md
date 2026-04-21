@@ -103,7 +103,7 @@ tools/
   inspector/      GUI inspector (ImGui)
   schema_creator/ Schema definition tool
   shared/         Shared UI library
-thirdparty/       Bundled dependencies (protobuf, flatbuffers, zstd, json, xxhash)
+thirdparty/       Header-only deps (json, xxhash) + legacy Windows protobuf binary fallback
 scripts/          Build and code generation scripts
 cmake/            CMake package configuration
 samples/          Example code and sample replay data

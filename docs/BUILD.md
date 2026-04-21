@@ -1,8 +1,6 @@
 # Build Guide
 
-> Looking for runnable example programs? See [SAMPLES.md](SAMPLES.md) -- five
-> targets shipped under `samples/`, from a 30-line reader demo to a full
-> arena-data pipeline using `IFrameDataSource`.
+> Looking for runnable example programs? See [SAMPLES.md](SAMPLES.md).
 
 ## Continuous Integration
 
@@ -26,16 +24,16 @@ The CI uses `clang-format-15` for reproducibility across runs. Locally, any rece
 
 ### Build + test matrix
 
-| # | OS | Build type | Library type |
-|---|---|---|---|
-| 1 | Windows | Release | static |
-| 2 | Windows | Release | shared (DLL) |
-| 3 | Windows | Debug | static |
-| 4 | Linux | Release | static |
-| 5 | Linux | Release | shared (.so) |
-| 6 | Linux | Debug | static |
+| # | OS | Build type | Library type | Dependency source |
+|---|---|---|---|---|
+| 1 | Windows | Release | static | bundled thirdparty |
+| 2 | Windows | Release | shared (DLL) | bundled thirdparty |
+| 3 | Windows | Debug | static | bundled thirdparty |
+| 4 | Linux | Release | static | apt (protobuf) + FetchContent (flatbuffers, zstd) |
+| 5 | Linux | Release | shared (.so) | apt + FetchContent |
+| 6 | Linux | Debug | static | apt + FetchContent |
 
-Each job runs the full ctest suite plus the sample smoke tests. GUI tools (`vtx_inspector`, `vtx_schema_creator`) are disabled in CI because they fetch ImGui + GLFW and still contain Windows-only glue; they get tested manually.
+Each job runs the full 187-test ctest suite plus the sample smoke tests. GUI tools (`vtx_inspector`, `vtx_schema_creator`) are disabled in CI because they fetch ImGui + GLFW and still contain Windows-only glue; they get tested manually.
 
 A failing CI run uploads `build/Testing/` and any dropped test artefacts as a job artefact (retained for 7 days) so the failure can be inspected without reproducing locally.
 
@@ -47,34 +45,100 @@ If you add a new platform target or dependency, extend the matrix in `build.yml`
 |---|---|
 | C++ Standard | C++20 |
 | CMake | >= 3.15 |
-| Compiler | MSVC 19.29+ (Visual Studio 2022 recommended) |
-| Platform | Windows x64 |
+| Compiler | MSVC 19.29+ (Visual Studio 2022) or gcc 11+ / clang 13+ |
+| Platform | Windows x64, Linux x86_64, macOS (SDK + CLI only) |
 
-All third-party dependencies are pre-built and bundled in `thirdparty/`:
+## Dependency Resolution
 
-| Dependency | Purpose | Linkage |
-|---|---|---|
-| Protocol Buffers | Serialization backend | Static (`libprotobuf.lib`) |
-| FlatBuffers | Serialization backend | Static (`flatbuffers.lib`) |
-| zstd | Chunk compression | Dynamic (`zstd.dll`) |
-| nlohmann/json | Schema JSON parsing | Header-only |
-| xxHash | Content hashing | Header-only (inline) |
+Header-only dependencies always come from the repo:
 
-Tools additionally fetch at build time (via CMake `FetchContent`):
-- **Dear ImGui** — GUI framework (inspector)
-- **GLFW** — Window/input (inspector)
+- `thirdparty/jsonlohmann`
+- `thirdparty/xxhash`
+
+Binary dependencies are resolved through `cmake/VtxDependencies.cmake`:
+
+- Protocol Buffers (`protoc` + `libprotobuf`) -- system package on Linux / macOS, bundled `thirdparty/protobuf/` or vcpkg on Windows
+- FlatBuffers (`flatc` + headers) -- always FetchContent, pinned to `v24.12.23`
+- zstd -- always FetchContent, pinned to `v1.5.6`, linked statically
+
+### Windows
+
+Preferred flow: package-managed dependencies with the included `vcpkg.json` manifest.
+
+```bat
+vcpkg install
+cmake -S . -B build -A x64 ^
+  -DCMAKE_TOOLCHAIN_FILE=%VCPKG_ROOT%\scripts\buildsystems\vcpkg.cmake ^
+  -DVTX_DEPENDENCY_SOURCE=PACKAGE_MANAGER
+cmake --build build --config Release --parallel
+```
+
+Legacy fallback:
+
+```bat
+cmake -S . -B build -A x64 -DVTX_DEPENDENCY_SOURCE=BUNDLED
+cmake --build build --config Release --parallel
+```
+
+`VTX_DEPENDENCY_SOURCE` accepts:
+
+| Value | Meaning |
+|---|---|
+| `AUTO` | Try package-manager resolution first, then fall back to `thirdparty/` |
+| `PACKAGE_MANAGER` | Require dependencies from vcpkg / installed packages |
+| `BUNDLED` | Require the legacy prebuilt artifacts under `thirdparty/` |
+
+### Linux / macOS
+
+Install packages through the system package manager:
+
+```bash
+# Ubuntu / Debian
+sudo apt install cmake g++ protobuf-compiler libprotobuf-dev
+
+# Fedora / RHEL / Rocky
+sudo dnf install cmake gcc-c++ protobuf-compiler protobuf-devel
+
+# macOS (Homebrew)
+brew install cmake protobuf
+```
+
+Neither FlatBuffers nor zstd is a system dependency -- the build fetches pinned source releases via CMake's `FetchContent`, compiles `flatc` + the zstd static library, and consumes everything in-tree.  This keeps the wire format and the compression library on the exact same version across Windows, Linux, and macOS regardless of what the distro packages.  First configure takes +30-90s while those two build from source; subsequent configures are instant thanks to the `build/_deps` cache.
+
+**Linux GUI tools (optional)** — the Inspector and Schema Creator additionally need the X11 dev stack because GLFW links against it. The default Linux build skips both tools (`BUILD_VTX_INSPECTOR` and `BUILD_VTX_SCHEMA_CREATOR` default to `OFF` on non-Windows), and the `tools/CMakeLists.txt` orchestrator only fetches GLFW when at least one GUI tool is enabled -- so a headless Linux build has zero X11 requirements. If you opt them back in:
+
+```bash
+# Ubuntu / Debian
+sudo apt install libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libgl1-mesa-dev
+```
 
 ## Quick Start
 
-### Build Script
+### Windows build script
 
 ```bat
 build_sdk.bat
 ```
 
-Configures, builds (Release), and installs to `dist/`.
+### Linux / macOS build script
 
-### CMake (Manual)
+```bash
+./build_sdk.sh
+```
+
+Environment overrides:
+
+```bash
+BUILD_TYPE=Debug ./build_sdk.sh
+SKIP_TESTS=1 ./build_sdk.sh
+CLEAN=1 ./build_sdk.sh
+JOBS=16 ./build_sdk.sh
+INSTALL_PREFIX=/opt/vtx ./build_sdk.sh
+```
+
+### Manual CMake
+
+Windows:
 
 ```bat
 cmake -S . -B build -A x64
@@ -82,74 +146,112 @@ cmake --build build --config Release --parallel
 cmake --install build --config Release --prefix dist
 ```
 
-### CMake Presets (VS 2022)
+Linux / macOS:
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --parallel
+ctest --test-dir build --output-on-failure
+cmake --install build --prefix dist
+```
+
+### CMake Presets
 
 ```bat
 cmake --preset windows-release
 cmake --build --preset windows-release
 ```
 
-Available presets are defined in `CMakePresets.json`.
-
 ## CMake Options
 
 | Option | Default | Description |
 |---|---|---|
-| `VTX_BUILD_WRITER` | `ON` | Build the vtx_writer module |
-| `VTX_BUILD_READER` | `ON` | Build the vtx_reader module |
-| `VTX_BUILD_DIFFER` | `ON` | Build the vtx_differ module |
-| `BUILD_VTX_TOOL` | `ON` | Build the tool suite (requires reader + writer) |
-| `BUILD_VTX_SAMPLES` | `ON` | Build sample programs (five targets -- see [SAMPLES.md](SAMPLES.md)) |
+| `VTX_BUILD_WRITER` | `ON` | Build the writer module |
+| `VTX_BUILD_READER` | `ON` | Build the reader module |
+| `VTX_BUILD_DIFFER` | `ON` | Build the differ module |
+| `BUILD_VTX_TOOL` | `ON` | Build tools |
+| `BUILD_VTX_SAMPLES` | `ON` | Build sample programs |
+| `VTX_BUILD_TESTS` | `ON` | Build the unit test suite |
+| `VTX_BUILD_SHARED` | `OFF` | Build shared SDK libraries instead of static |
+| `VTX_DEPENDENCY_SOURCE` | `AUTO` | Windows dependency source selection |
 
-### SDK Only (No Tools)
+SDK-only build:
 
 ```bat
 cmake -S . -B build -A x64 -DBUILD_VTX_TOOL=OFF
 cmake --build build --config Release --parallel
 ```
 
-This skips ImGui/GLFW fetching and builds only the 4 static libraries.
-
-### Minimal Build (Common Only)
+Minimal common-only build:
 
 ```bat
-cmake -S . -B build -A x64 -DVTX_BUILD_WRITER=OFF -DVTX_BUILD_READER=OFF -DVTX_BUILD_DIFFER=OFF -DBUILD_VTX_TOOL=OFF -DBUILD_VTX_SAMPLES=OFF
+cmake -S . -B build -A x64 ^
+  -DVTX_BUILD_WRITER=OFF ^
+  -DVTX_BUILD_READER=OFF ^
+  -DVTX_BUILD_DIFFER=OFF ^
+  -DBUILD_VTX_TOOL=OFF ^
+  -DBUILD_VTX_SAMPLES=OFF
 ```
 
-## Build Outputs
+## Static vs Shared
+
+Static is the default. Shared builds are enabled with:
+
+```bat
+cmake -S . -B build -A x64 -DVTX_BUILD_SHARED=ON
+cmake --build build --config Release --parallel
+```
+
+Shared-build caveats:
+
+1. Windows still uses `CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS`.
+2. If your process also links another protobuf runtime, ABI duplication is your problem.
+3. Installed Linux binaries rely on `$ORIGIN/../lib` RPATH.
+
+## Outputs
 
 After `cmake --install`:
 
-```
+```text
 dist/
-  include/vtx/          Public SDK headers
-    common/             Core types, logger, helpers
-    reader/             Reader facade and types
-    writer/             Writer facade and types
-    differ/             Differ facade and types
+  include/vtx/
   lib/
-    vtx_common.lib      Core library
-    vtx_writer.lib      Writer library
-    vtx_reader.lib      Reader library
-    vtx_differ.lib      Differ library
-    cmake/VTX/          CMake package config
+    vtx_common.lib
+    vtx_writer.lib
+    vtx_reader.lib
+    vtx_differ.lib
+    cmake/VTX/
   bin/
-    vtx_inspector.exe   GUI inspector (if tools enabled)
-    vtx_cli.exe         CLI inspector (if tools enabled)
-    vtx_schema_creator.exe  Schema tool (if tools enabled)
-    vtx_sample_read.exe         reader smoke test       (if samples enabled)
-    vtx_sample_write.exe        writer smoke test       (if samples enabled)
-    vtx_sample_diff.exe         hash-based frame diff   (if samples enabled)
-    vtx_sample_generate.exe     arena simulator         (if samples enabled)
-    vtx_sample_advance_write.exe  arena data-source pipeline (if samples enabled)
-    zstd.dll            Runtime dependency
+    vtx_inspector.exe
+    vtx_cli.exe
+    vtx_schema_creator.exe
+    vtx_sample_read.exe
+    vtx_sample_write.exe
+    vtx_sample_diff.exe
+    vtx_sample_generate.exe
+    vtx_sample_advance_write.exe
   scripts/
-    vtx_codegen.py      Code generation utility
+    vtx_codegen.py
+```
+
+## Samples and Validation
+
+`basic_diff.cpp` is now validated through `ctest` via a smoke test that runs the
+compiled sample against `samples/content/reader/arena/arena_from_fbs_ds.vtx`
+with `--fail-on-empty`.
+
+Manual sample flow:
+
+```bat
+cd samples
+
+..\build\bin\Release\vtx_sample_generate.exe
+..\build\bin\Release\vtx_sample_advance_write.exe
+..\build\bin\Release\vtx_sample_read.exe
+..\build\bin\Release\vtx_sample_diff.exe
 ```
 
 ## Integration via CMake
-
-After installing, downstream projects can use `find_package`:
 
 ```cmake
 find_package(VTX REQUIRED)
@@ -158,75 +260,64 @@ add_executable(my_app main.cpp)
 target_link_libraries(my_app PRIVATE VTX::vtx_reader VTX::vtx_differ)
 ```
 
-Available imported targets:
+Imported targets:
 
-| Target | Module | Always available? |
-|---|---|---|
-| `VTX::vtx_common` | Core types and utilities | Yes |
-| `VTX::vtx_writer` | Replay writer | If `VTX_BUILD_WRITER=ON` |
-| `VTX::vtx_reader` | Replay reader | If `VTX_BUILD_READER=ON` |
-| `VTX::vtx_differ` | Frame differ | If `VTX_BUILD_DIFFER=ON` |
-
-The `VTX_DIR` or `CMAKE_PREFIX_PATH` must point to the install prefix:
-
-```bat
-cmake -S . -B build -DCMAKE_PREFIX_PATH=path/to/vtx/dist
-```
+| Target | Module |
+|---|---|
+| `VTX::vtx_common` | Core types and utilities |
+| `VTX::vtx_writer` | Replay writer |
+| `VTX::vtx_reader` | Replay reader |
+| `VTX::vtx_differ` | Frame differ |
 
 ## Project Structure
 
-```
+```text
 VTX/
-  CMakeLists.txt          Root build file
-  CMakePresets.json       VS 2022 build presets
+  CMakeLists.txt
+  CMakePresets.json
   cmake/
-    VTXConfig.cmake.in    Package config template for find_package()
   sdk/
-    include/vtx/          Public API headers
-    src/
-      vtx_common/         Core library sources + generated code
-      vtx_reader/         Reader implementation
-      vtx_writer/         Writer implementation
-      vtx_differ/         Differ implementation
-      schemas/            .proto and .fbs schema definitions
   tools/
-    cli/                  Headless JSON CLI inspector
-    inspector/            ImGui GUI inspector
-    schema_creator/       Interactive schema definition tool
-    shared/               Shared UI utilities (session base, logger sink)
-  thirdparty/             Pre-built dependencies (Windows x64)
-  samples/                Five example programs -- see docs/SAMPLES.md
-    schemas/              Arena wire schemas (.proto + .fbs) used by advanced samples
-    content/              VTX schema + runtime-generated data sources + .vtx outputs
-  scripts/                Code generation (vtx_codegen.py)
-  docs/                   Documentation
+  samples/
+  docs/
+  scripts/
+  thirdparty/   Header-only deps + legacy Windows binary fallback
+  vcpkg.json    Windows package-manager manifest
 ```
-
-## Running the Samples
-
-After a successful build (samples default to `ON`), the five sample executables land in `build/bin/Release/`. The full arena pipeline runs end-to-end with:
-
-```bat
-cd samples
-
-..\build\bin\Release\vtx_sample_generate.exe        REM simulate -> 3 data sources
-..\build\bin\Release\vtx_sample_advance_write.exe   REM data sources -> 3 .vtx replays
-..\build\bin\Release\vtx_sample_read.exe            REM inspect the default replay
-..\build\bin\Release\vtx_sample_diff.exe            REM diff frames 0 vs 1
-```
-
-Each sample sets its VS debugger working directory to `samples/`, so relative paths like `content/reader/arena/arena_from_fbs_ds.vtx` resolve correctly when running from an IDE. See [SAMPLES.md](SAMPLES.md) for a per-target walkthrough.
 
 ## Troubleshooting
 
-### zstd.dll not found at runtime
+### Windows package-manager configure cannot find dependencies
 
-The build copies `zstd.dll` next to each executable via post-build commands. If running from a different directory, ensure `zstd.dll` is on the PATH or in the working directory.
+If you selected `-DVTX_DEPENDENCY_SOURCE=PACKAGE_MANAGER`, CMake expects:
 
-### Protobuf link errors
+- `protoc`
+- `protobuf::libprotobuf`
 
-VTX links protobuf statically. Ensure `PROTOBUF_STATIC_LIBRARY` is defined (the root CMakeLists.txt sets this globally). Do not link a different protobuf version in the same process.
+`flatc` + FlatBuffers headers and the zstd static library are built by
+FetchContent on every platform, so they are not probed on the package-
+manager path.
 
-### Schema generation fails
+Make sure you configured with the vcpkg toolchain file, or that `protoc`
+and `libprotobuf` are discoverable through `PATH` / `CMAKE_PREFIX_PATH`.
 
-`protoc.exe` and `flatc.exe` must exist at `thirdparty/protobuf/bin/protoc.exe` and `thirdparty/flatbuffers/bin/flatc.exe`. These are checked by the vtx_common CMakeLists.txt.
+### Windows bundled fallback configure fails
+
+If you selected `-DVTX_DEPENDENCY_SOURCE=BUNDLED`, the legacy artifacts must
+still exist under `thirdparty/protobuf/`. FlatBuffers and zstd are no longer
+read from `thirdparty/` on any platform -- `flatc`, the FlatBuffers headers,
+and the zstd static library are all built from source via CMake
+`FetchContent` into `build/_deps/`.
+
+### Linux cannot find Protobuf
+
+Install the development packages shown above. If they live in a non-standard
+prefix, provide `CMAKE_PREFIX_PATH`. FlatBuffers + zstd never need to be
+installed system-wide -- FetchContent handles them regardless of what the
+distro packages.
+
+### zstd at runtime
+
+There is no runtime zstd dependency on any platform. The library is linked
+statically from the FetchContent build, so binaries do not ship a
+`zstd.dll` / `libzstd.so.*` alongside them.

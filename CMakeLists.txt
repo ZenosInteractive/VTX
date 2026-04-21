@@ -4,9 +4,14 @@ project(VTX_SDK VERSION 1.0.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
-
-add_compile_definitions(PROTOBUF_STATIC_LIBRARY)
+# --- Platform-specific compiler settings --------------------------------------
+if(MSVC)
+    # Match the dynamic CRT that protobuf and FlatBuffers ship against.
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+else()
+    # Build position-independent code so static libs can be linked into .so's.
+    set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+endif()
 
 # Enable Folders in IDEs
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
@@ -16,6 +21,25 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
+# Help the installed binaries find bundled shared libs on Linux/macOS.
+if(UNIX AND NOT APPLE)
+    set(CMAKE_INSTALL_RPATH "$ORIGIN/../lib")
+elseif(APPLE)
+    set(CMAKE_INSTALL_RPATH "@loader_path/../lib")
+endif()
+set(CMAKE_INSTALL_RPATH_USE_LINK_PATH ON)
+
+# --- CMake module path + central dependency resolution ------------------------
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+include(VtxDependencies)
+
+if(MSVC AND VTX_NEEDS_PROTOBUF_STATIC_DEFINE)
+    # The legacy bundled Windows protobuf ships as static libraries. Package-
+    # manager builds provide the right usage requirements through imported
+    # targets, so we only force this define for the bundled fallback path.
+    add_compile_definitions(PROTOBUF_STATIC_LIBRARY)
+endif()
+
 set(VTX_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/sdk/include")
 
 option(VTX_BUILD_WRITER "Build vtx_writer module" ON)
@@ -24,6 +48,35 @@ option(VTX_BUILD_DIFFER "Build vtx_differ module" ON)
 option(BUILD_VTX_TOOL "Build tool suite (tools/)" ON)
 option(BUILD_VTX_SAMPLES "Build sample programs (samples/)" ON)
 option(VTX_BUILD_TESTS "Build unit test suite (tests/)" ON)
+
+# ------------------------------------------------------------------------------
+# VTX_BUILD_SHARED -- static (default) vs shared SDK libraries
+# ------------------------------------------------------------------------------
+#
+# Off (default): vtx_common, vtx_reader, vtx_writer, vtx_differ are built as
+#                static libraries.  Consumers link them directly into their
+#                binary -- zero runtime discovery, zero DLL dependency surface.
+#
+# On:            All four are built as shared libraries (DLL / .so / .dylib).
+#                Useful for language bindings, hot-reload, and multi-module
+#                apps that want a single shared VTX runtime.
+#
+# Note: on Windows, shared builds enable CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS so
+# every public function is exported automatically, including those reachable
+# through bundled static protobuf / flatbuffers.  For a production-grade SDK
+# you'd replace this with a VTX_API macro annotated on every public symbol --
+# that's a separate ticket (see docs/BUILD.md).
+# ------------------------------------------------------------------------------
+option(VTX_BUILD_SHARED "Build VTX libraries as shared (DLL / .so) instead of static" OFF)
+
+if(VTX_BUILD_SHARED)
+    set(BUILD_SHARED_LIBS ON)
+    set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
+    message(STATUS "VTX: Building SHARED libraries")
+else()
+    set(BUILD_SHARED_LIBS OFF)
+    message(STATUS "VTX: Building STATIC libraries")
+endif()
 
 # --- SDK Modules ---
 add_subdirectory(sdk/src)

@@ -1,0 +1,8 @@
+{
+  "name": "vtx-sdk",
+  "version-string": "1.0.0",
+  "description": "Dependencies for building the VTX SDK without checked-in Windows binaries. FlatBuffers and zstd are resolved through CMake FetchContent and do NOT appear here.",
+  "dependencies": [
+    "protobuf"
+  ]
+}

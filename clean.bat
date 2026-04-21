@@ -6,6 +6,11 @@ if exist "build" (
     rmdir /s /q "build"
 )
 
+if exist "build-shared" (
+    echo Deleting build-shared folder...
+    rmdir /s /q "build-shared"
+)
+
 if exist "dist" (
     echo Deleting dist folder...
     rmdir /s /q "dist"

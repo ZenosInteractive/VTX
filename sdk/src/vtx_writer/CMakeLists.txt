@@ -15,18 +15,28 @@ file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS
 # ==============================================================================
 # 2. Target and deps
 # ==============================================================================
-add_library(vtx_writer STATIC ${SOURCES} ${HEADERS})
+# Library type (STATIC/SHARED) follows BUILD_SHARED_LIBS (VTX_BUILD_SHARED).
+add_library(vtx_writer ${SOURCES} ${HEADERS})
 
 target_include_directories(vtx_writer
-    PUBLIC
     PRIVATE
-        "${CMAKE_SOURCE_DIR}/sdk/src/vtx_common/src/generated"
-        "${CMAKE_SOURCE_DIR}/thirdparty/protobuf/include"
-        "${CMAKE_SOURCE_DIR}/thirdparty/flatbuffers/include"
+        "${VTX_COMMON_GENERATED_DIR}"
 )
 
-target_compile_definitions(vtx_writer PRIVATE PROTOBUF_STATIC_LIBRARY)
-target_link_libraries(vtx_writer PUBLIC vtx_common)
+target_link_libraries(vtx_writer
+    PUBLIC
+        vtx_common
+    PRIVATE
+        $<BUILD_INTERFACE:VTX::deps::protobuf>
+        $<BUILD_INTERFACE:VTX::deps::flatbuffers>
+        $<BUILD_INTERFACE:VTX::deps::zstd>
+)
+
+# See note in vtx_reader/CMakeLists.txt -- Windows shared DLLs duplicate the
+# generated protobuf/flatbuffers objects into every module that references them.
+if(BUILD_SHARED_LIBS AND WIN32)
+    target_link_libraries(vtx_writer PRIVATE $<BUILD_INTERFACE:vtx_generated_code>)
+endif()
 
 # ==============================================================================
 # 3. VS filters
@@ -34,4 +44,8 @@ target_link_libraries(vtx_writer PUBLIC vtx_common)
 source_group(TREE "${CMAKE_SOURCE_DIR}/sdk/include" PREFIX "Header Files" FILES ${HEADERS})
 source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}" PREFIX "Source Files" FILES ${SOURCES})
 
-install(TARGETS vtx_writer EXPORT VTXTargets ARCHIVE DESTINATION lib LIBRARY DESTINATION lib)
+install(TARGETS vtx_writer EXPORT VTXTargets
+    ARCHIVE DESTINATION lib
+    LIBRARY DESTINATION lib
+    RUNTIME DESTINATION bin
+)
