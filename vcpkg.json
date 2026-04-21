@@ -1,8 +1,7 @@
 {
   "name": "vtx-sdk",
   "version-string": "1.0.0",
-  "description": "Windows Protobuf dependency for VTX. FlatBuffers and zstd are pinned separately via CMake FetchContent and do not appear here.",
-  "builtin-baseline": "3af1d1e60af2b2abf55760538cd607829029b07a",
+  "description": "Dependencies for building the VTX SDK without checked-in Windows binaries. FlatBuffers and zstd are resolved through CMake FetchContent and do NOT appear here.",
   "dependencies": [
     "protobuf"
   ]

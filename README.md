@@ -27,11 +27,11 @@ All four modules are static libraries. Enable or disable each with CMake options
 | Compiler | MSVC / clang / gcc with C++20 support |
 | Platform | Windows, Linux, macOS |
 
-Dependency flow:
+Preferred dependency flow:
 
-- **Windows**: `vcpkg.json` manifest + vcpkg toolchain file (see below).  `find_package(Protobuf)` via any other mechanism works too
-- **Linux / macOS**: system package manager for Protobuf (`apt install libprotobuf-dev`, `brew install protobuf`, etc.)
-- FlatBuffers + zstd are always pinned via CMake `FetchContent` -- no version drift between platforms, no apt / brew / vcpkg needed for them
+- **Windows**: use the provided `vcpkg.json` manifest with `-DVTX_DEPENDENCY_SOURCE=PACKAGE_MANAGER`
+- **Linux / macOS**: use system packages / package manager installs
+- **Legacy fallback**: the prebuilt binaries under `thirdparty/` still work on Windows via `-DVTX_DEPENDENCY_SOURCE=BUNDLED`, but they are no longer the only supported path
 
 Header-only dependencies remain bundled in `thirdparty/`:
 
@@ -61,7 +61,8 @@ cmake --install build --config Release --prefix dist
 ```bat
 vcpkg install
 cmake -S . -B build -A x64 ^
-  -DCMAKE_TOOLCHAIN_FILE=%VCPKG_ROOT%\scripts\buildsystems\vcpkg.cmake
+  -DCMAKE_TOOLCHAIN_FILE=%VCPKG_ROOT%\scripts\buildsystems\vcpkg.cmake ^
+  -DVTX_DEPENDENCY_SOURCE=PACKAGE_MANAGER
 cmake --build build --config Release --parallel
 ```
 
@@ -184,7 +185,7 @@ tools/
   inspector/           GUI inspector (ImGui + GLFW)
   schema_creator/      Schema definition tool
   shared/              Shared UI library
-thirdparty/            Header-only deps (nlohmann/json, xxHash)
+thirdparty/            Header-only deps + legacy Windows binary fallback
 vcpkg.json             Optional manifest for reproducible Windows package-manager builds
 scripts/               Code generation (vtx_codegen.py)
 cmake/                 CMake package config for downstream projects

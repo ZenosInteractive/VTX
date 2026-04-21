@@ -26,10 +26,10 @@ The CI uses `clang-format-15` for reproducibility across runs. Locally, any rece
 
 | # | OS | Build type | Library type | Dependency source |
 |---|---|---|---|---|
-| 1 | Windows | Release | static | vcpkg (protobuf) + FetchContent (flatbuffers, zstd) |
-| 2 | Windows | Release | shared (DLL) | vcpkg + FetchContent |
-| 3 | Windows | Debug | static | vcpkg + FetchContent |
-| 4 | Linux | Release | static | apt (protobuf) + FetchContent |
+| 1 | Windows | Release | static | bundled thirdparty |
+| 2 | Windows | Release | shared (DLL) | bundled thirdparty |
+| 3 | Windows | Debug | static | bundled thirdparty |
+| 4 | Linux | Release | static | apt (protobuf) + FetchContent (flatbuffers, zstd) |
 | 5 | Linux | Release | shared (.so) | apt + FetchContent |
 | 6 | Linux | Debug | static | apt + FetchContent |
 
@@ -57,22 +57,36 @@ Header-only dependencies always come from the repo:
 
 Binary dependencies are resolved through `cmake/VtxDependencies.cmake`:
 
-- Protocol Buffers (`protoc` + `libprotobuf`) -- `find_package(Protobuf)` on every platform.  Works with system packages (apt / brew), vcpkg, or any prefix pointed to by `CMAKE_PREFIX_PATH`
+- Protocol Buffers (`protoc` + `libprotobuf`) -- system package on Linux / macOS, bundled `thirdparty/protobuf/` or vcpkg on Windows
 - FlatBuffers (`flatc` + headers) -- always FetchContent, pinned to `v24.12.23`
 - zstd -- always FetchContent, pinned to `v1.5.6`, linked statically
 
 ### Windows
 
-VTX uses vcpkg to resolve Protobuf.  The included `vcpkg.json` manifest lists only what we actually need:
+Preferred flow: package-managed dependencies with the included `vcpkg.json` manifest.
 
 ```bat
 vcpkg install
 cmake -S . -B build -A x64 ^
-  -DCMAKE_TOOLCHAIN_FILE=%VCPKG_ROOT%\scripts\buildsystems\vcpkg.cmake
+  -DCMAKE_TOOLCHAIN_FILE=%VCPKG_ROOT%\scripts\buildsystems\vcpkg.cmake ^
+  -DVTX_DEPENDENCY_SOURCE=PACKAGE_MANAGER
 cmake --build build --config Release --parallel
 ```
 
-If you already have Protobuf discoverable through `CMAKE_PREFIX_PATH` (e.g. a non-vcpkg install), the toolchain file is optional -- `find_package(Protobuf)` in `cmake/VtxDependencies.cmake` will pick up any sufficient installation.
+Legacy fallback:
+
+```bat
+cmake -S . -B build -A x64 -DVTX_DEPENDENCY_SOURCE=BUNDLED
+cmake --build build --config Release --parallel
+```
+
+`VTX_DEPENDENCY_SOURCE` accepts:
+
+| Value | Meaning |
+|---|---|
+| `AUTO` | Try package-manager resolution first, then fall back to `thirdparty/` |
+| `PACKAGE_MANAGER` | Require dependencies from vcpkg / installed packages |
+| `BUNDLED` | Require the legacy prebuilt artifacts under `thirdparty/` |
 
 ### Linux / macOS
 
@@ -159,6 +173,7 @@ cmake --build --preset windows-release
 | `BUILD_VTX_SAMPLES` | `ON` | Build sample programs |
 | `VTX_BUILD_TESTS` | `ON` | Build the unit test suite |
 | `VTX_BUILD_SHARED` | `OFF` | Build shared SDK libraries instead of static |
+| `VTX_DEPENDENCY_SOURCE` | `AUTO` | Windows dependency source selection |
 
 SDK-only build:
 
@@ -266,28 +281,38 @@ VTX/
   samples/
   docs/
   scripts/
-  thirdparty/   Header-only deps (nlohmann/json, xxHash)
-  vcpkg.json    Windows package-manager manifest (Protobuf)
+  thirdparty/   Header-only deps + legacy Windows binary fallback
+  vcpkg.json    Windows package-manager manifest
 ```
 
 ## Troubleshooting
 
-### Windows configure cannot find Protobuf
+### Windows package-manager configure cannot find dependencies
 
-VTX uses `find_package(Protobuf)` with vcpkg as the expected provider.  Either:
+If you selected `-DVTX_DEPENDENCY_SOURCE=PACKAGE_MANAGER`, CMake expects:
 
-- Pass `-DCMAKE_TOOLCHAIN_FILE=%VCPKG_ROOT%\scripts\buildsystems\vcpkg.cmake`
-  so the vcpkg.json manifest is honoured, or
-- Install Protobuf some other way (non-vcpkg binary distribution, a manual
-  build) and point `CMAKE_PREFIX_PATH` at its install prefix.
+- `protoc`
+- `protobuf::libprotobuf`
 
-FlatBuffers and zstd are *not* looked up on Windows -- both come from
-`FetchContent` regardless of how Protobuf is resolved.
+`flatc` + FlatBuffers headers and the zstd static library are built by
+FetchContent on every platform, so they are not probed on the package-
+manager path.
+
+Make sure you configured with the vcpkg toolchain file, or that `protoc`
+and `libprotobuf` are discoverable through `PATH` / `CMAKE_PREFIX_PATH`.
+
+### Windows bundled fallback configure fails
+
+If you selected `-DVTX_DEPENDENCY_SOURCE=BUNDLED`, the legacy artifacts must
+still exist under `thirdparty/protobuf/`. FlatBuffers and zstd are no longer
+read from `thirdparty/` on any platform -- `flatc`, the FlatBuffers headers,
+and the zstd static library are all built from source via CMake
+`FetchContent` into `build/_deps/`.
 
 ### Linux cannot find Protobuf
 
-Install the development packages shown above.  If they live in a non-standard
-prefix, provide `CMAKE_PREFIX_PATH`.  FlatBuffers + zstd never need to be
+Install the development packages shown above. If they live in a non-standard
+prefix, provide `CMAKE_PREFIX_PATH`. FlatBuffers + zstd never need to be
 installed system-wide -- FetchContent handles them regardless of what the
 distro packages.
 
@@ -296,12 +321,3 @@ distro packages.
 There is no runtime zstd dependency on any platform. The library is linked
 statically from the FetchContent build, so binaries do not ship a
 `zstd.dll` / `libzstd.so.*` alongside them.
-
-### `find_package(VTX)` consumer gets link errors
-
-Downstream projects that `find_package(VTX REQUIRED)` get Protobuf
-automatically through `find_dependency(Protobuf)` in `VTXConfig.cmake`, and
-zstd through the installed `libzstd_static` exported under `VTX::libzstd_static`.
-If you see undefined references to `google::protobuf::*` in the consumer,
-check that Protobuf is reachable to `find_package` at consumer configure
-time (same `CMAKE_PREFIX_PATH` / vcpkg toolchain conventions).

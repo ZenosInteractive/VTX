@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package prot;
+
+message Fragment {
+  int32 index = 1;
+  int64 timestamp = 2;
+  bytes data = 3;
+  int32 PartIndex = 4;
+  int32 MaxParts = 5;
+}
