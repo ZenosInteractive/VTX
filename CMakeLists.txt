@@ -33,13 +33,6 @@ set(CMAKE_INSTALL_RPATH_USE_LINK_PATH ON)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(VtxDependencies)
 
-if(MSVC AND VTX_NEEDS_PROTOBUF_STATIC_DEFINE)
-    # The legacy bundled Windows protobuf ships as static libraries. Package-
-    # manager builds provide the right usage requirements through imported
-    # targets, so we only force this define for the bundled fallback path.
-    add_compile_definitions(PROTOBUF_STATIC_LIBRARY)
-endif()
-
 set(VTX_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/sdk/include")
 
 option(VTX_BUILD_WRITER "Build vtx_writer module" ON)

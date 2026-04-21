@@ -5,6 +5,20 @@ All notable changes to the VTX SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2026-04-21
+
+### Changed
+
+- **cmake**: `cmake/VtxDependencies.cmake` collapses Windows-vs-other branches into a single `find_package(Protobuf)` path.  The `VTX_DEPENDENCY_SOURCE` cache variable, its `_vtx_use_bundled_windows_deps()` helper, and the `VTX_NEEDS_PROTOBUF_STATIC_DEFINE` internal flag are all removed -- Protobuf resolution works the same way on every platform (CONFIG first, then MODULE fallback; any mechanism that lands `protobuf::libprotobuf` works)
+- **build**: `find_package(VTX)` is now self-contained.  `VTXConfig.cmake` calls `find_dependency(Protobuf)` so consumers automatically pull the matching protobuf runtime; the zstd static library is installed alongside VTX (`VTX::libzstd_static`) and hooked into `vtx_common` via `$<INSTALL_INTERFACE:...>`.  A downstream project can link `VTX::vtx_reader` with nothing more than `find_package(VTX REQUIRED)` + a reachable Protobuf (vcpkg / apt / brew)
+- **ci**: Windows matrix jobs now configure with the vcpkg toolchain file (`$VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake`).  The GitHub-hosted runner ships vcpkg pre-installed; `vcpkg.json` manifest mode picks up Protobuf on configure.  Added an `actions/cache@v4` step keyed on `vcpkg.json` for binary-cache reuse across runs
+- **build**: `thirdparty/protobuf/`, `thirdparty/zstd/`, and `thirdparty/flatbuffers/` deleted from the repo entirely.  All three libraries are resolved through package managers or `FetchContent` now
+
+### Removed
+
+- **build**: `VTX_DEPENDENCY_SOURCE` cache variable (no longer meaningful -- a single `find_package(Protobuf)` path covers every platform)
+- **build**: root `CMakeLists.txt` no longer force-defines `PROTOBUF_STATIC_LIBRARY`; the protobuf imported target's own usage requirements carry it when needed
+
 ## [Unreleased] - 2026-04-20
 
 ### Added

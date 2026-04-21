@@ -1,6 +1,17 @@
 @PACKAGE_INIT@
 
 include(CMakeFindDependencyMacro)
+
+# Consumers linking VTX need protobuf resolvable via find_package.  Any
+# mechanism works: vcpkg toolchain on Windows, apt / brew on Linux / macOS,
+# or an explicit CMAKE_PREFIX_PATH.  We re-use the same CONFIG-first /
+# MODULE-fallback pattern as VTX's own build (Ubuntu 22.04 ships
+# libprotobuf-dev without ProtobufConfig.cmake).
+find_dependency(Protobuf CONFIG QUIET)
+if(NOT Protobuf_FOUND)
+    find_dependency(Protobuf MODULE REQUIRED)
+endif()
+
 include("${CMAKE_CURRENT_LIST_DIR}/VTXTargets.cmake")
 
 check_required_components(VTX)

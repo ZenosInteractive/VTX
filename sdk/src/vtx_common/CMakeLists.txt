@@ -131,12 +131,18 @@ target_sources(vtx_common PRIVATE ${IDE_SCHEMA_FILES})
 
 target_link_libraries(vtx_common
     PUBLIC
-        # BUILD_INTERFACE keeps the imported thirdparty targets out of the
-        # install(EXPORT) tree -- consumers of the installed SDK supply their
-        # own protobuf / flatbuffers / zstd (documented in docs/BUILD.md).
+        # During VTX's own build, use the FetchContent / find_package targets
+        # established by cmake/VtxDependencies.cmake.
         $<BUILD_INTERFACE:VTX::deps::protobuf>
         $<BUILD_INTERFACE:VTX::deps::flatbuffers>
         $<BUILD_INTERFACE:VTX::deps::zstd>
+        # When VTX is consumed via find_package, VTXConfig.cmake pulls
+        # protobuf::libprotobuf through find_dependency(Protobuf) and we ship
+        # libzstd_static as part of VTX's EXPORT set (see VtxDependencies.cmake).
+        # FlatBuffers is header-only and only used during VTX's own build,
+        # so no install-interface propagation is needed.
+        $<INSTALL_INTERFACE:protobuf::libprotobuf>
+        $<INSTALL_INTERFACE:VTX::libzstd_static>
 )
 
 # ==============================================================================
