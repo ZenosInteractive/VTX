@@ -1,6 +1,7 @@
 #include "windows/entity_details_window.h"
 
 #include <algorithm>
+#include <cstring>
 #include <imgui.h>
 #include <utility>
 

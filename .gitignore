@@ -3,6 +3,9 @@ build/
 dist/
 out/
 
+# Local tool state (Claude Code, etc.)
+.claude/
+
 # CMake
 CMakeCache.txt
 CMakeFiles/

@@ -1060,7 +1060,8 @@ EntityInspectorViewModel EntityInspectorViewService::BuildFrameViewModel(
     view_model.header.show_hash = pc->content_hash != 0;
     if (view_model.header.show_hash) {
         char buffer[64];
-        std::snprintf(buffer, sizeof(buffer), "Hash: 0x%llX", pc->content_hash);
+        std::snprintf(buffer, sizeof(buffer), "Hash: 0x%llX",
+                      static_cast<unsigned long long>(pc->content_hash));
         view_model.header.hash_label = buffer;
     }
     view_model.properties = BuildPropertyTree(*pc, global_cache);
