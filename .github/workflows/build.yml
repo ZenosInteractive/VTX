@@ -1,22 +1,223 @@
-name: Build SDK
+name: CI
+
+# Full build + test matrix for every push to main and every pull request.
+#
+# Matrix (active jobs):
+#
+#   Windows Release static    <- bundled thirdparty on Windows, fast baseline
+#   Windows Release shared    <- validates DLL + import-lib path
+#   Windows Debug   static    <- catches debug-only issues (asserts, iterator debug)
+#
+# Linux jobs (Release static, Release shared, Debug static) are scaffolded
+# below but commented out -- they land in the follow-up commit that makes
+# the VTX sources actually build on Linux.  Uncomment that block to expand
+# to the full six-job matrix.
+#
+# GUI tools (vtx_inspector, vtx_schema_creator) are disabled in CI -- they
+# fetch ImGui + GLFW, take ~2x as long to build, and still contain Windows-only
+# glue that makes them flaky on Linux.  They get tested manually until someone
+# ports the INI-based settings persistence to XDG.
+#
+# The CLI tool (vtx_cli) and all five samples stay ON.  `ctest` runs the full
+# 187-test suite plus the sample smoke tests registered in tests/CMakeLists.txt.
 
 on:
   push:
-    branches: [main]
+    branches: [main, master]
   pull_request:
-    branches: [main]
+    branches: [main, master]
+
+# When a new commit lands on the same PR, cancel the previous CI run.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build:
-    runs-on: windows-latest
+  # ==========================================================================
+  # clang-format check.  Runs ONLY on files changed by the current PR / push,
+  # not on the whole repo -- 90% of the codebase pre-dates the .clang-format
+  # file so a strict full-repo check would be permanently red.  This "diff
+  # gate" catches new formatting regressions without requiring a one-time
+  # style-sweep commit.  When you're ready to sweep, run locally:
+  #
+  #   clang-format -i $(find sdk tools samples tests \
+  #       -type f \( -name "*.cpp" -o -name "*.cc" -o -name "*.h" -o -name "*.hpp" \) \
+  #       -not -path "*/generated/*" -not -path "*arena_generated.h" \
+  #       -not -path "*portable-file-dialogs.h")
+  #
+  # and commit with --git-blame-ignore-revs to preserve blame.
+  # ==========================================================================
+  clang-format:
+    name: clang-format (changed files)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout (with history for diff)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Configure CMake
-        run: cmake -S . -B build -A x64 -DBUILD_VTX_TOOL=OFF
+      - name: Install clang-format
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-format-15
+          sudo ln -sf "$(command -v clang-format-15)" /usr/local/bin/clang-format
+          clang-format --version
+
+      - name: List changed C++ source files
+        id: changed
+        run: |
+          # PR: diff against the base branch.  Push: diff against the previous commit.
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="origin/${{ github.base_ref }}"
+            git fetch origin "${{ github.base_ref }}" --depth=1
+          else
+            BASE="HEAD~1"
+          fi
+
+          # Find .cpp/.cc/.h/.hpp files added or modified, excluding vendored
+          # and generated code.
+          FILES=$(git diff --name-only --diff-filter=ACM "$BASE" HEAD \
+                  | grep -E '\.(cpp|cc|h|hpp)$' \
+                  | grep -v -E '^(thirdparty/|.*generated/|.*arena_generated\.h$|.*portable-file-dialogs\.h$)' \
+                  || true)
+
+          if [ -z "$FILES" ]; then
+            echo "No in-scope C++ files changed."
+            echo "files=" >> "$GITHUB_OUTPUT"
+          else
+            echo "Files to check:"
+            echo "$FILES"
+            # Collapse newlines into spaces for downstream xargs.
+            printf 'files<<EOF\n%s\nEOF\n' "$FILES" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: clang-format --dry-run --Werror
+        if: steps.changed.outputs.files != ''
+        run: |
+          echo "${{ steps.changed.outputs.files }}" | xargs clang-format --dry-run --Werror
+
+  build-test:
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # ---- Windows ------------------------------------------------------
+          - label: Windows / Release / static
+            os: windows-latest
+            build_type: Release
+            vtx_shared: "OFF"
+            extra_cmake: -A x64
+
+          - label: Windows / Release / shared
+            os: windows-latest
+            build_type: Release
+            vtx_shared: "ON"
+            extra_cmake: -A x64
+
+          - label: Windows / Debug / static
+            os: windows-latest
+            build_type: Debug
+            vtx_shared: "OFF"
+            extra_cmake: -A x64
+
+          # ---- Linux --------------------------------------------------------
+          # Linux jobs land in the follow-up commit that wires
+          # cmake/VtxDependencies.cmake, splits MSVC-only settings in the
+          # root CMakeLists.txt, and port tools/shared/src/gui/gui_app.cpp
+          # off GLFW_EXPOSE_NATIVE_WIN32.  Until then the VTX sources only
+          # build on Windows, so running Linux jobs in CI would be a
+          # guaranteed red herring.  Re-enable in the same commit that
+          # makes `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release` succeed
+          # on Ubuntu.
+          #
+          # - label: Linux / Release / static
+          #   os: ubuntu-latest
+          #   build_type: Release
+          #   vtx_shared: "OFF"
+          #   extra_cmake: -DCMAKE_BUILD_TYPE=Release
+          #
+          # - label: Linux / Release / shared
+          #   os: ubuntu-latest
+          #   build_type: Release
+          #   vtx_shared: "ON"
+          #   extra_cmake: -DCMAKE_BUILD_TYPE=Release
+          #
+          # - label: Linux / Debug / static
+          #   os: ubuntu-latest
+          #   build_type: Debug
+          #   vtx_shared: "OFF"
+          #   extra_cmake: -DCMAKE_BUILD_TYPE=Debug
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ----------------------------------------------------------------------
+      # Linux needs protobuf + protoc from apt.  FlatBuffers and zstd are
+      # both built from source through FetchContent -- see
+      # cmake/VtxDependencies.cmake -- so no libflatbuffers-dev /
+      # libzstd-dev packages.  Windows uses the bundled thirdparty
+      # binaries (VTX dependency resolver falls back to BUNDLED when no
+      # vcpkg toolchain is provided).
+      # ----------------------------------------------------------------------
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake \
+            g++ \
+            ninja-build \
+            protobuf-compiler \
+            libprotobuf-dev
+
+      # ----------------------------------------------------------------------
+      # Cache CMake FetchContent output (GoogleTest) so repeat CI runs don't
+      # re-clone + re-compile gtest.  Keyed on every CMakeLists + cmake module
+      # so any change to the build graph invalidates the cache.
+      # ----------------------------------------------------------------------
+      - name: Cache FetchContent
+        uses: actions/cache@v4
+        with:
+          path: build/_deps
+          key: ${{ matrix.os }}-deps-${{ hashFiles('CMakeLists.txt', 'cmake/*.cmake', 'tests/CMakeLists.txt', 'tools/CMakeLists.txt', 'sdk/src/**/CMakeLists.txt', 'samples/CMakeLists.txt') }}
+          restore-keys: |
+            ${{ matrix.os }}-deps-
+
+      # ----------------------------------------------------------------------
+      # Configure.  GUI tools disabled everywhere for CI speed.
+      # ----------------------------------------------------------------------
+      - name: Configure
+        run: >
+          cmake -S . -B build
+          ${{ matrix.extra_cmake }}
+          -DVTX_BUILD_SHARED=${{ matrix.vtx_shared }}
+          -DBUILD_VTX_INSPECTOR=OFF
+          -DBUILD_VTX_SCHEMA_CREATOR=OFF
 
       - name: Build
-        run: cmake --build build --config Release --parallel
+        run: cmake --build build --config ${{ matrix.build_type }} --parallel
 
-      - name: Install
-        run: cmake --install build --config Release --prefix dist
+      - name: Test
+        working-directory: build
+        run: ctest --output-on-failure -C ${{ matrix.build_type }} --parallel --timeout 120
+
+      # ----------------------------------------------------------------------
+      # On failure, upload ctest logs + any artefacts the test suite dropped
+      # under tests/test_output so the dev can inspect what went wrong.
+      # ----------------------------------------------------------------------
+      - name: Upload test artefacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: failure-${{ matrix.os }}-${{ matrix.build_type }}-${{ matrix.vtx_shared }}
+          path: |
+            build/Testing/**
+            build/tests/test_output/**
+          if-no-files-found: ignore
+          retention-days: 7
