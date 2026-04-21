@@ -29,6 +29,12 @@ set(SCHEMA_DIR "${CMAKE_SOURCE_DIR}/sdk/src/schemas")
 set(GENERATED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/generated")
 file(MAKE_DIRECTORY ${GENERATED_DIR})
 
+# Expose the generated-code path to sibling CMakeLists (tests/, samples/,
+# tools/) so they can include the same protobuf / flatbuffers headers that
+# vtx_common compiles.  INTERNAL so it doesn't show up in ccmake.
+set(VTX_COMMON_GENERATED_DIR "${GENERATED_DIR}"
+    CACHE INTERNAL "Path to vtx_common's generated protobuf + flatbuffers headers")
+
 set(PROTO_FILENAME "vtx_schema")
 set(PROTO_FILE "${SCHEMA_DIR}/${PROTO_FILENAME}.proto")
 set(PROTO_SRC "${GENERATED_DIR}/${PROTO_FILENAME}.pb.cc")

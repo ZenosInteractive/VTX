@@ -54,6 +54,15 @@ else()
     message(STATUS "VTX: Samples disabled.")
 endif()
 
+# --- Tests ---
+if(VTX_BUILD_TESTS AND VTX_BUILD_READER AND VTX_BUILD_WRITER AND VTX_BUILD_DIFFER)
+    message(STATUS "VTX: Building tests...")
+    enable_testing()
+    add_subdirectory(tests)
+else()
+    message(STATUS "VTX: Tests disabled.")
+endif()
+
 # --- Install ---
 install(DIRECTORY "${CMAKE_SOURCE_DIR}/sdk/include/"
         DESTINATION include

@@ -1,0 +1,205 @@
+{
+  "version": "1.0.0",
+  "buckets": ["entity"],
+  "property_mapping": [
+    {
+      "struct": "Player",
+      "values": [
+        {
+          "name": "UniqueID",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": { "type": "string", "keyType": "", "category": "Player", "displayName": "Unique ID", "tooltip": "Persistent player identifier", "defaultValue": "", "version": 1, "fixedArrayDim": 1 }
+        },
+        {
+          "name": "Name",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": { "type": "string", "keyType": "", "category": "Player", "displayName": "Player Name", "tooltip": "Display name", "defaultValue": "", "version": 1, "fixedArrayDim": 1 }
+        },
+        {
+          "name": "Team",
+          "structType": "",
+          "typeId": "Int32",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": { "type": "int32", "keyType": "", "category": "Player", "displayName": "Team", "tooltip": "Team number (1 or 2)", "defaultValue": "1", "version": 1, "fixedArrayDim": 1 }
+        },
+        {
+          "name": "Health",
+          "structType": "",
+          "typeId": "Float",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": { "type": "float", "keyType": "", "category": "Player", "displayName": "Health", "tooltip": "Current health points (0-100)", "defaultValue": "100", "version": 1, "fixedArrayDim": 1 }
+        },
+        {
+          "name": "Armor",
+          "structType": "",
+          "typeId": "Float",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": { "type": "float", "keyType": "", "category": "Player", "displayName": "Armor", "tooltip": "Current armor points (0-100)", "defaultValue": "50", "version": 1, "fixedArrayDim": 1 }
+        },
+        {
+          "name": "Position",
+          "structType": "",
+          "typeId": "Vector",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": { "type": "vector", "keyType": "", "category": "Player", "displayName": "Position", "tooltip": "World position (x, y, z)", "defaultValue": "", "version": 1, "fixedArrayDim": 1 }
+        },
+        {
+          "name": "Rotation",
+          "structType": "",
+          "typeId": "Quat",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": { "type": "quat", "keyType": "", "category": "Player", "displayName": "Rotation", "tooltip": "Look direction quaternion", "defaultValue": "", "version": 1, "fixedArrayDim": 1 }
+        },
+        {
+          "name": "Velocity",
+          "structType": "",
+          "typeId": "Vector",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": { "type": "vector", "keyType": "", "category": "Player", "displayName": "Velocity", "tooltip": "Movement velocity (units/sec)", "defaultValue": "", "version": 1, "fixedArrayDim": 1 }
+        },
+        {
+          "name": "IsAlive",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": { "type": "bool", "keyType": "", "category": "Player", "displayName": "Is Alive", "tooltip": "Whether the player is currently alive", "defaultValue": "true", "version": 1, "fixedArrayDim": 1 }
+        },
+        {
+          "name": "Score",
+          "structType": "",
+          "typeId": "Int32",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": { "type": "int32", "keyType": "", "category": "Player", "displayName": "Score", "tooltip": "Kill count", "defaultValue": "0", "version": 1, "fixedArrayDim": 1 }
+        },
+        {
+          "name": "Deaths",
+          "structType": "",
+          "typeId": "Int32",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": { "type": "int32", "keyType": "", "category": "Player", "displayName": "Deaths", "tooltip": "Death count", "defaultValue": "0", "version": 1, "fixedArrayDim": 1 }
+        }
+      ]
+    },
+    {
+      "struct": "Projectile",
+      "values": [
+        {
+          "name": "UniqueID",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": { "type": "string", "keyType": "", "category": "Projectile", "displayName": "Unique ID", "tooltip": "Projectile identifier", "defaultValue": "", "version": 1, "fixedArrayDim": 1 }
+        },
+        {
+          "name": "OwnerID",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": { "type": "string", "keyType": "", "category": "Projectile", "displayName": "Owner ID", "tooltip": "Player who fired this projectile", "defaultValue": "", "version": 1, "fixedArrayDim": 1 }
+        },
+        {
+          "name": "Position",
+          "structType": "",
+          "typeId": "Vector",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": { "type": "vector", "keyType": "", "category": "Projectile", "displayName": "Position", "tooltip": "World position", "defaultValue": "", "version": 1, "fixedArrayDim": 1 }
+        },
+        {
+          "name": "Velocity",
+          "structType": "",
+          "typeId": "Vector",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": { "type": "vector", "keyType": "", "category": "Projectile", "displayName": "Velocity", "tooltip": "Travel direction and speed", "defaultValue": "", "version": 1, "fixedArrayDim": 1 }
+        },
+        {
+          "name": "Damage",
+          "structType": "",
+          "typeId": "Float",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": { "type": "float", "keyType": "", "category": "Projectile", "displayName": "Damage", "tooltip": "Damage on hit", "defaultValue": "25", "version": 1, "fixedArrayDim": 1 }
+        },
+        {
+          "name": "Type",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": { "type": "string", "keyType": "", "category": "Projectile", "displayName": "Type", "tooltip": "bullet or rocket", "defaultValue": "bullet", "version": 1, "fixedArrayDim": 1 }
+        }
+      ]
+    },
+    {
+      "struct": "MatchState",
+      "values": [
+        {
+          "name": "UniqueID",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": { "type": "string", "keyType": "", "category": "MatchState", "displayName": "Unique ID", "tooltip": "Match identifier", "defaultValue": "match_001", "version": 1, "fixedArrayDim": 1 }
+        },
+        {
+          "name": "ScoreTeam1",
+          "structType": "",
+          "typeId": "Int32",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": { "type": "int32", "keyType": "", "category": "MatchState", "displayName": "Score Team 1", "tooltip": "Team 1 total kills", "defaultValue": "0", "version": 1, "fixedArrayDim": 1 }
+        },
+        {
+          "name": "ScoreTeam2",
+          "structType": "",
+          "typeId": "Int32",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": { "type": "int32", "keyType": "", "category": "MatchState", "displayName": "Score Team 2", "tooltip": "Team 2 total kills", "defaultValue": "0", "version": 1, "fixedArrayDim": 1 }
+        },
+        {
+          "name": "Round",
+          "structType": "",
+          "typeId": "Int32",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": { "type": "int32", "keyType": "", "category": "MatchState", "displayName": "Round", "tooltip": "Current round number", "defaultValue": "1", "version": 1, "fixedArrayDim": 1 }
+        },
+        {
+          "name": "Phase",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": { "type": "string", "keyType": "", "category": "MatchState", "displayName": "Phase", "tooltip": "warmup, playing, or roundend", "defaultValue": "warmup", "version": 1, "fixedArrayDim": 1 }
+        },
+        {
+          "name": "TimeRemaining",
+          "structType": "",
+          "typeId": "Float",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": { "type": "float", "keyType": "", "category": "MatchState", "displayName": "Time Remaining", "tooltip": "Seconds left in current phase", "defaultValue": "0", "version": 1, "fixedArrayDim": 1 }
+        }
+      ]
+    }
+  ]
+}

@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-04-20
 
+### Added
+
+- **tests**: 47 new tests across 8 new files, driven by a targeted SDK audit.  Test suite total: 89 -> 187 passing + 1 intentionally skipped (awaiting a fixture schema with a Map field).
+  - `tests/common/test_flat_array_edges.cpp` (12 tests) -- repeated OOB `PushBack`, empty-span `ReplaceSubArray` at non-zero indices, insert-at-end-equals-PushBack, erase-last-remaining-subarray, zero-length `EraseRange`, `CreateEmptySubArray` interactions, SSO-boundary operations on `FlatArray<std::string>`, `FlatBoolArray = FlatArray<uint8_t>` pin
+  - `tests/reader/test_corrupt_files.cpp` (8 tests) -- empty file, file smaller than magic bytes, valid magic but truncated header, truncated before footer, corrupt `footer_size`, chunk offset beyond EOF, negative / out-of-range frame indices (A1 / A3 regression tests)
+  - `tests/writer/test_writer_edges.cpp` (6 tests) -- zero-frame replay, single-frame replay, `chunk_max_frames = 1`, `RecordFrame` after `Stop`, double-`Stop` idempotency (A5 regression), frame larger than `chunk_max_bytes`
+  - `tests/differ/test_diff_edges.cpp` (6 tests) -- empty buckets, differing bucket contents, byte arrays, nested `any_struct_properties`, map properties (skipped pending schema fixture), entity replaced under same unique_id
+  - `tests/common/test_schema_registry_errors.cpp` (5 tests) -- empty / malformed / missing-required / duplicate-struct / unknown-typeId JSON inputs must not crash
+  - `tests/common/test_vtx_game_times_state.cpp` (6 tests) -- rollback without prior snapshot, zero-frame resolve, setup-after-data documents contract, clear-then-reuse, snapshot+rollback roundtrip, `InsertLiveChunkTimes` monotonicity
+  - `tests/common/test_content_hash_edges.cpp` (5 tests) -- NaN determinism, distinct NaN bit patterns, empty-vs-default equivalence, signed zero distinguishing, move stability
+  - `tests/reader/test_open_replay_edges.cpp` (4 tests) -- directory path, missing file size_in_mb zeroing, relative paths resolving against cwd, non-ASCII filenames
+- **samples/basic_diff.cpp**: `--fail-on-empty` flag used by the sample smoke test registered in `tests/CMakeLists.txt`.  Guards against regressions where the differ silently returns empty patches
+
+### Build
+
+- **cmake**: root `CMakeLists.txt` wires the new `tests/` directory through an `add_subdirectory(tests)` block guarded by `VTX_BUILD_TESTS` (default `ON`).  `sdk/src/vtx_common/CMakeLists.txt` exposes its generated-code directory as the cache variable `VTX_COMMON_GENERATED_DIR` so the test target can include the same protobuf / flatbuffers headers vtx_common compiles
+
 ### Fixed
 
 5 new correctness bugs surfaced by a targeted SDK audit:
