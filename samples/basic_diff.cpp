@@ -18,6 +18,7 @@
 #include "vtx/common/vtx_types.h"
 
 #include <cstddef>
+#include <cstring>
 #include <span>
 #include <string>
 #include <vector>
@@ -48,9 +49,16 @@ std::string PathToString(const VtxDiff::DiffIndexPath& p) {
 
 int main(int argc, char* argv[])
 {
-    const std::string filepath = (argc > 1)
-        ? argv[1]
-        : "content/reader/arena/arena_from_fbs_ds.vtx";
+    std::string filepath = "content/reader/arena/arena_from_fbs_ds.vtx";
+    bool fail_on_empty = false;
+
+    for (int i = 1; i < argc; ++i) {
+        if (std::strcmp(argv[i], "--fail-on-empty") == 0) {
+            fail_on_empty = true;
+        } else {
+            filepath = argv[i];
+        }
+    }
 
     // ---- Open the replay -------------------------------------------------
     auto result = VTX::OpenReplayFile(filepath);
@@ -111,6 +119,11 @@ int main(int argc, char* argv[])
     if (patch.operations.size() > kDetailLimit) {
         VTX_INFO("  ... {} more operation(s) suppressed",
                  patch.operations.size() - kDetailLimit);
+    }
+
+    if (fail_on_empty && patch.operations.empty()) {
+        VTX_ERROR("Diff completed but produced 0 operations on an input that was expected to change.");
+        return 2;
     }
 
     return 0;
