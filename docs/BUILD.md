@@ -4,6 +4,43 @@
 > targets shipped under `samples/`, from a 30-line reader demo to a full
 > arena-data pipeline using `IFrameDataSource`.
 
+## Continuous Integration
+
+Every push to `main` / `master` and every pull request triggers the CI workflow at `.github/workflows/build.yml`. It runs a clang-format gate plus a six-job build-and-test matrix.
+
+### Formatting gate
+
+A dedicated `clang-format` job checks every C++ file **added or modified** by the PR / push against `.clang-format`. Pre-existing files are not checked -- about 90% of the codebase predates the style file, so a strict full-repo check would be permanently red. The gate catches *new* formatting regressions without forcing a one-time blame-destroying style sweep.
+
+If you want to apply the style to the whole tree in one commit (consider recording that SHA in `.git-blame-ignore-revs` afterwards):
+
+```bash
+clang-format -i $(find sdk tools samples tests \
+    -type f \( -name "*.cpp" -o -name "*.cc" -o -name "*.h" -o -name "*.hpp" \) \
+    -not -path "*/generated/*" \
+    -not -path "*arena_generated.h" \
+    -not -path "*portable-file-dialogs.h")
+```
+
+The CI uses `clang-format-15` for reproducibility across runs. Locally, any recent clang-format (14+) works with the config.
+
+### Build + test matrix
+
+| # | OS | Build type | Library type |
+|---|---|---|---|
+| 1 | Windows | Release | static |
+| 2 | Windows | Release | shared (DLL) |
+| 3 | Windows | Debug | static |
+| 4 | Linux | Release | static |
+| 5 | Linux | Release | shared (.so) |
+| 6 | Linux | Debug | static |
+
+Each job runs the full ctest suite plus the sample smoke tests. GUI tools (`vtx_inspector`, `vtx_schema_creator`) are disabled in CI because they fetch ImGui + GLFW and still contain Windows-only glue; they get tested manually.
+
+A failing CI run uploads `build/Testing/` and any dropped test artefacts as a job artefact (retained for 7 days) so the failure can be inspected without reproducing locally.
+
+If you add a new platform target or dependency, extend the matrix in `build.yml` -- don't create a parallel workflow file.
+
 ## Requirements
 
 | Requirement | Version |
