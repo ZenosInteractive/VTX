@@ -191,7 +191,8 @@ std::vector<SummaryRow> FooterSummaryService::BuildFooterSummaryRows(const VTX::
     }
 
     char checksum_buffer[64];
-    std::snprintf(checksum_buffer, sizeof(checksum_buffer), "0x%llX", footer.payload_checksum);
+    std::snprintf(checksum_buffer, sizeof(checksum_buffer), "0x%llX",
+                  static_cast<unsigned long long>(footer.payload_checksum));
     rows.push_back({"Payload Checksum", checksum_buffer});
     return rows;
 }
