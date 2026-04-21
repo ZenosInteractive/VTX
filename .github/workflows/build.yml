@@ -32,11 +32,12 @@ concurrency:
 
 jobs:
   # ==========================================================================
-  # clang-format check.  Runs ONLY on files changed by the current PR / push,
-  # not on the whole repo -- 90% of the codebase pre-dates the .clang-format
-  # file so a strict full-repo check would be permanently red.  This "diff
-  # gate" catches new formatting regressions without requiring a one-time
-  # style-sweep commit.  When you're ready to sweep, run locally:
+  # clang-format check.  Runs on LINES changed by the current PR / push, not
+  # on the whole file -- 90% of the codebase pre-dates the .clang-format
+  # file so a strict full-repo check (or even full-file check on any file
+  # that happens to be touched) would be permanently red.  This "diff gate"
+  # catches new formatting regressions without requiring a one-time style-
+  # sweep commit.  When you're ready to sweep, run locally:
   #
   #   clang-format -i $(find sdk tools samples tests \
   #       -type f \( -name "*.cpp" -o -name "*.cc" -o -name "*.h" -o -name "*.hpp" \) \
@@ -46,7 +47,7 @@ jobs:
   # and commit with --git-blame-ignore-revs to preserve blame.
   # ==========================================================================
   clang-format:
-    name: clang-format (changed files)
+    name: clang-format (changed lines)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -62,18 +63,24 @@ jobs:
           sudo ln -sf "$(command -v clang-format-15)" /usr/local/bin/clang-format
           clang-format --version
 
-      - name: List changed C++ source files
-        id: changed
+      - name: clang-format (changed lines only)
         run: |
-          # PR: diff against the base branch.  Push: diff against the previous commit.
+          # Diff-only gate: we run clang-format-diff against the unified
+          # diff between BASE and HEAD so only lines actually modified get
+          # checked.  Checking the whole file would reject legacy files
+          # (pre .clang-format) that a PR only touched a handful of lines
+          # of -- that's exactly the sweep we're trying to avoid.
+          #
+          # PR: diff against the merge base of the PR.  Push: diff against
+          # the previous commit on the same branch.
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            BASE="origin/${{ github.base_ref }}"
-            git fetch origin "${{ github.base_ref }}" --depth=1
+              BASE="origin/${{ github.base_ref }}"
+              git fetch origin "${{ github.base_ref }}" --depth=1
           else
-            BASE="HEAD~1"
+              BASE="HEAD~1"
           fi
 
-          # Find .cpp/.cc/.h/.hpp files added or modified, excluding vendored
+          # Scope to .cpp/.cc/.h/.hpp added or modified, excluding vendored
           # and generated code.
           FILES=$(git diff --name-only --diff-filter=ACM "$BASE" HEAD \
                   | grep -E '\.(cpp|cc|h|hpp)$' \
@@ -81,19 +88,31 @@ jobs:
                   || true)
 
           if [ -z "$FILES" ]; then
-            echo "No in-scope C++ files changed."
-            echo "files=" >> "$GITHUB_OUTPUT"
-          else
-            echo "Files to check:"
-            echo "$FILES"
-            # Collapse newlines into spaces for downstream xargs.
-            printf 'files<<EOF\n%s\nEOF\n' "$FILES" >> "$GITHUB_OUTPUT"
+              echo "No in-scope C++ files changed."
+              exit 0
           fi
 
-      - name: clang-format --dry-run --Werror
-        if: steps.changed.outputs.files != ''
-        run: |
-          echo "${{ steps.changed.outputs.files }}" | xargs clang-format --dry-run --Werror
+          echo "Files in scope:"
+          echo "$FILES"
+          echo ""
+
+          # clang-format-diff-15 ships with the clang-format-15 apt package.
+          # -p1 strips the a/ b/ prefix that git diff emits.
+          # -style=file tells it to discover .clang-format in the repo root.
+          PATCH=$(git diff -U0 "$BASE" HEAD -- $FILES | clang-format-diff-15 -p1 -style=file)
+
+          if [ -n "$PATCH" ]; then
+              echo "::error::Formatting violations on changed lines:"
+              echo "$PATCH"
+              echo ""
+              echo "To fix locally for a given file:"
+              echo "  git diff -U0 $BASE HEAD -- <file> | clang-format-diff-15 -p1 -i"
+              echo "Or format the whole file (may touch unrelated legacy lines):"
+              echo "  clang-format -i <file>"
+              exit 1
+          fi
+
+          echo "All changed lines conform to .clang-format."
 
   build-test:
     name: ${{ matrix.label }}
