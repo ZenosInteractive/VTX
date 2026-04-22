@@ -117,7 +117,11 @@ jobs:
   build-test:
     name: ${{ matrix.label }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    timeout-minutes: 45
+    # Sanitizer jobs can fail without blocking CI while we triage their
+    # initial findings.  Once they're green, flip this off and add them
+    # to branch protection as required checks.
+    continue-on-error: ${{ matrix.sanitizer != '' }}
 
     strategy:
       fail-fast: false
@@ -161,6 +165,20 @@ jobs:
             vtx_shared: "OFF"
             extra_cmake: -DCMAKE_BUILD_TYPE=Debug
 
+          - label: Linux / ASan+UBSan / Debug
+            os: ubuntu-latest
+            build_type: Debug
+            vtx_shared: "OFF"
+            extra_cmake: -DCMAKE_BUILD_TYPE=Debug -DVTX_SANITIZE=address,undefined
+            sanitizer: "asan_ubsan"
+
+          - label: Linux / TSan / Debug
+            os: ubuntu-latest
+            build_type: Debug
+            vtx_shared: "OFF"
+            extra_cmake: -DCMAKE_BUILD_TYPE=Debug -DVTX_SANITIZE=thread
+            sanitizer: "tsan"
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -183,6 +201,15 @@ jobs:
             ninja-build \
             protobuf-compiler \
             libprotobuf-dev
+
+      # ----------------------------------------------------------------------
+      # TSan's shadow-memory layout breaks on kernels with high ASLR entropy
+      # (vm.mmap_rnd_bits=32 by default on recent Ubuntu).  Pin to 28 for
+      # sanitizer jobs only.  See https://github.com/google/sanitizers/issues/1716
+      # ----------------------------------------------------------------------
+      - name: Relax ASLR entropy for sanitizer runtime
+        if: matrix.sanitizer != ''
+        run: sudo sysctl -w vm.mmap_rnd_bits=28
 
       # ----------------------------------------------------------------------
       # Cache CMake FetchContent output (GoogleTest) so repeat CI runs don't
@@ -213,7 +240,14 @@ jobs:
 
       - name: Test
         working-directory: build
-        run: ctest --output-on-failure -C ${{ matrix.build_type }} --parallel --timeout 120
+        env:
+          # Sanitizer runtime options -- harmless when no sanitizer is active
+          # (the uninstrumented binary ignores them).
+          ASAN_OPTIONS: "detect_leaks=1:check_initialization_order=1:strict_init_order=1:abort_on_error=1:symbolize=1"
+          UBSAN_OPTIONS: "print_stacktrace=1:halt_on_error=1:symbolize=1"
+          TSAN_OPTIONS: "halt_on_error=1:second_deadlock_stack=1:history_size=7:symbolize=1"
+          LSAN_OPTIONS: "suppressions=${{ github.workspace }}/tests/sanitizer_suppressions/lsan.supp"
+        run: ctest --output-on-failure -C ${{ matrix.build_type }} --parallel --timeout 180
 
       # ----------------------------------------------------------------------
       # On failure, upload ctest logs + any artefacts the test suite dropped

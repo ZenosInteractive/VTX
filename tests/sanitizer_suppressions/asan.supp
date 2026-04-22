@@ -1,0 +1,10 @@
+# AddressSanitizer suppressions for VTX.
+#
+# Format: one pattern per line.  Lines starting with # are comments.
+#
+#   interceptor_via_fun:<substring of function>
+#   interceptor_via_lib:<substring of library name>
+#
+# Example (uncomment when needed):
+#   # Known leak in libprotobuf's global init, deliberate design.
+#   # leak:google::protobuf::internal::OnShutdown

@@ -1,0 +1,12 @@
+# UndefinedBehaviorSanitizer suppressions for VTX.
+#
+# Format (per issue type):
+#   signed-integer-overflow:<substring>
+#   unsigned-integer-overflow:<substring>
+#   null:<substring>
+#   alignment:<substring>
+#   vptr:<substring>
+#
+# Example (uncomment when needed):
+#   # libprotobuf intentionally checks misaligned pointers during parse.
+#   # alignment:google::protobuf::io::CodedInputStream::ReadRaw
