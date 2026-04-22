@@ -1,0 +1,13 @@
+# ThreadSanitizer suppressions for VTX.
+#
+# Format: one rule per line.  Lines starting with # are comments.
+#
+#   race:<substring of function or library>
+#   deadlock:<substring>
+#   thread:<substring>
+#   mutex:<substring>
+#   called_from_lib:<substring>
+#
+# Example (uncomment when needed):
+#   # Uninstrumented libprotobuf lazy init triggers false-positive race.
+#   # race:google::protobuf::internal::OnShutdownRun
