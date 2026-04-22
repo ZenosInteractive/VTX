@@ -1,0 +1,22 @@
+VTX SDK
+Copyright 2026 Zenos Interactive
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+It includes or links against the following third-party components, each
+governed by its own license:
+
+  - nlohmann/json       (MIT)              -- thirdparty/jsonlohmann/
+  - xxHash              (BSD-2-Clause)     -- thirdparty/xxhash/
+  - Protocol Buffers    (BSD-3-Clause)     -- thirdparty/protobuf/ on Windows,
+                                              system / vcpkg on Linux/macOS
+  - FlatBuffers         (Apache-2.0)       -- CMake FetchContent (v24.12.23)
+  - Zstandard (zstd)    (BSD-3-Clause)     -- CMake FetchContent (v1.5.6)
+
+  Test and tooling dependencies (not distributed with SDK binaries):
+  - GoogleTest          (BSD-3-Clause)     -- CMake FetchContent
+  - Dear ImGui          (MIT)              -- CMake FetchContent (GUI tools)
+  - GLFW                (zlib/libpng)      -- CMake FetchContent (GUI tools)
+
+See THIRD_PARTY_LICENSES.md for the full text of each license and the
+required attribution notices.
