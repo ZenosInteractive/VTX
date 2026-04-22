@@ -194,6 +194,11 @@ samples/               Example code and sample replay data
 
 ## License
 
-See [LICENSE](LICENSE) for details.
+VTX is licensed under the Apache License 2.0 — see [LICENSE](LICENSE).
 
-Copyright 2026 Zenos Interactive. Licensed under the Apache License 2.0.
+Copyright 2026 Zenos Interactive.
+
+VTX bundles or links against third-party components under MIT, BSD-2-Clause,
+BSD-3-Clause, Apache-2.0, and zlib/libpng licenses.  See
+[NOTICE](NOTICE) and [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) for
+the complete attribution and license texts.
