@@ -118,11 +118,6 @@ jobs:
     name: ${{ matrix.label }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
-    # Sanitizer jobs can fail without blocking CI while we triage their
-    # initial findings.  Once they're green, flip this off and add them
-    # to branch protection as required checks.
-    continue-on-error: ${{ matrix.sanitizer != '' }}
-
     strategy:
       fail-fast: false
       matrix:
