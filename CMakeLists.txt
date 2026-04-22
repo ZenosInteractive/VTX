@@ -40,6 +40,32 @@ if(MSVC AND VTX_NEEDS_PROTOBUF_STATIC_DEFINE)
     add_compile_definitions(PROTOBUF_STATIC_LIBRARY)
 endif()
 
+# ------------------------------------------------------------------------------
+# VTX_SANITIZE -- opt into a runtime sanitizer (gcc/clang only).
+#
+# Values: OFF (default), address, undefined, "address,undefined", thread
+#
+#   address    -- ASan: heap/stack/global OOB, use-after-free, double-free, leaks
+#   undefined  -- UBsan: integer overflow, null deref, misaligned access
+#   thread     -- TSan: data races, deadlocks (mutually exclusive with 'address')
+#
+# Enabled in CI via two matrix jobs (Linux / ASan+UBsan / Debug and
+# Linux / TSan / Debug).  Also usable locally -- see docs/BUILD.md.
+#
+# MSVC is skipped: MSVC ASan exists but uses /fsanitize=address and has no
+# TSan/UBsan; if we want Windows sanitizer coverage later it's a separate
+# CMake branch.
+# ------------------------------------------------------------------------------
+set(VTX_SANITIZE "OFF" CACHE STRING "Enable a sanitizer: OFF, address, undefined, address,undefined, thread")
+set_property(CACHE VTX_SANITIZE PROPERTY STRINGS
+    OFF  address undefined "address,undefined" thread)
+
+if(NOT MSVC AND NOT VTX_SANITIZE STREQUAL "OFF")
+    add_compile_options(-fsanitize=${VTX_SANITIZE} -fno-omit-frame-pointer -g)
+    add_link_options(-fsanitize=${VTX_SANITIZE})
+    message(STATUS "VTX: sanitizer enabled (${VTX_SANITIZE})")
+endif()
+
 set(VTX_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/sdk/include")
 
 option(VTX_BUILD_WRITER "Build vtx_writer module" ON)

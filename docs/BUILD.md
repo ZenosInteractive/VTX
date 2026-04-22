@@ -284,6 +284,58 @@ VTX/
   thirdparty/   Header-only deps + legacy Windows binary fallback
   vcpkg.json    Windows package-manager manifest
 ```
+## Running sanitizers locally
+
+VTX's root `CMakeLists.txt` exposes a `VTX_SANITIZE` option that enables gcc/clang runtime sanitizers.  Useful before pushing a change that touches threading or memory-ownership code.
+
+| Value | What it catches |
+|---|---|
+| `address` | Heap/stack/global out-of-bounds, use-after-free, double-free |
+| `undefined` | Integer overflow, null deref, misaligned access, UB conversions |
+| `address,undefined` | ASan + UBsan combined (they're compatible, single build) |
+| `thread` | Data races, deadlocks (incompatible with ASan -- separate build) |
+
+### ASan + UBsan
+
+```bash
+cmake -S . -B build-asan \
+    -DCMAKE_BUILD_TYPE=Debug \
+    -DVTX_SANITIZE=address,undefined \
+    -DBUILD_VTX_INSPECTOR=OFF \
+    -DBUILD_VTX_SCHEMA_CREATOR=OFF
+cmake --build build-asan --parallel
+
+ASAN_OPTIONS=abort_on_error=1:detect_leaks=1 \
+UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1 \
+ctest --test-dir build-asan --output-on-failure --timeout 180
+```
+
+### TSan (separate build)
+```bash
+cmake -S . -B build-tsan \
+    -DCMAKE_BUILD_TYPE=Debug \
+    -DVTX_SANITIZE=thread \
+    -DBUILD_VTX_INSPECTOR=OFF \
+    -DBUILD_VTX_SCHEMA_CREATOR=OFF
+cmake --build build-tsan --parallel
+
+TSAN_OPTIONS=halt_on_error=1:second_deadlock_stack=1 \
+ctest --test-dir build-tsan --output-on-failure --timeout 180
+```
+
+If TSan aborts at startup with FATAL: ThreadSanitizer: unexpected memory mapping, the host kernel's ASLR entropy is too high for TSan's shadow-memory layout. Fix for the current session:
+
+```bash
+ sudo sysctl vm.mmap_rnd_bits=28
+```
+
+### When a sanitizer reports a finding
+For each finding, decide:
+
+- Real bug in VTX -- fix it in `sdk/...` and add a regression test in `tests/....`
+- False positive or noise from a third-party library -- add a rule to the matching file under `tests/sanitizer_suppressions/` with a comment explaining why. The CI workflow already points the sanitizers at those files via `LSAN_OPTIONS=suppressions=`... etc.
+
+These sanitizer jobs also run on every PR via `.github/workflows/build.yml` (two extra Linux matrix entries: `ASan+UBsan` and `TSan`).
 
 ## Troubleshooting
 

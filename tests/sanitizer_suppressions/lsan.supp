@@ -1,0 +1,7 @@
+# LeakSanitizer suppressions (runs inside ASan).
+#
+# Format: `leak:<substring>` per line.  Lines starting with # are comments.
+#
+# Example (uncomment when needed):
+#   # libprotobuf keeps default-message instances alive until process exit.
+#   # leak:google::protobuf::internal::InitProtobufDefaults

@@ -5,6 +5,16 @@ All notable changes to the VTX SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2026-04-22
+
+### Added
+
+- **build**: `VTX_SANITIZE` CMake option enables gcc/clang runtime sanitizers.  Accepts `OFF` (default), `address`, `undefined`, `address,undefined`, `thread`.  Gated to `NOT MSVC` -- Windows MSVC ASan uses a separate `/fsanitize=address` flag and does not ship TSan/UBsan, so Windows sanitizer coverage is deferred to a future change.  When enabled, appends `-fsanitize=<mode>` + `-fno-omit-frame-pointer` + `-g` to both compile and link options.  Documented in `docs/BUILD.md` under "Running sanitizers locally"
+- **ci**: two new Linux matrix jobs in `.github/workflows/build.yml` -- `Linux / ASan+UBsan / Debug` and `Linux / TSan / Debug`.  Both run the full ctest suite with sanitizer-specific runtime options (`ASAN_OPTIONS`, `UBSAN_OPTIONS`, `TSAN_OPTIONS`, `LSAN_OPTIONS`).  Test timeout bumped 120 -> 180 seconds (TSan is ~5x slower).  Matrix-wide `timeout-minutes` bumped 30 -> 45 for the same reason.  Jobs are marked `continue-on-error: ${{ matrix.sanitizer != '' }}` initially so sanitizer findings do not block merges while we triage; once the two jobs are consistently green they will become required checks via branch protection
+- **ci**: sanitizer jobs run `sudo sysctl -w vm.mmap_rnd_bits=28` before the test step to work around TSan's shadow-memory-layout limit on recent Linux kernels (`vm.mmap_rnd_bits=32` by default on Ubuntu 24.04+ / WSL2 on Win11 -- TSan aborts at startup with `FATAL: ThreadSanitizer: unexpected memory mapping` otherwise).  Upstream tracker: https://github.com/google/sanitizers/issues/1716
+- **tests/sanitizer_suppressions/**: four suppression files (`asan.supp`, `lsan.supp`, `ubsan.supp`, `tsan.supp`) with header comments documenting the respective rule formats.  Committed empty; populated on demand when a specific finding is judged to be third-party noise that cannot be fixed in VTX
+- **docs/BUILD.md**: "Running sanitizers locally" section covering the ASan+UBsan and TSan invocations, the `vm.mmap_rnd_bits` workaround, and the fix-vs-suppress decision for findings
+
 ## [Unreleased] - 2026-04-21
 
 ### Changed
