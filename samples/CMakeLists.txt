@@ -56,6 +56,11 @@ add_executable(vtx_sample_diff basic_diff.cpp)
 target_link_libraries(vtx_sample_diff PRIVATE vtx_reader vtx_differ)
 vtx_configure_sample(vtx_sample_diff)
 
+# --- ready_api (chunk-0 "ready" signalling: poll / block / callback) ---
+add_executable(vtx_sample_ready_api ready_api.cpp)
+target_link_libraries(vtx_sample_ready_api PRIVATE vtx_reader)
+vtx_configure_sample(vtx_sample_ready_api)
+
 # ==============================================================================
 # Arena-specific codegen (arena_data.proto + arena_data.fbs)
 #

@@ -1,4 +1,5 @@
 #pragma once
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -55,6 +56,24 @@ namespace VTX {
         virtual void InspectChunkHeader(int32_t index) const = 0;
         virtual FrameAccessor CreateAccessor() const = 0;
         virtual std::span<const std::byte> GetRawFrameBytes(int32_t frame_index) = 0;
+
+        // "Ready" == chunk 0 is decompressed + deserialised in RAM.
+        // Distinct from ReaderContext::Loaded() which only checks that
+        // the reader object exists.  After OpenReplayFile() returns, an
+        // async load of chunk 0 is already in flight; callers can
+        // either poll IsReady(), block with WaitUntilReady(), or
+        // register ReplayReaderEvents::OnReady / OnReadyFailed.
+        virtual bool IsReady() const = 0;
+        virtual bool IsReadyFailed() const = 0;
+        virtual std::string GetReadyError() const = 0;
+        virtual bool WaitUntilReady() = 0;
+        virtual bool WaitUntilReady(std::chrono::milliseconds timeout) = 0;
+
+        // Facade escape hatch for the empty-replay path: flips the
+        // ready flag without triggering any chunk load.  Called by
+        // OpenReplayFile() on 0-frame files so waiters / pollers /
+        // callbacks get a definite answer.
+        virtual void MarkReadyVacuous() = 0;
     };
 
 
@@ -68,6 +87,17 @@ namespace VTX {
         const VtxFormat& GetFormat() const { return format; }
         const std::string& GetError() const { return error; }
         void SetError(const std::string& err) { error = err; }
+
+        // Forwarders for the chunk-0 "ready" semantic.  All five are
+        // safe no-ops when the reader pointer is null (Loaded() == false).
+        // See IVtxReaderFacade for semantics.
+        bool IsReady() const { return reader && reader->IsReady(); }
+        bool IsReadyFailed() const { return reader && reader->IsReadyFailed(); }
+        std::string GetReadyError() const { return reader ? reader->GetReadyError() : std::string {}; }
+        bool WaitUntilReady() { return reader ? reader->WaitUntilReady() : false; }
+        bool WaitUntilReady(std::chrono::milliseconds timeout) {
+            return reader ? reader->WaitUntilReady(timeout) : false;
+        }
 
         void Reset() {
             reader.reset();

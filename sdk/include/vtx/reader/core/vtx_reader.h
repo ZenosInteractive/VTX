@@ -8,7 +8,9 @@
 #include <mutex>
 #include <functional>
 #include <algorithm>
-#include <iostream>
+#include <atomic>
+#include <chrono>
+#include <condition_variable>
 #include <ranges>
 #include <stop_token>
 #include <stdexcept>
@@ -38,6 +40,18 @@ namespace VTX {
         std::function<void(int32_t)> OnChunkLoadStarted;
         std::function<void(int32_t)> OnChunkLoadFinished;
         std::function<void(int32_t)> OnChunkEvicted;
+
+        // Fired exactly once, the first time chunk 0 is in RAM and
+        // deserialised.  Pair with OnReadyFailed -- the reader fires one
+        // or the other, never both, and both are single-shot for the
+        // lifetime of the reader.
+        //
+        // Callback runs on the worker thread that finished the chunk
+        // load (or on the caller's thread if the ready signal came from
+        // the empty-replay vacuous path).  GUI consumers should marshal
+        // to their UI thread.
+        std::function<void()> OnReady;
+        std::function<void(const std::string&)> OnReadyFailed;
     };
 
     template <IVtxReaderPolicy SerializerPolicy>
@@ -64,6 +78,28 @@ namespace VTX {
         }
 
         ~ReplayReader() {
+            // Unblock anyone waiting on WaitUntilReady().  If chunk 0
+            // hasn't signalled ready/failed yet, flip to "failed" so
+            // waiters observe a definite answer instead of hanging on
+            // a reader that's being torn down.  No callback is fired
+            // here: the caller is destroying the reader, so invoking
+            // OnReadyFailed at this point would be invoked into a
+            // potentially already-torn-down context.
+            {
+                std::lock_guard<std::mutex> lk(ready_mutex_);
+                if (!ready_.load() && !ready_failed_.load()) {
+                    ready_failed_.store(true);
+                    ready_error_ = "Reader destroyed before first chunk was ready";
+                }
+            }
+            ready_cv_.notify_all();
+
+            // Cancel every in-flight prefetch, then wait for each task to
+            // observe the stop_token and exit.  Per-chunk `stop_source`s
+            // replace the previous single global `stop_source_`; the wait
+            // step is unchanged because `shared_future` destruction does
+            // not block and we still need to synchronise with the worker
+            // threads before releasing `*this`.
             std::vector<std::shared_future<void>> tasks;
             {
                 std::lock_guard<std::mutex> lock(cache_mutex_);
@@ -91,6 +127,49 @@ namespace VTX {
         }
 
     public:
+        // "Ready" == chunk 0 is decompressed and deserialised in RAM.
+        // Separate from the more general `Loaded()` concept on
+        // ReaderContext (which only asserts "reader object exists").
+        // The reader fires exactly one of OnReady / OnReadyFailed the
+        // first time chunk 0 resolves, and IsReady()/IsReadyFailed()
+        // mirror that terminal state.
+        bool IsReady() const { return ready_.load(std::memory_order_acquire); }
+        bool IsReadyFailed() const { return ready_failed_.load(std::memory_order_acquire); }
+
+        std::string GetReadyError() const {
+            std::lock_guard<std::mutex> lk(ready_mutex_);
+            return ready_error_;
+        }
+
+        // Blocks until the reader reports ready or failed.  Returns
+        // IsReady() at unblock time, so a `false` return means either
+        // "failed" or "destroyed before chunk 0 landed".  Check
+        // IsReadyFailed()/GetReadyError() to disambiguate.
+        bool WaitUntilReady() {
+            std::unique_lock<std::mutex> lk(ready_mutex_);
+            ready_cv_.wait(lk, [this] {
+                return ready_.load(std::memory_order_acquire) ||
+                       ready_failed_.load(std::memory_order_acquire);
+            });
+            return ready_.load(std::memory_order_acquire);
+        }
+
+        bool WaitUntilReady(std::chrono::milliseconds timeout) {
+            std::unique_lock<std::mutex> lk(ready_mutex_);
+            ready_cv_.wait_for(lk, timeout, [this] {
+                return ready_.load(std::memory_order_acquire) ||
+                       ready_failed_.load(std::memory_order_acquire);
+            });
+            return ready_.load(std::memory_order_acquire);
+        }
+
+        // Facade escape hatch for the empty-replay case: a file with
+        // zero chunks never triggers a chunk load, so the ready signal
+        // would never fire organically.  OpenReplayFile() calls this
+        // directly on such replays so waiters / pollers / callbacks get
+        // a definite "ready" answer without synthetic work.
+        void MarkReadyVacuous() { SignalFirstChunkReady(true, {}); }
+
         int32_t GetTotalFrames() const { return SerializerPolicy::GetTotalFrames(footer_); }
         const std::vector<ChunkIndexEntry>& GetSeekTable() const { return chunk_index_table_; }
         const SchemaType& GetPropertySchema() const { return SerializerPolicy::GetSchema(header_); }
@@ -500,7 +579,11 @@ namespace VTX {
         void LoadChunkToCacheSync(int32_t idx) {
             std::stop_token dummy;
             auto data = PerformHeavyLoading(idx, dummy);
-            if (!data.native_frames.empty()) {
+            const bool success = !data.native_frames.empty();
+            if (success) {
+                // Snapshot events_ before taking cache_mutex_ so we don't
+                // hold two locks at once, and so a concurrent SetEvents()
+                // can't race with our callback read (A4).
                 const auto evts = GetEventsSnapshot();
                 {
                     std::lock_guard<std::mutex> lock(cache_mutex_);
@@ -509,6 +592,15 @@ namespace VTX {
                 }
                 if (evts.OnChunkLoadFinished)
                     evts.OnChunkLoadFinished(idx);
+            }
+            // §READY: fire the first-chunk signal if a sync caller
+            // happened to be the one resolving chunk 0.  Single-shot
+            // guard inside SignalFirstChunkReady makes this safe to
+            // call alongside the async path.
+            if (idx == 0) {
+                SignalFirstChunkReady(success,
+                                      success ? std::string {}
+                                              : std::string {"Failed to load first chunk"});
             }
         }
 
@@ -523,6 +615,11 @@ namespace VTX {
                 VTX_ERROR("[READER] Chunk {} thread crashed", idx);
             }
 
+            // Capture load outcome before moving `data` into the cache:
+            // used for the §READY signal below and we can't check it
+            // after the move.
+            const bool load_succeeded = thread_survived && !data.native_frames.empty();
+
             {
                 std::lock_guard<std::mutex> lock(cache_mutex_);
                 if (!stop_token.stop_requested()) {
@@ -535,6 +632,56 @@ namespace VTX {
                 const auto evts = GetEventsSnapshot();
                 if (evts.OnChunkLoadFinished)
                     evts.OnChunkLoadFinished(idx);
+            }
+
+            // §READY: only chunk 0 drives the ready signal.  Skip when
+            // the task was cancelled: UpdateCacheWindow()'s trigger()
+            // may have respawned a fresh task for the same chunk, and
+            // the respawned task's outcome (not ours) is the
+            // authoritative one.  SignalFirstChunkReady is single-shot
+            // so calling it from multiple tasks is safe; the first one
+            // to win the lock wins the signal.
+            if (idx == 0 && !stop_token.stop_requested()) {
+                SignalFirstChunkReady(load_succeeded,
+                                      load_succeeded ? std::string {}
+                                                     : std::string {"Failed to load first chunk"});
+            }
+        }
+
+        // Flip the first-chunk-ready flag exactly once per reader.
+        // Called from AsyncLoadTask / LoadChunkToCacheSync when chunk 0
+        // resolves, and directly from MarkReadyVacuous() for the empty
+        // replay case.  Idempotent: repeated calls after the first are
+        // no-ops (the dtor also uses this pattern to flip to "failed"
+        // if the reader is torn down before chunk 0 landed).
+        //
+        // Lock order: ready_mutex_ only.  Callbacks fire OUTSIDE the
+        // lock so user handlers can safely re-enter reader APIs that
+        // take other locks (cache_mutex_, events_mutex_).  Events are
+        // snapshotted once under events_mutex_ via GetEventsSnapshot.
+        void SignalFirstChunkReady(bool success, const std::string& error) {
+            {
+                std::lock_guard<std::mutex> lk(ready_mutex_);
+                if (ready_.load(std::memory_order_acquire) ||
+                    ready_failed_.load(std::memory_order_acquire)) {
+                    return; // already signalled
+                }
+                if (success) {
+                    ready_.store(true, std::memory_order_release);
+                } else {
+                    ready_failed_.store(true, std::memory_order_release);
+                    ready_error_ = error;
+                }
+            }
+            ready_cv_.notify_all();
+
+            const auto evts = GetEventsSnapshot();
+            if (success) {
+                if (evts.OnReady)
+                    evts.OnReady();
+            } else {
+                if (evts.OnReadyFailed)
+                    evts.OnReadyFailed(error);
             }
         }
 
@@ -616,6 +763,17 @@ namespace VTX {
         mutable std::mutex cache_mutex_;
         ReplayReaderEvents events_;
         mutable std::mutex events_mutex_; // protects events_ (A4)
+
+        // §READY state: chunk-0 "ready" signalling.  `ready_` and
+        // `ready_failed_` are mutually exclusive and both single-shot
+        // for the reader's lifetime.  `ready_cv_` notifies waiters in
+        // WaitUntilReady(); `ready_error_` carries the human-readable
+        // reason when `ready_failed_` wins.
+        std::atomic<bool> ready_ {false};
+        std::atomic<bool> ready_failed_ {false};
+        std::string ready_error_;
+        mutable std::mutex ready_mutex_;
+        mutable std::condition_variable ready_cv_;
 
         uint32_t cache_backward_ = 2;
         uint32_t cache_forward_ = 2;
