@@ -5,6 +5,14 @@ All notable changes to the VTX SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 2026-04-23
+
+### Fixed
+- **reader**: `ReplayReader::UpdateCacheWindow` no longer leaves a chunk permanently stuck when it is cancelled by a window shift and then immediately re-requested before the worker thread has started running.  The §1.A cancellation path (PR #4) flags out-of-window prefetches via `request_stop()` on their per-`PendingLoad` stop_source but leaves the map entry in place.  If the chunk re-entered the window before its worker was scheduled, the `trigger()` lambda saw the stale entry, assumed a load was already in flight, and skipped spawning a new task.  The original worker then ran, observed `stop_requested() == true` at its entry check in `PerformHeavyLoading`, returned an empty `CachedChunk`, and `AsyncLoadTask` skipped the cache write (correctly, because the stop was still requested).  The future resolved cleanly, but the cache stayed empty.  A synchronous caller waiting on that future in `GetFramePtrSync` then read the empty cache and returned `nullptr` -- manifesting as a spurious load failure under random-seek patterns.  Fix: `trigger()` now detects a pending entry whose stop is already requested and replaces it with a fresh `PendingLoad`; the orphaned worker exits on its own and its `stop_requested()`-gated cache write still cannot pollute anything.  Exposed by the TSan CI job on `ReaderApiFlatBuffers.RandomAccessSkipsLateralPrefetches`; the scheduling overhead of the ThreadSanitizer runtime makes the "cancelled before scheduled" race far more likely to manifest.  Stock release builds had been papering over it by the workers happening to get past the entry check before cancellation landed
+
+### Added
+- **tests**: `ReaderApiFlatBuffers.CancelledPrefetchReEntersWindow` -- focused regression for the bug above.  Runs the cancel + re-enter pattern (prime chunks 0..2, jump to chunk 10 to cancel, jump to chunk 2 to revive) 50 times against a fresh reader each iteration.  Pre-fix this fails ~every run under TSan and flakes at single-digit-% on stock release; post-fix it is deterministic green on both
+
 ## [Unreleased] - 2026-04-22
 
 ### Changed
