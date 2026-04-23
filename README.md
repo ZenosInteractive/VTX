@@ -4,6 +4,40 @@
 
 A high-performance C++20 toolkit for recording, reading, comparing, and inspecting structured replay data. VTX serializes frame-based entity state into a compact, chunked binary format with support for **Protocol Buffers** and **FlatBuffers** backends.
 
+## Performance at a glance
+
+Measured on the CS2 (92 MB, 10 656 frames) and Rocket League (5 MB, ~21 k frames) real-world fixtures on a modern dev laptop. Full breakdown in [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md).
+
+| Task | Number | Notes |
+|---|---|---|
+| Writing frames end-to-end | **~82 k frames/s** | 30-min 60 fps match ≈ 1.3 s of CPU. |
+| Full sequential read (CS2, 92 MB) | **~5.6 s** (median) | Competitive with peer tooling. |
+| Preview first 1 000 frames | **~1 s** | Below UX perceptibility. |
+| `EntityView::Get` (isolated) | **1.70 ns** (585 M/s) | Theoretical ceiling. |
+| `EntityView::Get` (realistic hot loop) | **~80 ns** (13 M/s) | What real integrations observe. |
+| Diff consecutive frames | **4 µs** (267 k/s) | Instant from a user perspective. |
+
+### Health check
+
+| Area | Verdict | Why |
+|---|---|---|
+| Writer throughput | 🟢 Fast | ~10× headroom over real-time recording. |
+| Full sequential read | 🟢 Fast enough | 5.6 s for a 92 MB replay (median). |
+| Preview + seek-play | 🟢 Fast | Sub-second scrubbing. |
+| Cache-window **well-sized** | 🟢 Fast | <4 s for 50 random jumps. |
+| Cache-window **mis-sized** | 🔴 **Actively bad** | 59 % slower than no cache — needs docs guidance. |
+| `FrameAccessor` / `PropertyKey` setup | 🟢 Negligible | 6.77 µs + 74 ns/key. Once per integration. |
+| `EntityView` hot loop | 🟢 Excellent | 1.70 ns isolated / ~80 ns realistic. |
+| Diff + short-circuit | 🟢 Instant | 4 µs consecutive; 10×/2× shortcut. |
+| Schema parse | 🟢 Negligible | 200 µs, one-time. |
+| Format choice (FBS vs Proto) | 🟡 Depends | No universal winner — fixture-shape dictates. |
+
+**Honest caveats** (detail in [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md)):
+- One machine, one run. Ratios hold across hardware; absolute numbers vary.
+- No direct comparison to competitor libraries.
+- `items_per_second` is CPU-time based; use wall time for user-observable claims.
+- One known fixture counter inflated 2× (`BM_AccessorRandomWithinBucket`); flagged for fix.
+
 ## Architecture
 
 ```

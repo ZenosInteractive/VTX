@@ -266,3 +266,78 @@ static void BM_AccessorRandomWithinBucket(benchmark::State& state) {
     state.SetItemsProcessed(state.iterations() * ops_per_sweep);
 }
 BENCHMARK(BM_AccessorRandomWithinBucket)->Unit(benchmark::kMillisecond);
+
+// Isolated cost of `reader->CreateAccessor()` -- the one-time handshake a
+// consumer pays at integration startup.  Complements BM_AccessorKeyResolution
+// which measures what happens *after* an accessor exists.  Together they
+// bracket the "SDK initialization" cost the consumer observes.
+static void BM_FrameAccessor_Creation(benchmark::State& state) {
+    auto result = VTX::OpenReplayFile(ArenaReplayPath());
+    if (!result) {
+        state.SkipWithError("OpenReplayFile failed");
+        return;
+    }
+    auto& reader = result.reader;
+
+    for (auto _ : state) {
+        auto accessor = reader->CreateAccessor();
+        benchmark::DoNotOptimize(accessor);
+    }
+}
+BENCHMARK(BM_FrameAccessor_Creation)->Unit(benchmark::kMicrosecond);
+
+// Isolated cost of `EntityView(entity); view.Get(key)` -- one construction
+// plus one typed property read, on a single Player entity held in RAM.  This
+// is the per-property-access cost a consumer pays in their steady state
+// once everything else (accessor, keys, frame cache) is warm.
+//
+// Preloads a copy of frame 0 into a local Frame so the measured loop cannot
+// be invalidated by chunk eviction.  Picks the first Player entity it finds.
+static void BM_EntityView_SingleGet(benchmark::State& state) {
+    auto result = VTX::OpenReplayFile(ArenaReplayPath());
+    if (!result) {
+        state.SkipWithError("OpenReplayFile failed");
+        return;
+    }
+    auto& reader = result.reader;
+
+    auto accessor = reader->CreateAccessor();
+    auto key_position = accessor.Get<VTX::Vector>("Player", "Position");
+    if (!key_position.IsValid()) {
+        state.SkipWithError("Player::Position did not resolve");
+        return;
+    }
+
+    // Own the frame so chunk eviction can't yank the entity out from under us.
+    const auto* frame_ptr = reader->GetFrameSync(0);
+    if (!frame_ptr) {
+        state.SkipWithError("frame 0 not loaded");
+        return;
+    }
+    VTX::Frame frame_copy = *frame_ptr;
+
+    const VTX::PropertyContainer* sample_entity = nullptr;
+    for (const auto& bucket : frame_copy.GetBuckets()) {
+        for (const auto& entity : bucket.entities) {
+            if (entity.entity_type_id == 0) {
+                sample_entity = &entity;
+                break;
+            }
+        }
+        if (sample_entity)
+            break;
+    }
+    if (!sample_entity) {
+        state.SkipWithError("no Player entity in frame 0");
+        return;
+    }
+
+    double sink = 0.0;
+    for (auto _ : state) {
+        VTX::EntityView view(*sample_entity);
+        sink += view.Get(key_position).x;
+    }
+    benchmark::DoNotOptimize(sink);
+    state.SetItemsProcessed(state.iterations());
+}
+BENCHMARK(BM_EntityView_SingleGet)->Unit(benchmark::kNanosecond);
