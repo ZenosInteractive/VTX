@@ -3,22 +3,23 @@
 #include "vtx_schema.pb.h"
 namespace VTX {
     namespace Serialization {
-        
-        template<typename TProtoArr, typename TNativeArr>
+
+        template <typename TProtoArr, typename TNativeArr>
         void FromProtoVec(const TProtoArr& src, TNativeArr& dst) {
             dst.data.clear();
             dst.offsets.clear();
-            
+
             dst.data.reserve(src.data_size());
             dst.offsets.reserve(src.offsets_size());
 
             for (const auto& v : src.data()) {
-                dst.data.push_back(v); 
+                dst.data.push_back(v);
             }
-            for (auto o : src.offsets()) dst.offsets.push_back(o);
+            for (auto o : src.offsets())
+                dst.offsets.push_back(o);
         }
 
-        template<typename TProtoArr, typename TNativeArr, typename TFunc>
+        template <typename TProtoArr, typename TNativeArr, typename TFunc>
         void FromProtoComplexVec(const TProtoArr& src, TNativeArr& dst, TFunc unpackFunc) {
             dst.data.resize(src.data_size());
             for (int i = 0; i < src.data_size(); ++i) {
@@ -26,7 +27,7 @@ namespace VTX {
             }
             dst.offsets.assign(src.offsets().begin(), src.offsets().end());
         }
-        
+
 
         void FromProto(const cppvtx::Vector& src, VTX::Vector& dst) {
             dst.x = src.x();
@@ -60,11 +61,11 @@ namespace VTX {
 
             out.entity_type_id = proto.type_id();
             out.content_hash = proto.content_hash();
-            
-            Copy(out.bool_properties,   proto.bool_properties());
-            Copy(out.int32_properties,  proto.int32_properties());
-            Copy(out.int64_properties,  proto.int64_properties());
-            Copy(out.float_properties,  proto.float_properties());
+
+            Copy(out.bool_properties, proto.bool_properties());
+            Copy(out.int32_properties, proto.int32_properties());
+            Copy(out.int64_properties, proto.int64_properties());
+            Copy(out.float_properties, proto.float_properties());
             Copy(out.double_properties, proto.double_properties());
             Copy(out.string_properties, proto.string_properties());
 
@@ -75,11 +76,11 @@ namespace VTX {
                 }
             };
 
-            Unpack(proto.vector_properties(),    out.vector_properties);
-            Unpack(proto.quat_properties(),      out.quat_properties);
+            Unpack(proto.vector_properties(), out.vector_properties);
+            Unpack(proto.quat_properties(), out.quat_properties);
             Unpack(proto.transform_properties(), out.transform_properties);
-            Unpack(proto.range_properties(),     out.range_properties);
-            
+            Unpack(proto.range_properties(), out.range_properties);
+
             if (proto.has_byte_array_properties()) {
                 const auto& proto_bytes = proto.byte_array_properties();
                 auto& native_bytes = out.byte_array_properties;
@@ -96,50 +97,60 @@ namespace VTX {
                     native_bytes.offsets.push_back(o);
                 }
             }
-            
-            if (proto.has_int32_arrays())     FromProtoVec(proto.int32_arrays(),     out.int32_arrays);
-            if (proto.has_int64_arrays())     FromProtoVec(proto.int64_arrays(),     out.int64_arrays);
-            if (proto.has_float_arrays())     FromProtoVec(proto.float_arrays(),     out.float_arrays);
-            if (proto.has_double_arrays())    FromProtoVec(proto.double_arrays(),    out.double_arrays);
-            if (proto.has_bool_arrays())      FromProtoVec(proto.bool_arrays(),      out.bool_arrays);
-            if (proto.has_string_arrays())    FromProtoVec(proto.string_arrays(),    out.string_arrays);
 
-            if (proto.has_vector_arrays())    FromProtoComplexVec(proto.vector_arrays(),    out.vector_arrays,    [](auto& p, auto& n){ FromProto(p, n); });
-            if (proto.has_quat_arrays())      FromProtoComplexVec(proto.quat_arrays(),      out.quat_arrays,      [](auto& p, auto& n){ FromProto(p, n); });
-            if (proto.has_transform_arrays()) FromProtoComplexVec(proto.transform_arrays(), out.transform_arrays, [](auto& p, auto& n){ FromProto(p, n); });
-            if (proto.has_range_arrays())     FromProtoComplexVec(proto.range_arrays(),     out.range_arrays,     [](auto& p, auto& n){ FromProto(p, n); });
+            if (proto.has_int32_arrays())
+                FromProtoVec(proto.int32_arrays(), out.int32_arrays);
+            if (proto.has_int64_arrays())
+                FromProtoVec(proto.int64_arrays(), out.int64_arrays);
+            if (proto.has_float_arrays())
+                FromProtoVec(proto.float_arrays(), out.float_arrays);
+            if (proto.has_double_arrays())
+                FromProtoVec(proto.double_arrays(), out.double_arrays);
+            if (proto.has_bool_arrays())
+                FromProtoVec(proto.bool_arrays(), out.bool_arrays);
+            if (proto.has_string_arrays())
+                FromProtoVec(proto.string_arrays(), out.string_arrays);
+
+            if (proto.has_vector_arrays())
+                FromProtoComplexVec(proto.vector_arrays(), out.vector_arrays,
+                                    [](auto& p, auto& n) { FromProto(p, n); });
+            if (proto.has_quat_arrays())
+                FromProtoComplexVec(proto.quat_arrays(), out.quat_arrays, [](auto& p, auto& n) { FromProto(p, n); });
+            if (proto.has_transform_arrays())
+                FromProtoComplexVec(proto.transform_arrays(), out.transform_arrays,
+                                    [](auto& p, auto& n) { FromProto(p, n); });
+            if (proto.has_range_arrays())
+                FromProtoComplexVec(proto.range_arrays(), out.range_arrays, [](auto& p, auto& n) { FromProto(p, n); });
 
             out.any_struct_properties.resize(proto.any_struct_properties_size());
-            for(int i = 0; i < proto.any_struct_properties_size(); ++i) {
+            for (int i = 0; i < proto.any_struct_properties_size(); ++i) {
                 FromProto(proto.any_struct_properties(i), out.any_struct_properties[i]);
             }
 
             if (proto.has_any_struct_arrays()) {
-                FromProtoComplexVec(proto.any_struct_arrays(), out.any_struct_arrays, [](auto& p, auto& n){ FromProto(p, n); });
+                FromProtoComplexVec(proto.any_struct_arrays(), out.any_struct_arrays,
+                                    [](auto& p, auto& n) { FromProto(p, n); });
             }
         }
 
         void FromProto(const cppvtx::Bucket& proto, VTX::Bucket& out) {
             out.unique_ids.clear();
             out.unique_ids.reserve(proto.unique_ids_size());
-            for(const auto& id : proto.unique_ids()) {
+            for (const auto& id : proto.unique_ids()) {
                 out.unique_ids.push_back(id);
             }
-            
+
             out.entities.clear();
-            out.entities.resize(proto.entities_size()); 
-    
+            out.entities.resize(proto.entities_size());
+
             for (int i = 0; i < proto.entities_size(); ++i) {
                 FromProto(proto.entities(i), out.entities[i]);
             }
-            
+
             out.type_ranges.reserve(proto.type_ranges_size());
             for (int i = 0; i < proto.type_ranges_size(); ++i) {
                 const auto& r = proto.type_ranges(i);
-                out.type_ranges.push_back(VTX::EntityRange{
-                    r.start_index(), 
-                    r.count()
-                });
+                out.type_ranges.push_back(VTX::EntityRange {r.start_index(), r.count()});
             }
         }
 
@@ -150,5 +161,5 @@ namespace VTX {
                 FromProto(proto.data(i), buckets[i]);
             }
         }
-    }
-}
+    } // namespace Serialization
+} // namespace VTX

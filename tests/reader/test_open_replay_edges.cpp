@@ -17,36 +17,36 @@
 
 namespace {
 
-std::string WriteTinyReplay(const std::string& uuid) {
-    VTX::WriterFacadeConfig cfg;
-    cfg.output_filepath  = VtxTest::OutputPath("open_edge_" + uuid + ".vtx");
-    cfg.schema_json_path = VtxTest::FixturePath("test_schema.json");
-    cfg.replay_name      = "OpenReplayEdges";
-    cfg.replay_uuid      = uuid;
-    cfg.default_fps      = 60.0f;
-    cfg.chunk_max_frames = 10;
-    cfg.use_compression  = true;
+    std::string WriteTinyReplay(const std::string& uuid) {
+        VTX::WriterFacadeConfig cfg;
+        cfg.output_filepath = VtxTest::OutputPath("open_edge_" + uuid + ".vtx");
+        cfg.schema_json_path = VtxTest::FixturePath("test_schema.json");
+        cfg.replay_name = "OpenReplayEdges";
+        cfg.replay_uuid = uuid;
+        cfg.default_fps = 60.0f;
+        cfg.chunk_max_frames = 10;
+        cfg.use_compression = true;
 
-    auto writer = VTX::CreateFlatBuffersWriterFacade(cfg);
-    VTX::Frame f;
-    auto& bucket = f.CreateBucket("entity");
-    VTX::PropertyContainer pc;
-    pc.entity_type_id    = 0;
-    pc.string_properties = {"p", "name"};
-    pc.int32_properties  = {1, 0, 0};
-    pc.float_properties  = {100.0f, 50.0f};
-    pc.vector_properties = {VTX::Vector{}, VTX::Vector{}};
-    pc.quat_properties   = {VTX::Quat{}};
-    pc.bool_properties   = {true};
-    bucket.unique_ids.push_back("p");
-    bucket.entities.push_back(std::move(pc));
-    VTX::GameTime::GameTimeRegister t;
-    t.game_time = 0.0f;
-    writer->RecordFrame(f, t);
-    writer->Flush();
-    writer->Stop();
-    return cfg.output_filepath;
-}
+        auto writer = VTX::CreateFlatBuffersWriterFacade(cfg);
+        VTX::Frame f;
+        auto& bucket = f.CreateBucket("entity");
+        VTX::PropertyContainer pc;
+        pc.entity_type_id = 0;
+        pc.string_properties = {"p", "name"};
+        pc.int32_properties = {1, 0, 0};
+        pc.float_properties = {100.0f, 50.0f};
+        pc.vector_properties = {VTX::Vector {}, VTX::Vector {}};
+        pc.quat_properties = {VTX::Quat {}};
+        pc.bool_properties = {true};
+        bucket.unique_ids.push_back("p");
+        bucket.entities.push_back(std::move(pc));
+        VTX::GameTime::GameTimeRegister t;
+        t.game_time = 0.0f;
+        writer->RecordFrame(f, t);
+        writer->Flush();
+        writer->Stop();
+        return cfg.output_filepath;
+    }
 
 } // namespace
 
@@ -91,8 +91,7 @@ TEST(OpenReplayEdges, RelativePathResolvesAgainstCurrentWorkingDir) {
     // Compute the relative path from cwd.
     const auto cwd = std::filesystem::current_path();
     std::error_code ec;
-    const auto relative_path =
-        std::filesystem::relative(absolute_path, cwd, ec);
+    const auto relative_path = std::filesystem::relative(absolute_path, cwd, ec);
     ASSERT_FALSE(ec) << ec.message();
     ASSERT_FALSE(relative_path.empty());
 
@@ -114,8 +113,7 @@ TEST(OpenReplayEdges, UnicodeFilenameDoesNotCrash) {
 
     const auto unicode_path = VtxTest::OutputPath("replay_\xc3\xa1\xe3\x83\x86_tests.vtx");
     std::error_code ec;
-    std::filesystem::copy_file(good_path, unicode_path,
-                               std::filesystem::copy_options::overwrite_existing, ec);
+    std::filesystem::copy_file(good_path, unicode_path, std::filesystem::copy_options::overwrite_existing, ec);
     if (ec) {
         // Some filesystems / locales reject non-ASCII filenames.  In that
         // case we've still shown the API doesn't crash on the attempt.

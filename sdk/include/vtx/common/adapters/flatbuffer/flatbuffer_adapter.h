@@ -36,8 +36,8 @@ namespace VTX {
      */
     template <typename CppType, typename CppMemberType, typename FbTable, typename FbReturnType>
     struct FastField {
-        CppMemberType CppType::* cpp_member;        //  &BBChampion::Kills
-        FbReturnType(FbTable::* fb_accessor)() const; // &FB::Champion::kills()
+        CppMemberType CppType::*cpp_member;           //  &BBChampion::Kills
+        FbReturnType (FbTable::*fb_accessor)() const; // &FB::Champion::kills()
     };
 
     /**
@@ -47,8 +47,8 @@ namespace VTX {
      * @return FastField instance.
      */
     template <typename CppType, typename CppMemberType, typename FbTable, typename FbReturnType>
-    constexpr auto MapFB(CppMemberType CppType::* cpp_ptr, FbReturnType(FbTable::* fb_ptr)() const) {
-        return FastField<CppType, CppMemberType, FbTable, FbReturnType>{cpp_ptr, fb_ptr};
+    constexpr auto MapFB(CppMemberType CppType::*cpp_ptr, FbReturnType (FbTable::*fb_ptr)() const) {
+        return FastField<CppType, CppMemberType, FbTable, FbReturnType> {cpp_ptr, fb_ptr};
     }
 
     /**
@@ -61,23 +61,21 @@ namespace VTX {
     public:
         template <typename T>
         static T Load(const typename FlatBufferMapping<T>::FbType* fb_table) {
-            T instance{};
+            T instance {};
 
-            if (!fb_table) return instance;
+            if (!fb_table)
+                return instance;
 
             // Retrieve the compile-time mapping tuple
             constexpr auto mapping = FlatBufferMapping<T>::GetFields();
 
             // Iterate over all mapped fields and process them
-            std::apply([&](auto&&... fields) {
-                (ProcessField(instance, fb_table, fields), ...);
-                }, mapping);
+            std::apply([&](auto&&... fields) { (ProcessField(instance, fb_table, fields), ...); }, mapping);
 
             return instance;
         }
 
     private:
-
         /**
          * @brief Processes a single field mapping.
          * @details Calls the FB accessor, converts the type if necessary, and assigns to the C++ member.
@@ -99,29 +97,26 @@ namespace VTX {
 
         /** @brief Conversion for arithmetic types (int, float, etc.). */
         template <typename Target, typename Source>
-        static std::enable_if_t<std::is_arithmetic_v<Target>, Target>
-            Convert(Source fb_val) {
+        static std::enable_if_t<std::is_arithmetic_v<Target>, Target> Convert(Source fb_val) {
             return static_cast<Target>(fb_val);
         }
 
         /** @brief Conversion for Enum types. */
         template <typename Target, typename Source>
-        static std::enable_if_t<std::is_enum_v<Target>, Target>
-            Convert(Source fb_val) {
+        static std::enable_if_t<std::is_enum_v<Target>, Target> Convert(Source fb_val) {
             return static_cast<Target>(fb_val);
         }
 
         /** @brief Conversion for Strings (FlatBuffer String* -> std::string). */
         template <typename Target>
         static std::enable_if_t<std::is_same_v<Target, std::string>, std::string>
-            Convert(const flatbuffers::String* fb_str) {
+        Convert(const flatbuffers::String* fb_str) {
             return fb_str ? fb_str->str() : "";
         }
 
         /** @brief Recursive conversion for nested structures (Sub-tables). */
         template <typename Target, typename FbSubTable>
-        static std::enable_if_t<has_fb_mapping_v<Target>, Target>
-            Convert(const FbSubTable* fb_sub_table) {
+        static std::enable_if_t<has_fb_mapping_v<Target>, Target> Convert(const FbSubTable* fb_sub_table) {
             Target result;
             if (fb_sub_table) {
                 result = Load<Target>(fb_sub_table);
@@ -135,9 +130,10 @@ namespace VTX {
         */
         template <typename Target, typename FbSubTable>
         static std::enable_if_t<VTX::is_vector_v<Target>, Target>
-            Convert(const flatbuffers::Vector<flatbuffers::Offset<FbSubTable>>* fb_vector) {
+        Convert(const flatbuffers::Vector<flatbuffers::Offset<FbSubTable>>* fb_vector) {
             Target result;
-            if (!fb_vector) return result;
+            if (!fb_vector)
+                return result;
 
             using ElementType = typename Target::value_type;
 
@@ -148,8 +144,7 @@ namespace VTX {
 
                 if constexpr (has_fb_mapping_v<ElementType>) {
                     result.push_back(Load<ElementType>(fb_element));
-                }
-                else {
+                } else {
                     result.push_back(static_cast<ElementType>(*fb_element));
                 }
             }
@@ -161,10 +156,10 @@ namespace VTX {
         * @brief Conversion for Vectors of Pointers (Structs in FB are often pointers).
         */
         template <typename Target, typename U>
-        static std::enable_if_t<VTX::is_vector_v<Target>, Target>
-            Convert(const flatbuffers::Vector<const U*>* fb_vec) {
+        static std::enable_if_t<VTX::is_vector_v<Target>, Target> Convert(const flatbuffers::Vector<const U*>* fb_vec) {
             Target result;
-            if (!fb_vec) return result;
+            if (!fb_vec)
+                return result;
 
             result.reserve(fb_vec->size());
             for (const U* element : *fb_vec) {
@@ -174,4 +169,4 @@ namespace VTX {
             return result;
         }
     };
-}
+} // namespace VTX

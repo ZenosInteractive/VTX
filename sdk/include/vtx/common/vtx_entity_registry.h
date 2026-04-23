@@ -7,9 +7,7 @@ namespace VTX {
 
     class EntityTypeRegistry {
     public:
-        static void RegisterName(int32_t type_id, const std::string& name) {
-            GetInternalMap()[type_id] = name;
-        }
+        static void RegisterName(int32_t type_id, const std::string& name) { GetInternalMap()[type_id] = name; }
 
         static std::string GetName(int32_t type_id) {
             auto& map = GetInternalMap();
@@ -20,9 +18,7 @@ namespace VTX {
             return "Type_" + std::to_string(type_id);
         }
 
-        static void Clear() {
-            GetInternalMap().clear();
-        }
+        static void Clear() { GetInternalMap().clear(); }
 
     private:
         static std::unordered_map<int32_t, std::string>& GetInternalMap() {

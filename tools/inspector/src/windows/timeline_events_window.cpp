@@ -9,8 +9,7 @@
 
 TimelineEventsWindow::TimelineEventsWindow(std::shared_ptr<InspectorSession> session)
     : ImGuiWindow(VtxGuiNames::TimelineEventsWindow, session)
-    , inspector_session_(std::move(session)) {
-}
+    , inspector_session_(std::move(session)) {}
 
 void TimelineEventsWindow::DrawContent() {
     if (!inspector_session_->HasLoadedReplay()) {
@@ -18,8 +17,8 @@ void TimelineEventsWindow::DrawContent() {
         return;
     }
 
-    const auto view_model = VtxServices::FooterSummaryService::BuildTimelineEventsTableViewModel(
-        inspector_session_->GetFooter().events);
+    const auto view_model =
+        VtxServices::FooterSummaryService::BuildTimelineEventsTableViewModel(inspector_session_->GetFooter().events);
 
     if (view_model.rows.empty()) {
         ImGui::TextDisabled("%s", view_model.empty_message.c_str());
@@ -29,18 +28,15 @@ void TimelineEventsWindow::DrawContent() {
     ImGui::TextDisabled("%s", view_model.count_label.c_str());
     ImGui::Spacing();
 
-    if (ImGui::BeginTable(
-            "EventsTable",
-            static_cast<int>(view_model.columns.size()),
-            ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable |
-                ImGuiTableFlags_ScrollY,
-            ImVec2(0, ImGui::GetContentRegionAvail().y))) {
+    if (ImGui::BeginTable("EventsTable", static_cast<int>(view_model.columns.size()),
+                          ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_Resizable |
+                              ImGuiTableFlags_ScrollY,
+                          ImVec2(0, ImGui::GetContentRegionAvail().y))) {
         ImGui::TableSetupScrollFreeze(0, 1);
         for (const auto& column : view_model.columns) {
             ImGui::TableSetupColumn(
                 column.label.c_str(),
-                column.stretch ? ImGuiTableColumnFlags_WidthStretch : ImGuiTableColumnFlags_WidthFixed,
-                column.width);
+                column.stretch ? ImGuiTableColumnFlags_WidthStretch : ImGuiTableColumnFlags_WidthFixed, column.width);
         }
         ImGui::TableHeadersRow();
 

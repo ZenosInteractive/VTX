@@ -47,7 +47,8 @@ namespace VTX {
         using FooterType = typename SerializerPolicy::FooterType;
         using SchemaType = typename SerializerPolicy::SchemaType;
 
-        explicit ReplayReader(const std::string& filepath) : filepath_(filepath) {
+        explicit ReplayReader(const std::string& filepath)
+            : filepath_(filepath) {
             std::ifstream init_stream(filepath_, std::ios::binary | std::ios::in);
             if (!init_stream.is_open()) {
                 throw std::runtime_error("VTX Reader: Can not open the file " + filepath);
@@ -74,11 +75,14 @@ namespace VTX {
                 std::lock_guard<std::mutex> lock(cache_mutex_);
                 for (auto& kv : pending_loads_) {
                     kv.second.stop.request_stop();
-                    if (kv.second.future.valid()) tasks.push_back(kv.second.future);
+                    if (kv.second.future.valid())
+                        tasks.push_back(kv.second.future);
                 }
             }
 
-            for (auto& task : tasks) { task.wait(); }
+            for (auto& task : tasks) {
+                task.wait();
+            }
         }
 
         // Fix A4: protect events_ with a mutex.  std::function is not
@@ -96,6 +100,7 @@ namespace VTX {
             std::lock_guard<std::mutex> lock(events_mutex_);
             return events_;
         }
+
     public:
         int32_t GetTotalFrames() const { return SerializerPolicy::GetTotalFrames(footer_); }
         const std::vector<ChunkIndexEntry>& GetSeekTable() const { return chunk_index_table_; }
@@ -130,9 +135,8 @@ namespace VTX {
         // it contributes to the EWMA reflects the real jump the caller
         // just committed to.
         void WarmAt(int32_t frame_index) {
-            auto it = std::lower_bound(
-                chunk_index_table_.begin(), chunk_index_table_.end(), frame_index,
-                [](const ChunkIndexEntry& e, int32_t val) { return e.end_frame < val; });
+            auto it = std::lower_bound(chunk_index_table_.begin(), chunk_index_table_.end(), frame_index,
+                                       [](const ChunkIndexEntry& e, int32_t val) { return e.end_frame < val; });
             if (it == chunk_index_table_.end() || frame_index < it->start_frame) {
                 return;
             }
@@ -141,7 +145,7 @@ namespace VTX {
 
         std::span<const std::byte> GetRawFrameBytes(int32_t frame_index) {
             auto it = std::lower_bound(chunk_index_table_.begin(), chunk_index_table_.end(), frame_index,
-                [](const ChunkIndexEntry& e, int32_t val) { return e.end_frame < val; });
+                                       [](const ChunkIndexEntry& e, int32_t val) { return e.end_frame < val; });
 
             if (it == chunk_index_table_.end() || frame_index < it->start_frame) {
                 return {};
@@ -185,9 +189,10 @@ namespace VTX {
 
         bool GetFrame(int32_t frame_index, VTX::Frame& out_frame) {
             auto it = std::lower_bound(chunk_index_table_.begin(), chunk_index_table_.end(), frame_index,
-                [](const ChunkIndexEntry& e, int32_t val) { return e.end_frame < val; });
+                                       [](const ChunkIndexEntry& e, int32_t val) { return e.end_frame < val; });
 
-            if (it == chunk_index_table_.end() || frame_index < it->start_frame) return false;
+            if (it == chunk_index_table_.end() || frame_index < it->start_frame)
+                return false;
 
             int32_t target_chunk = it->chunk_index;
             int32_t relative_idx = frame_index - it->start_frame;
@@ -234,9 +239,10 @@ namespace VTX {
 
         const VTX::Frame* GetFramePtr(int32_t frame_index) {
             auto it = std::lower_bound(chunk_index_table_.begin(), chunk_index_table_.end(), frame_index,
-                [](const ChunkIndexEntry& e, int32_t val) { return e.end_frame < val; });
+                                       [](const ChunkIndexEntry& e, int32_t val) { return e.end_frame < val; });
 
-            if (it == chunk_index_table_.end() || frame_index < it->start_frame) return nullptr;
+            if (it == chunk_index_table_.end() || frame_index < it->start_frame)
+                return nullptr;
 
             int32_t target_chunk = it->chunk_index;
             int32_t relative_idx = frame_index - it->start_frame;
@@ -256,7 +262,7 @@ namespace VTX {
 
         const VTX::Frame* GetFramePtrSync(int32_t frame_index) {
             auto it = std::lower_bound(chunk_index_table_.begin(), chunk_index_table_.end(), frame_index,
-                [](const ChunkIndexEntry& e, int32_t val) { return e.end_frame < val; });
+                                       [](const ChunkIndexEntry& e, int32_t val) { return e.end_frame < val; });
 
             if (it == chunk_index_table_.end() || frame_index < it->start_frame) {
                 return nullptr;
@@ -300,9 +306,10 @@ namespace VTX {
         }
 
         int32_t GetChunkFrameCountSafe(int32_t chunk_index) {
-             std::lock_guard<std::mutex> lock(cache_mutex_);
-             if (chunk_cache_.contains(chunk_index)) return chunk_cache_[chunk_index].native_frames.size();
-             return 0;
+            std::lock_guard<std::mutex> lock(cache_mutex_);
+            if (chunk_cache_.contains(chunk_index))
+                return chunk_cache_[chunk_index].native_frames.size();
+            return 0;
         }
 
         FrameAccessor CreateAccessor() const {
@@ -312,32 +319,21 @@ namespace VTX {
         }
 
         void InspectChunkHeader(int32_t index) const {
-            if (index < 0 || index >= chunk_index_table_.size()) return;
+            if (index < 0 || index >= chunk_index_table_.size())
+                return;
             const auto& entry = chunk_index_table_[index];
-            VTX_INFO("--- Chunk Inspection --- Index: {} Offset: {} Size: {}", entry.chunk_index, entry.file_offset, entry.chunk_size_bytes);
+            VTX_INFO("--- Chunk Inspection --- Index: {} Offset: {} Size: {}", entry.chunk_index, entry.file_offset,
+                     entry.chunk_size_bytes);
         }
 
-        VTX::FileHeader GetFileHeader()
-        {
-            return SerializerPolicy::GetVTXHeader(header_);
-        }
+        VTX::FileHeader GetFileHeader() { return SerializerPolicy::GetVTXHeader(header_); }
 
-        VTX::FileFooter GetFileFooter()
-        {
-            return SerializerPolicy::GetVTXFooter(footer_);
-        }
+        VTX::FileFooter GetFileFooter() { return SerializerPolicy::GetVTXFooter(footer_); }
 
-        VTX::ContextualSchema GetContextualSchema()
-        {
-            return SerializerPolicy::GetVTXContextualSchema(header_);
-        }
+        VTX::ContextualSchema GetContextualSchema() { return SerializerPolicy::GetVTXContextualSchema(header_); }
 
 
-
-        VTX::PropertyAddressCache GetPropertyAddressCache()
-        {
-            return property_address_cache_;
-        }
+        VTX::PropertyAddressCache GetPropertyAddressCache() { return property_address_cache_; }
 
     private:
         struct CachedChunk {
@@ -357,7 +353,7 @@ namespace VTX {
             stream.seekg(0, std::ios::end);
             const auto end = stream.tellg();
             stream.seekg(prev);
-            return (end < 0) ? int64_t{0} : static_cast<int64_t>(end);
+            return (end < 0) ? int64_t {0} : static_cast<int64_t>(end);
         }
 
         void ReadHeader(std::ifstream& stream) {
@@ -422,8 +418,7 @@ namespace VTX {
             // Fix A3: guard against an implausible footer_size (either
             // malicious UINT32_MAX or garbage from a corrupt trailer) that
             // would seek before the beginning of the file.
-            if (footer_size == 0 ||
-                static_cast<int64_t>(footer_size) + 8 > file_size) {
+            if (footer_size == 0 || static_cast<int64_t>(footer_size) + 8 > file_size) {
                 throw std::runtime_error("VTX file has implausible footer size");
             }
 
@@ -494,18 +489,15 @@ namespace VTX {
             if (last_requested_chunk_ >= 0) {
                 const int32_t dist = std::abs(current_idx - last_requested_chunk_);
                 constexpr float alpha = 0.3f;
-                ewma_chunk_distance_ =
-                    alpha * static_cast<float>(dist) +
-                    (1.0f - alpha) * ewma_chunk_distance_;
-                if (window_size > 0 &&
-                    ewma_chunk_distance_ > static_cast<float>(window_size)) {
+                ewma_chunk_distance_ = alpha * static_cast<float>(dist) + (1.0f - alpha) * ewma_chunk_distance_;
+                if (window_size > 0 && ewma_chunk_distance_ > static_cast<float>(window_size)) {
                     do_lateral_prefetch = false;
                 }
             }
             last_requested_chunk_ = current_idx;
 
             // Reap prefetches that finished naturally since the last call.
-            for (auto it = pending_loads_.begin(); it != pending_loads_.end(); ) {
+            for (auto it = pending_loads_.begin(); it != pending_loads_.end();) {
                 if (it->second.future.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
                     it = pending_loads_.erase(it);
                 } else {
@@ -514,10 +506,13 @@ namespace VTX {
             }
 
             int32_t start = std::max(0, current_idx - static_cast<int32_t>(cache_backward_));
-            int32_t end = std::min(static_cast<int32_t>(chunk_index_table_.size()) - 1, current_idx + (int32_t)cache_forward_);
+            int32_t end =
+                std::min(static_cast<int32_t>(chunk_index_table_.size()) - 1, current_idx + (int32_t)cache_forward_);
 
-            if (start == current_range_start_ && end == current_range_end_) return;
-            current_range_start_ = start; current_range_end_ = end;
+            if (start == current_range_start_ && end == current_range_end_)
+                return;
+            current_range_start_ = start;
+            current_range_end_ = end;
 
             // Cancel in-flight prefetches whose target chunk fell outside
             // the new window.  AsyncLoadTask checks `stop_requested()` at
@@ -546,9 +541,10 @@ namespace VTX {
             // while firing user callbacks.
             const auto evts = GetEventsSnapshot();
 
-            for (auto it = chunk_cache_.begin(); it != chunk_cache_.end(); ) {
+            for (auto it = chunk_cache_.begin(); it != chunk_cache_.end();) {
                 if (it->first < start || it->first > end) {
-                    if (evts.OnChunkEvicted) evts.OnChunkEvicted(it->first);
+                    if (evts.OnChunkEvicted)
+                        evts.OnChunkEvicted(it->first);
                     it = chunk_cache_.erase(it);
                 } else {
                     ++it;
@@ -619,7 +615,8 @@ namespace VTX {
             trigger(current_idx);
             if (do_lateral_prefetch) {
                 for (int32_t i = start; i <= end; ++i) {
-                    if (i != current_idx) trigger(i);
+                    if (i != current_idx)
+                        trigger(i);
                 }
             }
         }
@@ -637,7 +634,8 @@ namespace VTX {
                     chunk_cache_[idx] = std::move(data);
                     pending_loads_.erase(idx);
                 }
-                if (evts.OnChunkLoadFinished) evts.OnChunkLoadFinished(idx);
+                if (evts.OnChunkLoadFinished)
+                    evts.OnChunkLoadFinished(idx);
             }
         }
 
@@ -662,20 +660,24 @@ namespace VTX {
             if (thread_survived) {
                 // A4: snapshot before invoking.
                 const auto evts = GetEventsSnapshot();
-                if (evts.OnChunkLoadFinished) evts.OnChunkLoadFinished(idx);
+                if (evts.OnChunkLoadFinished)
+                    evts.OnChunkLoadFinished(idx);
             }
         }
 
         CachedChunk PerformHeavyLoading(int32_t idx, const std::stop_token& stop_token) {
-            if (idx < 0 || idx >= chunk_index_table_.size()) return {};
+            if (idx < 0 || idx >= chunk_index_table_.size())
+                return {};
             const auto& entry = chunk_index_table_[idx];
 
-            if (stop_token.stop_requested()) return {};
+            if (stop_token.stop_requested())
+                return {};
 
             std::string compressed_blob;
             {
                 std::ifstream local_stream(filepath_, std::ios::binary | std::ios::in);
-                if (!local_stream.is_open()) return {};
+                if (!local_stream.is_open())
+                    return {};
 
                 // Fix A3: validate that the chunk is fully contained in the
                 // file before seeking.  A corrupt seek table can list offsets
@@ -683,15 +685,11 @@ namespace VTX {
                 // produce garbage that then crashes the deserialiser.
                 const int64_t file_size = GetStreamSize(local_stream);
                 const int64_t chunk_end =
-                    static_cast<int64_t>(entry.file_offset) +
-                    static_cast<int64_t>(entry.chunk_size_bytes);
-                if (entry.chunk_size_bytes == 0 ||
-                    static_cast<int64_t>(entry.file_offset) < 0 ||
+                    static_cast<int64_t>(entry.file_offset) + static_cast<int64_t>(entry.chunk_size_bytes);
+                if (entry.chunk_size_bytes == 0 || static_cast<int64_t>(entry.file_offset) < 0 ||
                     chunk_end > file_size) {
-                    VTX_ERROR("[READER] Chunk {} offset/size out of bounds (offset={}, size={}, file_size={})",
-                              idx,
-                              static_cast<int64_t>(entry.file_offset),
-                              static_cast<int64_t>(entry.chunk_size_bytes),
+                    VTX_ERROR("[READER] Chunk {} offset/size out of bounds (offset={}, size={}, file_size={})", idx,
+                              static_cast<int64_t>(entry.file_offset), static_cast<int64_t>(entry.chunk_size_bytes),
                               file_size);
                     return {};
                 }
@@ -706,22 +704,24 @@ namespace VTX {
                 // would otherwise leave `raw_buffer` half-filled with zeros
                 // and feed that to the deserialiser.
                 if (local_stream.gcount() != static_cast<std::streamsize>(entry.chunk_size_bytes)) {
-                    VTX_ERROR("[READER] Chunk {} short read: expected {} bytes, got {}",
-                              idx, entry.chunk_size_bytes,
+                    VTX_ERROR("[READER] Chunk {} short read: expected {} bytes, got {}", idx, entry.chunk_size_bytes,
                               static_cast<int64_t>(local_stream.gcount()));
                     return {};
                 }
 
-                if (raw_buffer.size() <= 4) return {};
+                if (raw_buffer.size() <= 4)
+                    return {};
                 compressed_blob = raw_buffer.substr(4);
             }
 
-            if (stop_token.stop_requested()) return {};
+            if (stop_token.stop_requested())
+                return {};
 
             try {
                 CachedChunk cc;
                 cc.index = idx;
-                SerializerPolicy::ProcessChunkData(idx, compressed_blob, stop_token, cc.native_frames, cc.decompressed_blob, cc.raw_frames_spans);
+                SerializerPolicy::ProcessChunkData(idx, compressed_blob, stop_token, cc.native_frames,
+                                                   cc.decompressed_blob, cc.raw_frames_spans);
                 return cc;
             } catch (const std::exception& e) {
                 VTX_ERROR("[READER] Chunk {} deserialization failed: {}", idx, e.what());
@@ -758,7 +758,7 @@ namespace VTX {
 
         mutable std::mutex cache_mutex_;
         ReplayReaderEvents events_;
-        mutable std::mutex events_mutex_;  // protects events_ (A4)
+        mutable std::mutex events_mutex_; // protects events_ (A4)
 
         uint32_t cache_backward_ = 2;
         uint32_t cache_forward_ = 2;
@@ -776,7 +776,6 @@ namespace VTX {
         int32_t last_requested_chunk_ = -1;
         float ewma_chunk_distance_ = 0.0f;
 
-        PropertyAddressCache property_address_cache_={};
+        PropertyAddressCache property_address_cache_ = {};
     };
-}
-
+} // namespace VTX

@@ -17,34 +17,31 @@
 
 namespace {
 
-constexpr int   kTotalFrames    = 120;     // enough to force multiple chunks
-constexpr int   kChunkMaxFrames = 40;      // = 3 chunks
-constexpr float kFps            = 60.0f;
+    constexpr int kTotalFrames = 120;   // enough to force multiple chunks
+    constexpr int kChunkMaxFrames = 40; // = 3 chunks
+    constexpr float kFps = 60.0f;
 
-const char* FormatName(VTX::VtxFormat f) {
-    return f == VTX::VtxFormat::FlatBuffers ? "FlatBuffers" : "Protobuf";
-}
+    const char* FormatName(VTX::VtxFormat f) {
+        return f == VTX::VtxFormat::FlatBuffers ? "FlatBuffers" : "Protobuf";
+    }
 
-VTX::Frame BuildFrame(int frame_index) {
-    VTX::Frame f;
-    auto& bucket = f.CreateBucket("entity");
+    VTX::Frame BuildFrame(int frame_index) {
+        VTX::Frame f;
+        auto& bucket = f.CreateBucket("entity");
 
-    VTX::PropertyContainer pc;
-    pc.entity_type_id    = 0;
-    pc.string_properties = { "player_0", "Alpha" };
-    pc.int32_properties  = { 1, frame_index, 0 };                // Team, Score(=frame), Deaths
-    pc.float_properties  = { 100.0f - float(frame_index), 50.0f };
-    pc.vector_properties = {
-        VTX::Vector{ double(frame_index), 0.0, 0.0 },
-        VTX::Vector{ 1.0, 0.0, 0.0 }
-    };
-    pc.quat_properties = { VTX::Quat{0.0f, 0.0f, 0.0f, 1.0f} };
-    pc.bool_properties = { true };
+        VTX::PropertyContainer pc;
+        pc.entity_type_id = 0;
+        pc.string_properties = {"player_0", "Alpha"};
+        pc.int32_properties = {1, frame_index, 0}; // Team, Score(=frame), Deaths
+        pc.float_properties = {100.0f - float(frame_index), 50.0f};
+        pc.vector_properties = {VTX::Vector {double(frame_index), 0.0, 0.0}, VTX::Vector {1.0, 0.0, 0.0}};
+        pc.quat_properties = {VTX::Quat {0.0f, 0.0f, 0.0f, 1.0f}};
+        pc.bool_properties = {true};
 
-    bucket.unique_ids.push_back("player_0");
-    bucket.entities.push_back(std::move(pc));
-    return f;
-}
+        bucket.unique_ids.push_back("player_0");
+        bucket.entities.push_back(std::move(pc));
+        return f;
+    }
 
 } // namespace
 
@@ -55,27 +52,22 @@ VTX::Frame BuildFrame(int frame_index) {
 
 class RoundtripTest : public ::testing::TestWithParam<VTX::VtxFormat> {
 protected:
-    VTX::WriterFacadeConfig MakeConfig(const std::string& suffix,
-                                       const std::string& uuid) const
-    {
+    VTX::WriterFacadeConfig MakeConfig(const std::string& suffix, const std::string& uuid) const {
         VTX::WriterFacadeConfig cfg;
-        cfg.output_filepath  = VtxTest::OutputPath(
-            std::string("roundtrip_") + FormatName(GetParam()) + "_" + suffix + ".vtx");
+        cfg.output_filepath =
+            VtxTest::OutputPath(std::string("roundtrip_") + FormatName(GetParam()) + "_" + suffix + ".vtx");
         cfg.schema_json_path = VtxTest::FixturePath("test_schema.json");
-        cfg.replay_name      = "RoundtripTest";
-        cfg.replay_uuid      = uuid;
-        cfg.default_fps      = kFps;
+        cfg.replay_name = "RoundtripTest";
+        cfg.replay_uuid = uuid;
+        cfg.default_fps = kFps;
         cfg.chunk_max_frames = kChunkMaxFrames;
-        cfg.use_compression  = true;
+        cfg.use_compression = true;
         return cfg;
     }
 
-    std::unique_ptr<VTX::IVtxWriterFacade> CreateWriter(
-        const VTX::WriterFacadeConfig& cfg) const
-    {
-        return GetParam() == VTX::VtxFormat::FlatBuffers
-            ? VTX::CreateFlatBuffersWriterFacade(cfg)
-            : VTX::CreateProtobuffWriterFacade(cfg);
+    std::unique_ptr<VTX::IVtxWriterFacade> CreateWriter(const VTX::WriterFacadeConfig& cfg) const {
+        return GetParam() == VTX::VtxFormat::FlatBuffers ? VTX::CreateFlatBuffersWriterFacade(cfg)
+                                                         : VTX::CreateProtobuffWriterFacade(cfg);
     }
 };
 
@@ -147,11 +139,11 @@ TEST_P(RoundtripTest, AcceptsHistoricalUtc) {
         auto writer = CreateWriter(cfg);
         ASSERT_TRUE(writer);
 
-        const int64_t base_utc = 1'745'000'000LL * 10'000'000LL;  // 2025-04-19
+        const int64_t base_utc = 1'745'000'000LL * 10'000'000LL; // 2025-04-19
         for (int i = 0; i < 20; ++i) {
             auto frame = BuildFrame(i);
             VTX::GameTime::GameTimeRegister t;
-            t.game_time        = float(i) / kFps;
+            t.game_time = float(i) / kFps;
             t.created_utc_time = base_utc + int64_t(i) * 166'666LL;
             writer->RecordFrame(frame, t);
         }
@@ -172,11 +164,8 @@ TEST_P(RoundtripTest, AcceptsHistoricalUtc) {
 //   BothBackends/RoundtripTest.AcceptsHistoricalUtc/Protobuf
 // ---------------------------------------------------------------------------
 
-INSTANTIATE_TEST_SUITE_P(
-    BothBackends,
-    RoundtripTest,
-    ::testing::Values(VTX::VtxFormat::FlatBuffers, VTX::VtxFormat::Protobuf),
-    [](const ::testing::TestParamInfo<VTX::VtxFormat>& info) {
-        return std::string(FormatName(info.param));
-    }
-);
+INSTANTIATE_TEST_SUITE_P(BothBackends, RoundtripTest,
+                         ::testing::Values(VTX::VtxFormat::FlatBuffers, VTX::VtxFormat::Protobuf),
+                         [](const ::testing::TestParamInfo<VTX::VtxFormat>& info) {
+                             return std::string(FormatName(info.param));
+                         });

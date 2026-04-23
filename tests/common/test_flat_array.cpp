@@ -16,7 +16,7 @@ TEST(FlatArray, DefaultConstructsEmpty) {
     FlatArray<int> arr;
     EXPECT_EQ(arr.SubArrayCount(), 0u);
     EXPECT_EQ(arr.TotalElementCount(), 0u);
-    EXPECT_TRUE(arr.GetSubArray(0).empty());  // OOB read is silent-empty
+    EXPECT_TRUE(arr.GetSubArray(0).empty()); // OOB read is silent-empty
 }
 
 TEST(FlatArray, ClearResetsEverything) {
@@ -45,8 +45,11 @@ TEST(FlatArray, AppendSubArrayStoresItemsContiguously) {
     auto sub1 = arr.GetSubArray(1);
     ASSERT_EQ(sub0.size(), 3u);
     ASSERT_EQ(sub1.size(), 2u);
-    EXPECT_EQ(sub0[0], 10); EXPECT_EQ(sub0[1], 20); EXPECT_EQ(sub0[2], 30);
-    EXPECT_EQ(sub1[0], 40); EXPECT_EQ(sub1[1], 50);
+    EXPECT_EQ(sub0[0], 10);
+    EXPECT_EQ(sub0[1], 20);
+    EXPECT_EQ(sub0[2], 30);
+    EXPECT_EQ(sub1[0], 40);
+    EXPECT_EQ(sub1[1], 50);
 }
 
 TEST(FlatArray, AppendEmptySubArrayStillCountsAsOne) {
@@ -107,7 +110,7 @@ TEST(FlatArray, EraseSubArrayRemovesElementsAndShifts) {
     EXPECT_EQ(arr.GetSubArray(0).size(), 2u);
     EXPECT_EQ(arr.GetSubArray(1).size(), 1u);
     EXPECT_EQ(arr.GetSubArray(1)[0], 6);
-    EXPECT_EQ(arr.TotalElementCount(), 3u);  // 2 + 1
+    EXPECT_EQ(arr.TotalElementCount(), 3u); // 2 + 1
 }
 
 TEST(FlatArray, EraseSubArrayOutOfBoundsReturnsFalse) {
@@ -190,7 +193,7 @@ TEST(FlatArray, ReplaceAtPositionUpdatesInPlace) {
 TEST(FlatArray, EraseRangeRemovesContiguousRun) {
     FlatArray<int> arr;
     arr.AppendSubArray({1, 2, 3, 4, 5});
-    ASSERT_TRUE(arr.EraseRange(0, 1, 4));  // remove indexes [1,4)  = 2,3,4
+    ASSERT_TRUE(arr.EraseRange(0, 1, 4)); // remove indexes [1,4)  = 2,3,4
     auto sub = arr.GetSubArray(0);
     ASSERT_EQ(sub.size(), 2u);
     EXPECT_EQ(sub[0], 1);

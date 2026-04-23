@@ -3,8 +3,7 @@
 #include <memory>
 #include "gui/gui_manager.h"
 
-namespace VtxGuiNames
-{
+namespace VtxGuiNames {
     inline const char* SessionName = "VtxSessionBase";
     inline const char* TimelineWindow = "Timeline";
     inline const char* FilePropertiesWindow = "File Properties";
@@ -16,10 +15,7 @@ namespace VtxGuiNames
     inline const char* TimelineEventsWindow = "Timeline Events";
     inline const char* EntityDetailsWindow = "Entity Details";
     inline const char* LogWindow = "Logs";
-}
+} // namespace VtxGuiNames
 
 
-enum class TimeDisplayFormat {
-    Ticks = 0,
-    Formatted
-};
+enum class TimeDisplayFormat { Ticks = 0, Formatted };

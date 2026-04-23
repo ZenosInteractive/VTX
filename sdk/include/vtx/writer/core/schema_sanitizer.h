@@ -16,10 +16,9 @@ namespace VTX {
 
     class SchemaSanitizerRegistry {
         std::unordered_map<std::string, SanitizeFunc> _processors;
+
     public:
-        void Register(const std::string& structName, const SanitizeFunc& func) {
-            _processors[structName] = func;
-        }
+        void Register(const std::string& structName, const SanitizeFunc& func) { _processors[structName] = func; }
 
         void TrySanitize(PropertyContainer& container, const SanitizeContext& ctx) const {
             auto it = _processors.find(ctx.struct_name);
@@ -28,4 +27,4 @@ namespace VTX {
             }
         }
     };
-}
+} // namespace VTX

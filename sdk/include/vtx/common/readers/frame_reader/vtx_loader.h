@@ -25,4 +25,4 @@ namespace VTX {
     T Load(const FbPointer* fb_data) {
         return FlatBufferAdapter::Load<T>(fb_data);
     }
-}
+} // namespace VTX

@@ -15,100 +15,81 @@
 
 namespace {
 
-const char* FormatName(VTX::VtxFormat format)
-{
-    return format == VTX::VtxFormat::FlatBuffers ? "FlatBuffers" : "Protobuf";
-}
-
-std::string UniqueOutputPath(VTX::VtxFormat format, const std::string& suffix)
-{
-    const auto* info = ::testing::UnitTest::GetInstance()->current_test_info();
-    return VtxTest::OutputPath(
-        VtxTest::SanitizePathComponent(std::string(info->test_suite_name())) + "_" +
-        VtxTest::SanitizePathComponent(std::string(info->name())) + "_" +
-        FormatName(format) + "_" + suffix + ".vtx");
-}
-
-VTX::WriterFacadeConfig MakeConfig(VTX::VtxFormat format,
-                                   const std::string& suffix,
-                                   int32_t chunk_max_frames)
-{
-    VTX::WriterFacadeConfig cfg;
-    cfg.output_filepath = UniqueOutputPath(format, suffix);
-    cfg.schema_json_path = VtxTest::FixturePath("test_schema.json");
-    cfg.replay_name = "ReaderApiTest";
-    cfg.replay_uuid = "reader-api";
-    cfg.default_fps = 60.0f;
-    cfg.chunk_max_frames = chunk_max_frames;
-    cfg.use_compression = true;
-    return cfg;
-}
-
-std::unique_ptr<VTX::IVtxWriterFacade> CreateWriter(VTX::VtxFormat format,
-                                                    const VTX::WriterFacadeConfig& cfg)
-{
-    return format == VTX::VtxFormat::FlatBuffers
-        ? VTX::CreateFlatBuffersWriterFacade(cfg)
-        : VTX::CreateProtobuffWriterFacade(cfg);
-}
-
-VTX::Frame MakePlayerFrame(int frame_index)
-{
-    VTX::Frame f;
-    auto& bucket = f.CreateBucket("entity");
-
-    VTX::PropertyContainer pc;
-    pc.entity_type_id = 0;
-    pc.string_properties = {"player_0", "Alpha"};
-    pc.int32_properties = {1, frame_index, 0};
-    pc.float_properties = {100.0f - float(frame_index), 50.0f};
-    pc.vector_properties = {
-        VTX::Vector{double(frame_index), 0.0, 0.0},
-        VTX::Vector{1.0, 0.0, 0.0}
-    };
-    pc.quat_properties = {VTX::Quat{0.0f, 0.0f, 0.0f, 1.0f}};
-    pc.bool_properties = {true};
-
-    bucket.unique_ids.push_back("player_0");
-    bucket.entities.push_back(std::move(pc));
-    return f;
-}
-
-void WriteReplay(VTX::VtxFormat format,
-                 const std::string& path,
-                 int frames,
-                 int32_t chunk_max_frames)
-{
-    VTX::WriterFacadeConfig cfg;
-    cfg.output_filepath = path;
-    cfg.schema_json_path = VtxTest::FixturePath("test_schema.json");
-    cfg.replay_name = "ReaderApiTest";
-    cfg.replay_uuid = "reader-api";
-    cfg.default_fps = 60.0f;
-    cfg.chunk_max_frames = chunk_max_frames;
-    cfg.use_compression = true;
-
-    auto writer = CreateWriter(format, cfg);
-    for (int i = 0; i < frames; ++i) {
-        auto frame = MakePlayerFrame(i);
-        VTX::GameTime::GameTimeRegister t;
-        t.game_time = float(i) / 60.0f;
-        writer->RecordFrame(frame, t);
+    const char* FormatName(VTX::VtxFormat format) {
+        return format == VTX::VtxFormat::FlatBuffers ? "FlatBuffers" : "Protobuf";
     }
-    writer->Stop();
-}
 
-int ReadScore(const VTX::Frame& frame)
-{
-    return frame.GetBuckets()[0].entities[0].int32_properties[1];
-}
+    std::string UniqueOutputPath(VTX::VtxFormat format, const std::string& suffix) {
+        const auto* info = ::testing::UnitTest::GetInstance()->current_test_info();
+        return VtxTest::OutputPath(VtxTest::SanitizePathComponent(std::string(info->test_suite_name())) + "_" +
+                                   VtxTest::SanitizePathComponent(std::string(info->name())) + "_" +
+                                   FormatName(format) + "_" + suffix + ".vtx");
+    }
+
+    VTX::WriterFacadeConfig MakeConfig(VTX::VtxFormat format, const std::string& suffix, int32_t chunk_max_frames) {
+        VTX::WriterFacadeConfig cfg;
+        cfg.output_filepath = UniqueOutputPath(format, suffix);
+        cfg.schema_json_path = VtxTest::FixturePath("test_schema.json");
+        cfg.replay_name = "ReaderApiTest";
+        cfg.replay_uuid = "reader-api";
+        cfg.default_fps = 60.0f;
+        cfg.chunk_max_frames = chunk_max_frames;
+        cfg.use_compression = true;
+        return cfg;
+    }
+
+    std::unique_ptr<VTX::IVtxWriterFacade> CreateWriter(VTX::VtxFormat format, const VTX::WriterFacadeConfig& cfg) {
+        return format == VTX::VtxFormat::FlatBuffers ? VTX::CreateFlatBuffersWriterFacade(cfg)
+                                                     : VTX::CreateProtobuffWriterFacade(cfg);
+    }
+
+    VTX::Frame MakePlayerFrame(int frame_index) {
+        VTX::Frame f;
+        auto& bucket = f.CreateBucket("entity");
+
+        VTX::PropertyContainer pc;
+        pc.entity_type_id = 0;
+        pc.string_properties = {"player_0", "Alpha"};
+        pc.int32_properties = {1, frame_index, 0};
+        pc.float_properties = {100.0f - float(frame_index), 50.0f};
+        pc.vector_properties = {VTX::Vector {double(frame_index), 0.0, 0.0}, VTX::Vector {1.0, 0.0, 0.0}};
+        pc.quat_properties = {VTX::Quat {0.0f, 0.0f, 0.0f, 1.0f}};
+        pc.bool_properties = {true};
+
+        bucket.unique_ids.push_back("player_0");
+        bucket.entities.push_back(std::move(pc));
+        return f;
+    }
+
+    void WriteReplay(VTX::VtxFormat format, const std::string& path, int frames, int32_t chunk_max_frames) {
+        VTX::WriterFacadeConfig cfg;
+        cfg.output_filepath = path;
+        cfg.schema_json_path = VtxTest::FixturePath("test_schema.json");
+        cfg.replay_name = "ReaderApiTest";
+        cfg.replay_uuid = "reader-api";
+        cfg.default_fps = 60.0f;
+        cfg.chunk_max_frames = chunk_max_frames;
+        cfg.use_compression = true;
+
+        auto writer = CreateWriter(format, cfg);
+        for (int i = 0; i < frames; ++i) {
+            auto frame = MakePlayerFrame(i);
+            VTX::GameTime::GameTimeRegister t;
+            t.game_time = float(i) / 60.0f;
+            writer->RecordFrame(frame, t);
+        }
+        writer->Stop();
+    }
+
+    int ReadScore(const VTX::Frame& frame) {
+        return frame.GetBuckets()[0].entities[0].int32_properties[1];
+    }
 
 } // namespace
 
 class ReaderApiTest : public ::testing::TestWithParam<VTX::VtxFormat> {};
 
-TEST_P(ReaderApiTest, CreateAccessorReadsSchemaDrivenEntityValues)
-{
+TEST_P(ReaderApiTest, CreateAccessorReadsSchemaDrivenEntityValues) {
     const auto cfg = MakeConfig(GetParam(), "accessor", 8);
     WriteReplay(GetParam(), cfg.output_filepath, 1, 8);
 
@@ -136,8 +117,7 @@ TEST_P(ReaderApiTest, CreateAccessorReadsSchemaDrivenEntityValues)
     EXPECT_FALSE(accessor.Get<float>("Player", "Name").IsValid());
 }
 
-TEST_P(ReaderApiTest, FrameRangeAndContextReturnExpectedFrames)
-{
+TEST_P(ReaderApiTest, FrameRangeAndContextReturnExpectedFrames) {
     const auto cfg = MakeConfig(GetParam(), "range_context", 8);
     WriteReplay(GetParam(), cfg.output_filepath, 5, 8);
 
@@ -159,8 +139,7 @@ TEST_P(ReaderApiTest, FrameRangeAndContextReturnExpectedFrames)
     EXPECT_EQ(ReadScore(context[2]), 3);
 }
 
-TEST_P(ReaderApiTest, OutOfBoundsQueriesReturnEmptyResults)
-{
+TEST_P(ReaderApiTest, OutOfBoundsQueriesReturnEmptyResults) {
     const auto cfg = MakeConfig(GetParam(), "oob", 8);
     WriteReplay(GetParam(), cfg.output_filepath, 2, 8);
 
@@ -175,8 +154,7 @@ TEST_P(ReaderApiTest, OutOfBoundsQueriesReturnEmptyResults)
     EXPECT_TRUE(range.empty());
 }
 
-TEST(ReaderApiFlatBuffers, CacheWindowZeroEvictsPreviousChunks)
-{
+TEST(ReaderApiFlatBuffers, CacheWindowZeroEvictsPreviousChunks) {
     const auto path = VtxTest::OutputPath("ReaderApiFlatBuffers_CacheWindowZeroEvictsPreviousChunks.vtx");
     WriteReplay(VTX::VtxFormat::FlatBuffers, path, 3, 1);
 
@@ -225,10 +203,8 @@ TEST(ReaderApiFlatBuffers, CacheWindowZeroEvictsPreviousChunks)
 // the EWMA and still trigger laterals.  This catches a regression of
 // the EWMA logic (hitting >= 5*N) while tolerating reasonable
 // variations in bootstrap behaviour.
-TEST(ReaderApiFlatBuffers, RandomAccessSkipsLateralPrefetches)
-{
-    const auto path = VtxTest::OutputPath(
-        "ReaderApiFlatBuffers_RandomAccessSkipsLateralPrefetches.vtx");
+TEST(ReaderApiFlatBuffers, RandomAccessSkipsLateralPrefetches) {
+    const auto path = VtxTest::OutputPath("ReaderApiFlatBuffers_RandomAccessSkipsLateralPrefetches.vtx");
     // 20 chunks of 5 frames each -> 100 frames total.  Small enough
     // to run in milliseconds, big enough that jumps of 10 exceed the
     // window of 2.
@@ -242,9 +218,7 @@ TEST(ReaderApiFlatBuffers, RandomAccessSkipsLateralPrefetches)
     // The indices below map to 10 chunks, each jump distance 10 chunks
     // (well above window=2), guaranteeing the EWMA crosses its
     // threshold after ~2 jumps.
-    const std::vector<int32_t> jump_frames{
-        0, 50, 10, 60, 20, 70, 30, 80, 40, 90
-    };
+    const std::vector<int32_t> jump_frames {0, 50, 10, 60, 20, 70, 30, 80, 40, 90};
 
     for (int32_t f : jump_frames) {
         ASSERT_NE(ctx.reader->GetFrameSync(f), nullptr);
@@ -261,8 +235,7 @@ TEST(ReaderApiFlatBuffers, RandomAccessSkipsLateralPrefetches)
     // this would be ~5x.
     EXPECT_LE(total_seen, jump_frames.size() * 2)
         << "Expected random access to skip lateral prefetches "
-        << "but saw " << total_seen << " chunks loaded vs "
-        << jump_frames.size() << " jumps.";
+        << "but saw " << total_seen << " chunks loaded vs " << jump_frames.size() << " jumps.";
 }
 
 // Regression for the "stale-cancelled prefetch blocks re-entry" bug.
@@ -313,11 +286,9 @@ TEST(ReaderApiFlatBuffers, CancelledPrefetchReEntersWindow) {
 // §3.A regression coverage.  WarmAt must trigger an asynchronous load
 // of the chunk containing `frame_index` without blocking the caller,
 // and without requiring a subsequent GetFrame to fire the load.
-TEST(ReaderApiFlatBuffers, WarmAtTriggersAsyncLoadWithoutReading)
-{
-    const auto path = VtxTest::OutputPath(
-        "ReaderApiFlatBuffers_WarmAtTriggersAsyncLoadWithoutReading.vtx");
-    WriteReplay(VTX::VtxFormat::FlatBuffers, path, 50, 10);  // 5 chunks
+TEST(ReaderApiFlatBuffers, WarmAtTriggersAsyncLoadWithoutReading) {
+    const auto path = VtxTest::OutputPath("ReaderApiFlatBuffers_WarmAtTriggersAsyncLoadWithoutReading.vtx");
+    WriteReplay(VTX::VtxFormat::FlatBuffers, path, 50, 10); // 5 chunks
 
     auto ctx = VTX::OpenReplayFile(path);
     ASSERT_TRUE(ctx) << ctx.error;
@@ -339,8 +310,7 @@ TEST(ReaderApiFlatBuffers, WarmAtTriggersAsyncLoadWithoutReading)
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
     while (std::chrono::steady_clock::now() < deadline) {
         auto snap = ctx.chunk_state->GetSnapshot();
-        if (std::find(snap.loaded_chunks.begin(), snap.loaded_chunks.end(), 3)
-            != snap.loaded_chunks.end()) {
+        if (std::find(snap.loaded_chunks.begin(), snap.loaded_chunks.end(), 3) != snap.loaded_chunks.end()) {
             break;
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -350,14 +320,11 @@ TEST(ReaderApiFlatBuffers, WarmAtTriggersAsyncLoadWithoutReading)
 
     auto snap = ctx.chunk_state->GetSnapshot();
     ASSERT_FALSE(snap.loaded_chunks.empty());
-    EXPECT_NE(std::find(snap.loaded_chunks.begin(), snap.loaded_chunks.end(), 3),
-              snap.loaded_chunks.end());
+    EXPECT_NE(std::find(snap.loaded_chunks.begin(), snap.loaded_chunks.end(), 3), snap.loaded_chunks.end());
 }
 
-INSTANTIATE_TEST_SUITE_P(
-    BothBackends,
-    ReaderApiTest,
-    ::testing::Values(VTX::VtxFormat::FlatBuffers, VTX::VtxFormat::Protobuf),
-    [](const ::testing::TestParamInfo<VTX::VtxFormat>& info) {
-        return std::string(FormatName(info.param));
-    });
+INSTANTIATE_TEST_SUITE_P(BothBackends, ReaderApiTest,
+                         ::testing::Values(VTX::VtxFormat::FlatBuffers, VTX::VtxFormat::Protobuf),
+                         [](const ::testing::TestParamInfo<VTX::VtxFormat>& info) {
+                             return std::string(FormatName(info.param));
+                         });

@@ -22,11 +22,8 @@
 
 #include <string>
 
-int main(int argc, char* argv[])
-{
-    const std::string filepath = (argc > 1)
-        ? argv[1]
-        : "content/reader/arena/arena_from_fbs_ds.vtx";
+int main(int argc, char* argv[]) {
+    const std::string filepath = (argc > 1) ? argv[1] : "content/reader/arena/arena_from_fbs_ds.vtx";
 
 
     auto result = VTX::OpenReplayFile(filepath);

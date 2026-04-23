@@ -23,15 +23,14 @@ namespace VTX {
         const google::protobuf::FieldDescriptor* field_desc_; // Null if root or full obj
 
     public:
-        
         explicit ProtobufAdapter(const google::protobuf::Message& msg)
-            : message_(msg), field_desc_(nullptr) {
-        }
+            : message_(msg)
+            , field_desc_(nullptr) {}
 
         //submessage constructor, used internally
         ProtobufAdapter(const google::protobuf::Message& msg, const google::protobuf::FieldDescriptor* fd)
-            : message_(msg), field_desc_(fd) {
-        }
+            : message_(msg)
+            , field_desc_(fd) {}
 
         bool HasKey(const std::string& key) const {
             const auto* descriptor = message_.GetDescriptor();
@@ -40,8 +39,7 @@ namespace VTX {
 
         template <typename T>
         T GetValue() const {
-
-            return T{};
+            return T {};
         }
 
 
@@ -49,17 +47,15 @@ namespace VTX {
             const auto* descriptor = message_.GetDescriptor();
             const auto* field = descriptor->FindFieldByName(key);
 
-            if (!field) throw std::runtime_error("Field not found: " + key);
+            if (!field)
+                throw std::runtime_error("Field not found: " + key);
 
             const auto* reflection = message_.GetReflection();
 
             if (field->cpp_type() == google::protobuf::FieldDescriptor::CPPTYPE_MESSAGE) {
                 if (field->is_repeated()) {
-   
                     return ProtobufAdapter(message_, field);
-                }
-                else
-                {
+                } else {
                     const auto& sub_message = reflection->GetMessage(message_, field);
                     return ProtobufAdapter(sub_message);
                 }
@@ -71,29 +67,25 @@ namespace VTX {
 
         template <typename T>
         T GetValueFromField() const {
-            if (!field_desc) return T{}; // Error
+            if (!field_desc)
+                return T {}; // Error
 
             const auto* ref = message.GetReflection();
 
             if constexpr (std::is_same_v<T, int> || std::is_same_v<T, int32_t>) {
                 return ref->GetInt32(message_, field_desc);
-            }
-            else if constexpr (std::is_same_v<T, int64_t>) {
+            } else if constexpr (std::is_same_v<T, int64_t>) {
                 return ref->GetInt64(message_, field_desc);
-            }
-            else if constexpr (std::is_same_v<T, bool>) {
+            } else if constexpr (std::is_same_v<T, bool>) {
                 return ref->GetBool(message_, field_desc);
-            }
-            else if constexpr (std::is_same_v<T, float>) {
+            } else if constexpr (std::is_same_v<T, float>) {
                 return ref->GetFloat(message_, field_desc);
-            }
-            else if constexpr (std::is_same_v<T, double>) {
+            } else if constexpr (std::is_same_v<T, double>) {
                 return ref->GetDouble(message_, field_desc);
-            }
-            else if constexpr (std::is_same_v<T, std::string>) {
+            } else if constexpr (std::is_same_v<T, std::string>) {
                 return ref->GetString(message_, field_desc);
             }
-            return T{};
+            return T {};
         }
 
         template <typename T>
@@ -101,9 +93,7 @@ namespace VTX {
             return GetValueFromField<T>();
         }
 
-        bool IsArray() const {
-            return field_desc_ && field_desc_->is_repeated();
-        }
+        bool IsArray() const { return field_desc_ && field_desc_->is_repeated(); }
 
         size_t Size() const {
             if (IsArray()) {
@@ -113,7 +103,8 @@ namespace VTX {
         }
 
         ProtobufAdapter GetElement(size_t index) const {
-            if (!IsArray()) throw std::runtime_error("Not an array");
+            if (!IsArray())
+                throw std::runtime_error("Not an array");
 
             const auto* ref = message_.GetReflection();
 

@@ -5,20 +5,19 @@
 #include "vtx_schema.pb.h"
 
 std::string VTX::ProtobufVtxPolicy::GetMagicBytes() {
-    return "VTXP"; 
+    return "VTXP";
 }
 
 std::unique_ptr<VTX::ProtobufVtxPolicy::FrameType> VTX::ProtobufVtxPolicy::FromNative(VTX::Frame&& native) {
     const auto& native_buckets = native.GetBuckets();
     VTX::Frame sorted_native;
     sorted_native.GetMutableBuckets().resize(native_buckets.size());
-    
+
     for (size_t b_idx = 0; b_idx < native_buckets.size(); ++b_idx) {
         const auto& src_bucket = native_buckets[b_idx];
         auto& dst_bucket = sorted_native.GetBucket(static_cast<int>(b_idx));
 
-        if (b_idx == 0 && !src_bucket.entities.empty())
-        {
+        if (b_idx == 0 && !src_bucket.entities.empty()) {
             const auto& entities = src_bucket.entities;
             const auto& ids = src_bucket.unique_ids;
             int32_t max_type = -1;
@@ -57,24 +56,21 @@ std::unique_ptr<VTX::ProtobufVtxPolicy::FrameType> VTX::ProtobufVtxPolicy::FromN
             } else {
                 dst_bucket = src_bucket;
             }
-        }
-        else
-        {
+        } else {
             dst_bucket = src_bucket;
         }
     }
-        
+
     auto proto = std::make_unique<cppvtx::Frame>();
     VTX::Serialization::ToProto(sorted_native, proto.get());
     return proto;
 }
-        
+
 size_t VTX::ProtobufVtxPolicy::GetFrameSize(const VTX::ProtobufVtxPolicy::FrameType& frame) {
     return frame.ByteSizeLong();
 }
 
 VTX::ProtobufVtxPolicy::SchemaType VTX::ProtobufVtxPolicy::CreateSchema(const SchemaRegistry& registry) {
-    
     SchemaType proto_schema;
     proto_schema.set_data_indentifier("VTX_GameData"); // Default VTX data format identifier
     proto_schema.set_data_version(1);
@@ -89,15 +85,15 @@ std::string VTX::ProtobufVtxPolicy::SerializeHeader(const VTX::SessionConfig& co
     proto_header.set_replay_name(config.replay_name);
     proto_header.set_replay_uuid(config.replay_uuid.empty() ? "uuid_placeholder" : config.replay_uuid);
     proto_header.set_custom_json_metadata(config.custom_json_metadata);
-    
+
     auto* v = proto_header.mutable_version();
-    v->set_format_major(1); v->set_format_minor(0);
+    v->set_format_major(1);
+    v->set_format_minor(0);
     v->set_schema_version(config.schema_version);
 
     auto now = std::chrono::system_clock::now();
     proto_header.set_recorded_utc_timestamp(
-        std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count()
-    );
+        std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count());
 
     proto_header.mutable_prop_schema()->CopyFrom(schema);
 
@@ -106,15 +102,17 @@ std::string VTX::ProtobufVtxPolicy::SerializeHeader(const VTX::SessionConfig& co
     return payload;
 }
 
-std::string VTX::ProtobufVtxPolicy::SerializeChunk(const std::vector<std::unique_ptr<FrameType>>& frames, int32_t chunkIdx, bool is_compressed) {
-    if (frames.empty()) return "";
+std::string VTX::ProtobufVtxPolicy::SerializeChunk(const std::vector<std::unique_ptr<FrameType>>& frames,
+                                                   int32_t chunkIdx, bool is_compressed) {
+    if (frames.empty())
+        return "";
 
     cppvtx::FrameChunk chunk_msg;
     chunk_msg.set_chunk_index(chunkIdx);
-    chunk_msg.set_is_compressed(is_compressed); 
-    
+    chunk_msg.set_is_compressed(is_compressed);
+
     for (const auto& frame_ptr : frames) {
-        if(frame_ptr) {
+        if (frame_ptr) {
             chunk_msg.add_frames()->Swap(frame_ptr.get());
         }
     }
@@ -124,19 +122,17 @@ std::string VTX::ProtobufVtxPolicy::SerializeChunk(const std::vector<std::unique
         throw std::runtime_error("VTX [ProtobufPolicy]: Error serializing Chunk.");
     }
 
-    return uncompressed_payload; 
+    return uncompressed_payload;
 }
 
-std::string VTX::ProtobufVtxPolicy::SerializeFooter(const std::vector<ChunkIndexData>& seekTable, 
-                                   const SessionFooter& footerData) 
-{
+std::string VTX::ProtobufVtxPolicy::SerializeFooter(const std::vector<ChunkIndexData>& seekTable,
+                                                    const SessionFooter& footerData) {
     cppvtx::FileFooter footer_msg;
-    
+
     footer_msg.set_total_frames(footerData.total_frames);
     footer_msg.set_duration_seconds(static_cast<float>(footerData.duration_seconds));
-    
-   if (footerData.game_times || footerData.created_utc || footerData.gaps || footerData.segments) {
-        
+
+    if (footerData.game_times || footerData.created_utc || footerData.gaps || footerData.segments) {
         auto* times_msg = footer_msg.mutable_times();
 
         if (footerData.game_times && !footerData.game_times->empty()) {
@@ -171,9 +167,9 @@ std::string VTX::ProtobufVtxPolicy::SerializeFooter(const std::vector<ChunkIndex
             }
         }
     }
-    
+
     footer_msg.mutable_chunk_index()->Reserve(static_cast<int>(seekTable.size()));
-    
+
     for (const auto& entry : seekTable) {
         auto* proto_entry = footer_msg.add_chunk_index();
         proto_entry->set_chunk_index(entry.chunk_index);
@@ -185,8 +181,8 @@ std::string VTX::ProtobufVtxPolicy::SerializeFooter(const std::vector<ChunkIndex
 
     std::string payload;
     if (!footer_msg.SerializeToString(&payload)) {
-         throw std::runtime_error("VTX [ProtobufPolicy]: Failed to serialize Footer.");
+        throw std::runtime_error("VTX [ProtobufPolicy]: Failed to serialize Footer.");
     }
-    
+
     return payload;
 }

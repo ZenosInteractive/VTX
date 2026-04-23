@@ -17,40 +17,37 @@
 
 namespace {
 
-VTX::WriterFacadeConfig MakeBaseConfig(const std::string& out_name,
-                                       const std::string& uuid,
-                                       int32_t chunk_max_frames = 500,
-                                       size_t chunk_max_bytes = 10 * 1024 * 1024)
-{
-    VTX::WriterFacadeConfig cfg;
-    cfg.output_filepath  = VtxTest::OutputPath(out_name);
-    cfg.schema_json_path = VtxTest::FixturePath("test_schema.json");
-    cfg.replay_name      = "WriterEdgeTest";
-    cfg.replay_uuid      = uuid;
-    cfg.default_fps      = 60.0f;
-    cfg.chunk_max_frames = chunk_max_frames;
-    cfg.chunk_max_bytes  = chunk_max_bytes;
-    cfg.use_compression  = true;
-    return cfg;
-}
+    VTX::WriterFacadeConfig MakeBaseConfig(const std::string& out_name, const std::string& uuid,
+                                           int32_t chunk_max_frames = 500, size_t chunk_max_bytes = 10 * 1024 * 1024) {
+        VTX::WriterFacadeConfig cfg;
+        cfg.output_filepath = VtxTest::OutputPath(out_name);
+        cfg.schema_json_path = VtxTest::FixturePath("test_schema.json");
+        cfg.replay_name = "WriterEdgeTest";
+        cfg.replay_uuid = uuid;
+        cfg.default_fps = 60.0f;
+        cfg.chunk_max_frames = chunk_max_frames;
+        cfg.chunk_max_bytes = chunk_max_bytes;
+        cfg.use_compression = true;
+        return cfg;
+    }
 
-VTX::Frame MakeTrivialFrame(int frame_index = 0) {
-    VTX::Frame f;
-    auto& bucket = f.CreateBucket("entity");
+    VTX::Frame MakeTrivialFrame(int frame_index = 0) {
+        VTX::Frame f;
+        auto& bucket = f.CreateBucket("entity");
 
-    VTX::PropertyContainer pc;
-    pc.entity_type_id    = 0;
-    pc.string_properties = { "p", "player" };
-    pc.int32_properties  = { 1, frame_index, 0 };
-    pc.float_properties  = { 100.0f, 50.0f };
-    pc.vector_properties = { VTX::Vector{}, VTX::Vector{} };
-    pc.quat_properties   = { VTX::Quat{} };
-    pc.bool_properties   = { true };
+        VTX::PropertyContainer pc;
+        pc.entity_type_id = 0;
+        pc.string_properties = {"p", "player"};
+        pc.int32_properties = {1, frame_index, 0};
+        pc.float_properties = {100.0f, 50.0f};
+        pc.vector_properties = {VTX::Vector {}, VTX::Vector {}};
+        pc.quat_properties = {VTX::Quat {}};
+        pc.bool_properties = {true};
 
-    bucket.unique_ids.push_back("p");
-    bucket.entities.push_back(std::move(pc));
-    return f;
-}
+        bucket.unique_ids.push_back("p");
+        bucket.entities.push_back(std::move(pc));
+        return f;
+    }
 
 } // namespace
 
@@ -63,7 +60,7 @@ TEST(WriterEdges, WriteZeroFramesThenStop) {
     {
         auto writer = VTX::CreateFlatBuffersWriterFacade(cfg);
         ASSERT_TRUE(writer);
-        writer->Stop();   // no RecordFrame calls
+        writer->Stop(); // no RecordFrame calls
     }
 
     ASSERT_TRUE(std::filesystem::exists(cfg.output_filepath));
@@ -87,7 +84,7 @@ TEST(WriterEdges, WriteSingleFrame) {
     const auto cfg = MakeBaseConfig("edge_single_frame.vtx", "edge-single");
     {
         auto writer = VTX::CreateFlatBuffersWriterFacade(cfg);
-        auto frame  = MakeTrivialFrame(0);
+        auto frame = MakeTrivialFrame(0);
         VTX::GameTime::GameTimeRegister t;
         t.game_time = 0.0f;
         writer->RecordFrame(frame, t);
@@ -138,7 +135,7 @@ TEST(WriterEdges, ChunkMaxFramesIsOne) {
     EXPECT_EQ(seek.size(), static_cast<size_t>(kFrames));
     for (size_t i = 0; i < seek.size(); ++i) {
         EXPECT_EQ(seek[i].start_frame, static_cast<int32_t>(i));
-        EXPECT_EQ(seek[i].end_frame,   static_cast<int32_t>(i));
+        EXPECT_EQ(seek[i].end_frame, static_cast<int32_t>(i));
     }
 }
 
@@ -165,13 +162,13 @@ TEST(WriterEdges, RecordFrameAfterStopIsSafe) {
     writer->RecordFrame(f2, t);
     writer->Flush();
 
-    writer.reset();  // release before inspecting
+    writer.reset(); // release before inspecting
 
     auto ctx = VTX::OpenReplayFile(cfg.output_filepath);
     ASSERT_TRUE(ctx);
     // Whatever total_frames ends up being, the file should be readable.
     const int total = ctx.reader->GetTotalFrames();
-    EXPECT_GE(total, 1);  // at least the frame recorded before Stop
+    EXPECT_GE(total, 1); // at least the frame recorded before Stop
 }
 
 TEST(WriterEdges, DoubleStopIsIdempotent) {
@@ -186,8 +183,8 @@ TEST(WriterEdges, DoubleStopIsIdempotent) {
     writer->Flush();
 
     writer->Stop();
-    writer->Stop();   // second call must be a safe no-op
-    writer->Stop();   // third for good measure
+    writer->Stop(); // second call must be a safe no-op
+    writer->Stop(); // third for good measure
 
     writer.reset();
 
@@ -215,15 +212,12 @@ TEST(WriterEdges, GiantFrameLargerThanChunkMaxBytes) {
         auto& bucket = f.CreateBucket("entity");
         VTX::PropertyContainer pc;
         pc.entity_type_id = 0;
-        pc.string_properties = {
-            "giant",
-            std::string(64 * 1024, 'X')
-        };
-        pc.int32_properties  = {1, 0, 0};
-        pc.float_properties  = {100.0f, 50.0f};
-        pc.vector_properties = {VTX::Vector{}, VTX::Vector{}};
-        pc.quat_properties   = {VTX::Quat{}};
-        pc.bool_properties   = {true};
+        pc.string_properties = {"giant", std::string(64 * 1024, 'X')};
+        pc.int32_properties = {1, 0, 0};
+        pc.float_properties = {100.0f, 50.0f};
+        pc.vector_properties = {VTX::Vector {}, VTX::Vector {}};
+        pc.quat_properties = {VTX::Quat {}};
+        pc.bool_properties = {true};
         bucket.unique_ids.push_back("giant_id");
         bucket.entities.push_back(std::move(pc));
 

@@ -12,25 +12,25 @@
 
 namespace VtxServices {
 
-class PlaybackService {
-public:
-    /// Advance playback by the given wall-clock delta (seconds).
-    /// Returns the (possibly updated) current frame index.
-    /// Does nothing when paused or when replay metadata is invalid.
-    int Update(float delta_time_seconds, int current_frame, int total_frames, float duration_seconds);
+    class PlaybackService {
+    public:
+        /// Advance playback by the given wall-clock delta (seconds).
+        /// Returns the (possibly updated) current frame index.
+        /// Does nothing when paused or when replay metadata is invalid.
+        int Update(float delta_time_seconds, int current_frame, int total_frames, float duration_seconds);
 
-    void Play(int current_frame, int total_frames);
-    void Pause();
-    void Stop();
+        void Play(int current_frame, int total_frames);
+        void Pause();
+        void Stop();
 
-    bool IsPlaying() const { return is_playing_; }
-    float GetSpeed() const { return playback_speed_; }
-    void SetSpeed(float speed) { playback_speed_ = std::clamp(speed, 0.1f, 10.0f); }
+        bool IsPlaying() const { return is_playing_; }
+        float GetSpeed() const { return playback_speed_; }
+        void SetSpeed(float speed) { playback_speed_ = std::clamp(speed, 0.1f, 10.0f); }
 
-private:
-    bool is_playing_ = false;
-    float playback_speed_ = 1.0f;
-    float time_accumulator_ = 0.0f;
-};
+    private:
+        bool is_playing_ = false;
+        float playback_speed_ = 1.0f;
+        float time_accumulator_ = 0.0f;
+    };
 
 } // namespace VtxServices

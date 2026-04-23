@@ -13,7 +13,7 @@ protected:
     ImGuiWindowFlags flags_ = 0;
 
 public:
-    ImGuiWindow(const std::string& title, const std::shared_ptr<VtxSessionBase>& session, ImGuiWindowFlags flags = 0) ;
+    ImGuiWindow(const std::string& title, const std::shared_ptr<VtxSessionBase>& session, ImGuiWindowFlags flags = 0);
     virtual ~ImGuiWindow() = default;
 
     void OnUpdate() final;
@@ -25,9 +25,9 @@ public:
 
 protected:
     //Child classes only need to override these two methods
-    virtual void UpdateLogic() {} 
+    virtual void UpdateLogic() {}
     virtual void DrawContent() = 0;
-    
+
     //pointer to global session
     std::shared_ptr<VtxSessionBase> session_;
 };

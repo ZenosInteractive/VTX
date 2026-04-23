@@ -47,7 +47,7 @@ private:
     std::string tool_id_;
     std::filesystem::path settings_path_;
     GLFWwindow* window_ = nullptr;
-    ImGuiStyle base_style_{};
+    ImGuiStyle base_style_ {};
     bool has_base_style_ = false;
     float auto_scale_ = 1.0f;
     float effective_scale_ = 1.0f;

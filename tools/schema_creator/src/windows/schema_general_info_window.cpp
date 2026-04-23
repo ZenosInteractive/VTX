@@ -10,26 +10,26 @@
 
 namespace {
 
-// Renders editable std::string via fixed temporary buffer for ImGui input APIs.
-bool InputTextString(const char* label, std::string& value, size_t min_buffer_size = 256, ImGuiInputTextFlags flags = 0) {
-    const size_t buffer_size = std::max(min_buffer_size, value.size() + 64);
-    std::vector<char> buffer(buffer_size, '\0');
-    std::snprintf(buffer.data(), buffer.size(), "%s", value.c_str());
+    // Renders editable std::string via fixed temporary buffer for ImGui input APIs.
+    bool InputTextString(const char* label, std::string& value, size_t min_buffer_size = 256,
+                         ImGuiInputTextFlags flags = 0) {
+        const size_t buffer_size = std::max(min_buffer_size, value.size() + 64);
+        std::vector<char> buffer(buffer_size, '\0');
+        std::snprintf(buffer.data(), buffer.size(), "%s", value.c_str());
 
-    if (!ImGui::InputText(label, buffer.data(), buffer.size(), flags)) {
-        return false;
+        if (!ImGui::InputText(label, buffer.data(), buffer.size(), flags)) {
+            return false;
+        }
+        value = buffer.data();
+        return true;
     }
-    value = buffer.data();
-    return true;
-}
 
 } // namespace
 
 // Constructs schema general-info window bound to schema creator session.
 SchemaGeneralInfoWindow::SchemaGeneralInfoWindow(std::shared_ptr<SchemaCreatorSession> session)
     : ImGuiWindow("General Info", session)
-    , schema_session_(std::move(session)) {
-}
+    , schema_session_(std::move(session)) {}
 
 // Renders window shell only while general-info panel visibility is enabled.
 void SchemaGeneralInfoWindow::OnRender() {
@@ -52,9 +52,7 @@ void SchemaGeneralInfoWindow::DrawContent() {
     auto& document = schema_session_->MutableDocument();
 
     // Step 1: Show session/document state summary.
-    const std::string path_text = schema_session_->HasActivePath()
-        ? schema_session_->GetActivePath()
-        : "<unsaved>";
+    const std::string path_text = schema_session_->HasActivePath() ? schema_session_->GetActivePath() : "<unsaved>";
     ImGui::Text("Path: %s", path_text.c_str());
     ImGui::Text("Baseline: %s", schema_session_->HasBaseline() ? "Available" : "Not loaded yet");
     ImGui::Text("Unsaved Changes: %s", schema_session_->HasUnsavedChanges() ? "Yes" : "No");
@@ -90,4 +88,3 @@ void SchemaGeneralInfoWindow::DrawContent() {
     ImGui::Text("Bone Models: %d", static_cast<int>(document.bone_mapping.size()));
     ImGui::Text("Bone Entries: %d", static_cast<int>(total_bones));
 }
-

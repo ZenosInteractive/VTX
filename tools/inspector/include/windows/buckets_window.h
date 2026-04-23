@@ -14,7 +14,7 @@ namespace VTX {
 class BucketsWindow : public ImGuiWindow {
 public:
     BucketsWindow(std::shared_ptr<InspectorSession> session);
-    
+
 protected:
     void DrawContent() override;
 

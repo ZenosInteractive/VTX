@@ -1,0 +1,15 @@
+# Revisions listed here are ignored by `git blame` so that purely
+# mechanical commits (reformatting, mass renames) don't overwrite
+# the blame history of every line they touch.
+#
+# GitHub honours this file automatically on the web UI.  Locally, run:
+#
+#     git config blame.ignoreRevsFile .git-blame-ignore-revs
+#
+# to make the local `git blame` respect it as well.
+#
+# Only add a SHA here when the commit is guaranteed to change no
+# semantics -- formatters, whitespace-only edits, renames.
+
+# Repo-wide clang-format-15 sweep (2026-04-23)
+101feb407ac0fdfa1b96de37f625b40b716573b0

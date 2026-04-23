@@ -21,20 +21,15 @@ namespace VTX {
     // Replicates UE_LOG macros
     // ==========================================================
 
-    constexpr const char* ANSI_COLOR_RESET   = "\033[0m";
-    constexpr const char* ANSI_COLOR_INFO    = "\033[32m"; // Green
-    constexpr const char* ANSI_COLOR_WARN    = "\033[33m"; // Yellow
-    constexpr const char* ANSI_COLOR_ERROR   = "\033[31m"; // Red
-    constexpr const char* ANSI_COLOR_DEBUG   = "\033[36m"; // Cian
+    constexpr const char* ANSI_COLOR_RESET = "\033[0m";
+    constexpr const char* ANSI_COLOR_INFO = "\033[32m";  // Green
+    constexpr const char* ANSI_COLOR_WARN = "\033[33m";  // Yellow
+    constexpr const char* ANSI_COLOR_ERROR = "\033[31m"; // Red
+    constexpr const char* ANSI_COLOR_DEBUG = "\033[36m"; // Cian
 
     class Logger {
     public:
-        enum class Level {
-            Info,
-            Warning,
-            Error,
-            Debug
-        };
+        enum class Level { Info, Warning, Error, Debug };
 
         struct Entry {
             Level level = Level::Info;
@@ -66,13 +61,9 @@ namespace VTX {
         // print).  Useful for benchmarks, production deployments, or noisy
         // workloads where per-chunk trace output would dominate timings.
         // Thread-safe; can be toggled any time.
-        void SetDebugEnabled(bool enabled) {
-            debug_enabled_.store(enabled, std::memory_order_relaxed);
-        }
+        void SetDebugEnabled(bool enabled) { debug_enabled_.store(enabled, std::memory_order_relaxed); }
 
-        bool IsDebugEnabled() const {
-            return debug_enabled_.load(std::memory_order_relaxed);
-        }
+        bool IsDebugEnabled() const { return debug_enabled_.load(std::memory_order_relaxed); }
 
         void Log(Level LogLvl, const std::string& Message) {
             if (LogLvl == Level::Debug && !IsDebugEnabled()) {
@@ -95,11 +86,8 @@ namespace VTX {
                 entry.timestamp = timestamp_stream.str();
                 entry.message = Message;
 
-                std::cout << GetColorCode(LogLvl)
-                          << "[" << entry.timestamp << "] "
-                          << "[" << ToString(LogLvl) << "] "
-                          << Message
-                          << ANSI_COLOR_RESET << std::endl;
+                std::cout << GetColorCode(LogLvl) << "[" << entry.timestamp << "] "
+                          << "[" << ToString(LogLvl) << "] " << Message << ANSI_COLOR_RESET << std::endl;
 
                 sinks_copy.reserve(sinks_.size());
                 for (const auto& [_, sink] : sinks_) {
@@ -112,32 +100,33 @@ namespace VTX {
             }
         }
 
-        template<typename... Args>
+        template <typename... Args>
         void Info(std::string_view format_str, Args&&... args) {
             Log(Level::Info, std::vformat(format_str, std::make_format_args(args...)));
         }
 
-        template<typename... Args>
+        template <typename... Args>
         void Warn(std::string_view format_str, Args&&... args) {
             Log(Level::Warning, std::vformat(format_str, std::make_format_args(args...)));
         }
 
-        template<typename... Args>
+        template <typename... Args>
         void Error(std::string_view format_str, Args&&... args) {
             Log(Level::Error, std::vformat(format_str, std::make_format_args(args...)));
         }
 
-        template<typename... Args>
+        template <typename... Args>
         void Debug(std::string_view format_str, Args&&... args) {
             Log(Level::Debug, std::vformat(format_str, std::make_format_args(args...)));
         }
+
     private:
         std::mutex mute_;
         std::unordered_map<SinkId, SinkCallback> sinks_;
         SinkId next_sink_id_ = 1;
-        std::atomic<bool> debug_enabled_{true};
+        std::atomic<bool> debug_enabled_ {true};
 
-        template<typename ...Args>
+        template <typename... Args>
         void LogFormatted(Level log_level, const char* message, Args... args) {
             if constexpr (sizeof...(args) == 0) {
                 Log(log_level, message);
@@ -159,27 +148,36 @@ namespace VTX {
 
         const char* ToString(Level LogLvl) const {
             switch (LogLvl) {
-            case Level::Info:    return "INFO";
-            case Level::Warning: return "WARN";
-            case Level::Error:   return "ERROR";
-            case Level::Debug:   return "DEBUG";
-            default:             return "LOG";
+            case Level::Info:
+                return "INFO";
+            case Level::Warning:
+                return "WARN";
+            case Level::Error:
+                return "ERROR";
+            case Level::Debug:
+                return "DEBUG";
+            default:
+                return "LOG";
             }
         }
 
         const char* GetColorCode(Level LogLvl) const {
             switch (LogLvl) {
-            case Level::Info:    return ANSI_COLOR_INFO;
-            case Level::Warning: return ANSI_COLOR_WARN;
-            case Level::Error:   return ANSI_COLOR_ERROR;
-            case Level::Debug:   return ANSI_COLOR_DEBUG;
-            default:             return ANSI_COLOR_RESET;
+            case Level::Info:
+                return ANSI_COLOR_INFO;
+            case Level::Warning:
+                return ANSI_COLOR_WARN;
+            case Level::Error:
+                return ANSI_COLOR_ERROR;
+            case Level::Debug:
+                return ANSI_COLOR_DEBUG;
+            default:
+                return ANSI_COLOR_RESET;
             }
         }
-
     };
-    #define VTX_INFO(...)  VTX::Logger::Instance().Info(__VA_ARGS__)
-    #define VTX_WARN(...)  VTX::Logger::Instance().Warn(__VA_ARGS__)
-    #define VTX_ERROR(...) VTX::Logger::Instance().Error(__VA_ARGS__)
-    #define VTX_DEBUG(...) VTX::Logger::Instance().Debug(__VA_ARGS__)
+#define VTX_INFO(...) VTX::Logger::Instance().Info(__VA_ARGS__)
+#define VTX_WARN(...) VTX::Logger::Instance().Warn(__VA_ARGS__)
+#define VTX_ERROR(...) VTX::Logger::Instance().Error(__VA_ARGS__)
+#define VTX_DEBUG(...) VTX::Logger::Instance().Debug(__VA_ARGS__)
 } // namespace VTX

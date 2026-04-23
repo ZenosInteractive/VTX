@@ -9,32 +9,31 @@
 
 namespace {
 
-bool BeginPropertyTable(const char* id, float label_width = 160.0f) {
-    if (ImGui::BeginTable(id, 2, ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_RowBg)) {
-        ImGui::TableSetupColumn("Property", ImGuiTableColumnFlags_WidthFixed, label_width);
-        ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
-        return true;
+    bool BeginPropertyTable(const char* id, float label_width = 160.0f) {
+        if (ImGui::BeginTable(id, 2, ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_RowBg)) {
+            ImGui::TableSetupColumn("Property", ImGuiTableColumnFlags_WidthFixed, label_width);
+            ImGui::TableSetupColumn("Value", ImGuiTableColumnFlags_WidthStretch);
+            return true;
+        }
+        return false;
     }
-    return false;
-}
 
-ImVec4 ResolveToneColor(VtxServices::FileInfoTone tone) {
-    switch (tone) {
+    ImVec4 ResolveToneColor(VtxServices::FileInfoTone tone) {
+        switch (tone) {
         case VtxServices::FileInfoTone::Highlight:
             return ImVec4(0.4f, 0.8f, 1.0f, 1.0f);
         case VtxServices::FileInfoTone::Success:
             return ImVec4(0.0f, 1.0f, 0.0f, 1.0f);
         default:
             return ImVec4(1.0f, 1.0f, 1.0f, 1.0f);
+        }
     }
-}
 
 } // namespace
 
 FileInfoWindow::FileInfoWindow(std::shared_ptr<InspectorSession> session)
     : ImGuiWindow(VtxGuiNames::FilePropertiesWindow, session)
-    , inspector_session_(std::move(session)) {
-}
+    , inspector_session_(std::move(session)) {}
 
 void FileInfoWindow::DrawContent() {
     if (!inspector_session_->HasLoadedReplay()) {
@@ -43,11 +42,8 @@ void FileInfoWindow::DrawContent() {
     }
 
     const auto view_model = VtxServices::FooterSummaryService::BuildFileInfoViewModel(
-        inspector_session_->current_file_path_,
-        inspector_session_->GetFileSizeMb(),
-        inspector_session_->GetFormat(),
-        inspector_session_->GetHeader(),
-        inspector_session_->GetFooter());
+        inspector_session_->current_file_path_, inspector_session_->GetFileSizeMb(), inspector_session_->GetFormat(),
+        inspector_session_->GetHeader(), inspector_session_->GetFooter());
 
     ImGui::TextWrapped("File: %s", view_model.file_path.c_str());
     ImGui::Separator();
@@ -62,12 +58,8 @@ void FileInfoWindow::DrawContent() {
                     ImGui::TextDisabled("No custom metadata in this file.");
                 } else {
                     ImVec2 text_size = ImVec2(-FLT_MIN, 200.0f);
-                    ImGui::InputTextMultiline(
-                        "##CustomMeta",
-                        const_cast<char*>(section.raw_text.c_str()),
-                        section.raw_text.size(),
-                        text_size,
-                        ImGuiInputTextFlags_ReadOnly);
+                    ImGui::InputTextMultiline("##CustomMeta", const_cast<char*>(section.raw_text.c_str()),
+                                              section.raw_text.size(), text_size, ImGuiInputTextFlags_ReadOnly);
                 }
             } else if (BeginPropertyTable((section.title + "Table").c_str())) {
                 for (const auto& row : section.rows) {

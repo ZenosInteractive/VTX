@@ -2,10 +2,11 @@
 #include <imgui.h>
 
 // Constructs a reusable ImGui window shell bound to a shared session.
-ImGuiWindow::ImGuiWindow(const std::string& title, const std::shared_ptr<VtxSessionBase>& session, ImGuiWindowFlags flags)
-: title_(title), session_(session), flags_(flags)
-{
-}
+ImGuiWindow::ImGuiWindow(const std::string& title, const std::shared_ptr<VtxSessionBase>& session,
+                         ImGuiWindowFlags flags)
+    : title_(title)
+    , session_(session)
+    , flags_(flags) {}
 
 // Updates window-specific state only while the window is visible.
 void ImGuiWindow::OnUpdate() {
@@ -28,19 +29,16 @@ void ImGuiWindow::OnRender() {
 }
 
 // Flips open/closed visibility state.
-void ImGuiWindow::Toggle()
-{
+void ImGuiWindow::Toggle() {
     is_open_ = !is_open_;
 }
 
 // Sets visibility explicitly.
-void ImGuiWindow::SetOpen(bool open)
-{
+void ImGuiWindow::SetOpen(bool open) {
     is_open_ = open;
 }
 
 // Returns current visibility state.
-bool ImGuiWindow::IsOpen() const
-{
+bool ImGuiWindow::IsOpen() const {
     return is_open_;
 }

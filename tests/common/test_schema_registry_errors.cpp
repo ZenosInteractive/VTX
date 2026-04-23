@@ -86,7 +86,7 @@ TEST(SchemaRegistryErrors, LoadFromRawStringDuplicateStructIsDeterministic) {
     (void)ok2;
 
     // Both registries must agree on Player existence or absence.
-    const bool player1_exists = (schema.GetStruct("Player")  != nullptr);
+    const bool player1_exists = (schema.GetStruct("Player") != nullptr);
     const bool player2_exists = (schema2.GetStruct("Player") != nullptr);
     EXPECT_EQ(player1_exists, player2_exists);
 }
@@ -117,7 +117,7 @@ TEST(SchemaRegistryErrors, LoadFromRawStringUnknownTypeIdDoesntCrash) {
 
     // If the struct was accepted, looking up the bogus field must not crash.
     if (const auto* s = schema.GetStruct("Ghost")) {
-        (void)s;  // just don't crash
+        (void)s; // just don't crash
     }
     // If not accepted, that's also fine -- both outcomes are valid.
     SUCCEED();
