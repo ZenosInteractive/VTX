@@ -443,6 +443,29 @@ namespace VTX {
         }
 
         void UpdateCacheWindow(int32_t current_idx) {
+            // Orphaned PendingLoads moved out of pending_loads_ by trigger()
+            // when it respawns a stale-cancelled entry.  Declared BEFORE the
+            // lock_guard so the vector -- and therefore each orphan's
+            // std::shared_future destructor -- runs AFTER cache_mutex_ has
+            // been released on function exit.
+            //
+            // libstdc++'s std::shared_future dtor blocks until the async
+            // task completes when it holds the last reference to a state
+            // created by std::async(std::launch::async, ...).  The task
+            // itself acquires cache_mutex_ in AsyncLoadTask to check
+            // stop_requested() and (optionally) write chunk_cache_, so
+            // destroying a to-be-cancelled shared_future WHILE holding
+            // cache_mutex_ would deadlock: we would wait on a task that
+            // cannot make progress without the mutex we hold.
+            //
+            // By moving the stale entry into orphans[] before overwriting
+            // it in pending_loads_, we defer the shared_future dtor until
+            // the lock_guard below has released the mutex.  The task can
+            // then observe its already-requested stop, bail at the entry
+            // check in PerformHeavyLoading, skip the cache write, and
+            // resolve its future -- unblocking the orphans[] destructor.
+            std::vector<PendingLoad> orphans;
+
             std::lock_guard<std::mutex> lock(cache_mutex_);
 
             // §1.B -- access-pattern detection.
@@ -567,6 +590,14 @@ namespace VTX {
 
                 if (evts.OnChunkLoadStarted) evts.OnChunkLoadStarted(i);
 
+                // Relocate the stale entry to orphans[] before overwriting.
+                // See the long comment at the top of UpdateCacheWindow for
+                // why destroying its shared_future inside cache_mutex_
+                // would deadlock under TSan.
+                if (stale) {
+                    orphans.push_back(std::move(pending_loads_[i]));
+                }
+
                 // Give each prefetch its own stop_source so we can
                 // cancel it independently from the "window changed"
                 // path above.  The token is captured by value into the
@@ -580,7 +611,7 @@ namespace VTX {
                 pl.future = std::async(std::launch::async, [this, i, token]() {
                     this->AsyncLoadTask(i, token);
                 }).share();
-                pending_loads_[i] = std::move(pl);  // overwrites stale entry if present
+                pending_loads_[i] = std::move(pl);  // overwrites moved-from entry if stale
             };
 
             trigger(current_idx);
