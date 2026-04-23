@@ -265,6 +265,51 @@ TEST(ReaderApiFlatBuffers, RandomAccessSkipsLateralPrefetches)
         << jump_frames.size() << " jumps.";
 }
 
+// Regression for the "stale-cancelled prefetch blocks re-entry" bug.
+//
+// Sequence that hits the race:
+//   1. GetFrameSync(frame_in_chunk_0) -- triggers chunk 0 (sync) plus
+//      lateral prefetches of chunks 1 and 2.  Workers for 1 and 2 are
+//      queued on std::async but may not have started yet.
+//   2. GetFrameSync(frame_in_chunk_10) -- window shifts away from 0.
+//      The UpdateCacheWindow cancel loop calls request_stop() on the
+//      PendingLoads for chunks 1 and 2; their entries remain in
+//      pending_loads_ until the workers exit and the next reap sweep
+//      picks them up.
+//   3. GetFrameSync(frame_in_chunk_2) -- chunk 2 is back in the window.
+//      Pre-fix: trigger() saw pending_loads_[2] and skipped spawning a
+//      new task; worker 2 eventually ran, observed stop_requested(),
+//      bailed at its entry check, and the chunk_cache_ write was
+//      skipped.  GetFramePtrSync waited on the future, it resolved,
+//      cache was empty, returned nullptr.
+//   4. Post-fix: trigger() detects pending_loads_[2] has its stop
+//      already requested and respawns with a fresh stop_source; the
+//      orphaned worker exits on its own, the new worker populates the
+//      cache, GetFramePtrSync returns the frame.
+//
+// The race is timing-dependent, so we run the pattern 50 iterations.
+// Under TSan's scheduler overhead a single iteration suffices; under
+// stock release it is a flaky single-digit-% race and 50 reps push
+// the miss probability below the CI flake floor.
+TEST(ReaderApiFlatBuffers, CancelledPrefetchReEntersWindow) {
+    const auto path = VtxTest::OutputPath("ReaderApiFlatBuffers_CancelledPrefetchReEntersWindow.vtx");
+    WriteReplay(VTX::VtxFormat::FlatBuffers, path, 100, 5); // 20 chunks * 5 frames
+
+    constexpr int kIters = 50;
+    for (int iter = 0; iter < kIters; ++iter) {
+        auto ctx = VTX::OpenReplayFile(path);
+        ASSERT_TRUE(ctx) << "iter=" << iter << " " << ctx.error;
+        ctx.reader->SetCacheWindow(2, 2);
+
+        // Step 1: prime chunks 0..2 (chunk 0 sync + 1,2 as laterals).
+        ASSERT_NE(ctx.reader->GetFrameSync(0), nullptr) << "iter=" << iter << " step=1";
+        // Step 2: jump far away -> cancels 1 and 2 before they run.
+        ASSERT_NE(ctx.reader->GetFrameSync(50), nullptr) << "iter=" << iter << " step=2";
+        // Step 3: jump back to a cancelled chunk.  Pre-fix returns null.
+        ASSERT_NE(ctx.reader->GetFrameSync(10), nullptr) << "iter=" << iter << " step=3";
+    }
+}
+
 // §3.A regression coverage.  WarmAt must trigger an asynchronous load
 // of the chunk containing `frame_index` without blocking the caller,
 // and without requiring a subsequent GetFrame to fire the load.
