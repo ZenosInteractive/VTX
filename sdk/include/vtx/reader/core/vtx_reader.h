@@ -558,7 +558,8 @@ namespace VTX {
             const size_t max_concurrent_loads = 3;
 
             auto trigger = [&](int32_t i) {
-                if (chunk_cache_.contains(i)) return;
+                if (chunk_cache_.contains(i))
+                    return;
 
                 // A prefetch that was cancelled by a previous window shift
                 // (line ~509) leaves its entry in pending_loads_ with the
@@ -576,19 +577,21 @@ namespace VTX {
                 // own; its cache write is gated by a stop_requested() check
                 // inside cache_mutex_ (see AsyncLoadTask) so it cannot
                 // pollute the cache with empty data either.
-                const bool stale = pending_loads_.contains(i) &&
-                                   pending_loads_[i].stop.get_token().stop_requested();
+                const bool stale = pending_loads_.contains(i) && pending_loads_[i].stop.get_token().stop_requested();
 
-                if (pending_loads_.contains(i) && !stale) return;
+                if (pending_loads_.contains(i) && !stale)
+                    return;
 
                 // The concurrency cap guards *new* slots.  Respawning a
                 // stale entry replaces an existing slot rather than adding
                 // one, so don't gate the resurrection path on the cap --
                 // otherwise we could refuse to revive a chunk the caller is
                 // about to synchronously wait on.
-                if (!stale && pending_loads_.size() >= max_concurrent_loads) return;
+                if (!stale && pending_loads_.size() >= max_concurrent_loads)
+                    return;
 
-                if (evts.OnChunkLoadStarted) evts.OnChunkLoadStarted(i);
+                if (evts.OnChunkLoadStarted)
+                    evts.OnChunkLoadStarted(i);
 
                 // Relocate the stale entry to orphans[] before overwriting.
                 // See the long comment at the top of UpdateCacheWindow for
@@ -608,10 +611,9 @@ namespace VTX {
                 // useful for reasoning about shutdown paths).
                 PendingLoad pl;
                 auto token = pl.stop.get_token();
-                pl.future = std::async(std::launch::async, [this, i, token]() {
-                    this->AsyncLoadTask(i, token);
-                }).share();
-                pending_loads_[i] = std::move(pl);  // overwrites moved-from entry if stale
+                pl.future =
+                    std::async(std::launch::async, [this, i, token]() { this->AsyncLoadTask(i, token); }).share();
+                pending_loads_[i] = std::move(pl); // overwrites moved-from entry if stale
             };
 
             trigger(current_idx);
