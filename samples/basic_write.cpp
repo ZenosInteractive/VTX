@@ -9,7 +9,7 @@
 // Args
 //   argv[1] -- schema JSON path       (default: content/writer/arena/arena_schema.json)
 //   argv[2] -- output .vtx path       (default: sample_output.vtx)
-//
+//   argv[3] -- frame count            (default: 100)
 // Build
 //   Link against vtx_writer (vtx_common is transitive).
 
@@ -26,6 +26,8 @@ int main(int argc, char* argv[])
     const std::string output_path = (argc > 2)
         ? argv[2]
         : "sample_output.vtx";
+
+    const int frame_count = (argc > 3) ? std::max(1, std::atoi(argv[3])) : 100;
 
     // Configure the writer.
     VTX::WriterFacadeConfig config;
@@ -44,8 +46,8 @@ int main(int argc, char* argv[])
         return 1;
     }
 
-    // Record 100 synthetic frames.
-    for (int i = 0; i < 100; ++i) {
+    // Record frame_count synthetic frames.
+    for (int i = 0; i < frame_count; ++i) {
         VTX::Frame frame;
 
         // Create a bucket and add one entity per frame.
@@ -77,6 +79,6 @@ int main(int argc, char* argv[])
     writer->Flush();
     writer->Stop();
 
-    VTX_INFO("Wrote 100 frames to {}", output_path);
+    VTX_INFO("Wrote {} frames to {}",frame_count, output_path);
     return 0;
 }
