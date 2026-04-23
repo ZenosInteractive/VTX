@@ -63,13 +63,18 @@ namespace VTX {
         }
 
         ~ReplayReader() {
-            stop_source_.request_stop();
-
+            // Cancel every in-flight prefetch, then wait for each task to
+            // observe the stop_token and exit.  Per-chunk `stop_source`s
+            // replace the previous single global `stop_source_`; the wait
+            // step is unchanged because `shared_future` destruction does
+            // not block and we still need to synchronise with the worker
+            // threads before releasing `*this`.
             std::vector<std::shared_future<void>> tasks;
             {
                 std::lock_guard<std::mutex> lock(cache_mutex_);
-                for (const auto& kv : pending_loads_) {
-                    if (kv.second.valid()) tasks.push_back(kv.second);
+                for (auto& kv : pending_loads_) {
+                    kv.second.stop.request_stop();
+                    if (kv.second.future.valid()) tasks.push_back(kv.second.future);
                 }
             }
 
@@ -103,6 +108,37 @@ namespace VTX {
             current_range_start_ = -1;
         }
 
+        // §3.A -- explicit prefetch hint.
+        //
+        // Tell the reader the caller is about to access `frame_index`.
+        // Returns immediately: if the enclosing chunk is already cached
+        // or in flight, this is a no-op; otherwise it kicks off an
+        // asynchronous load.  The subsequent GetFrame(frame_index) will
+        // either hit the cache (if the prefetch finished) or wait on
+        // the in-flight future -- either way, no synchronous decompress
+        // on the hot path.
+        //
+        // Intended use: commit a seek gesture with WarmAt(target_frame),
+        // let the UI finish its animation, then call GetFrame.  Moves
+        // the ZSTD decompress off the first-frame-after-seek critical
+        // path and overlaps it with any teardown the caller is doing.
+        //
+        // Implementation note: reuses UpdateCacheWindow verbatim, which
+        // means WarmAt also updates the §1.B access-pattern EWMA.  This
+        // is correct -- from the reader's point of view, WarmAt is
+        // indistinguishable from a "virtual" access, and the distance
+        // it contributes to the EWMA reflects the real jump the caller
+        // just committed to.
+        void WarmAt(int32_t frame_index) {
+            auto it = std::lower_bound(
+                chunk_index_table_.begin(), chunk_index_table_.end(), frame_index,
+                [](const ChunkIndexEntry& e, int32_t val) { return e.end_frame < val; });
+            if (it == chunk_index_table_.end() || frame_index < it->start_frame) {
+                return;
+            }
+            UpdateCacheWindow(it->chunk_index);
+        }
+
         std::span<const std::byte> GetRawFrameBytes(int32_t frame_index) {
             auto it = std::lower_bound(chunk_index_table_.begin(), chunk_index_table_.end(), frame_index,
                 [](const ChunkIndexEntry& e, int32_t val) { return e.end_frame < val; });
@@ -127,7 +163,7 @@ namespace VTX {
                     return {};
                 }
                 if (pending_loads_.contains(target_chunk)) {
-                    load_task = pending_loads_[target_chunk];
+                    load_task = pending_loads_[target_chunk].future;
                 }
             }
 
@@ -242,7 +278,7 @@ namespace VTX {
                     return nullptr;
                 }
                 if (pending_loads_.contains(target_chunk)) {
-                    load_task = pending_loads_[target_chunk];
+                    load_task = pending_loads_[target_chunk].future;
                 }
             }
 
@@ -409,8 +445,45 @@ namespace VTX {
         void UpdateCacheWindow(int32_t current_idx) {
             std::lock_guard<std::mutex> lock(cache_mutex_);
 
+            // §1.B -- access-pattern detection.
+            //
+            // Maintain an EWMA of |current - last_requested| chunk
+            // distance.  Small values mean the caller is reading
+            // sequentially (playback, or a short scrub); large values
+            // mean random access (editor seeks, scripted frame picking).
+            //
+            // We only benefit from lateral prefetches when the next
+            // access is likely to land inside the current window -- i.e.
+            // when the expected distance is <= window radius.  Under
+            // random access the [start..end] prefetch loop below would
+            // spawn N loads that get cancelled on the very next seek,
+            // pure waste that also steals CPU and cache_mutex_ from the
+            // synchronous load the caller is actually waiting on.
+            //
+            // α = 0.3 gives ~3-sample reaction time to a regime change
+            // (spike of 50 chunk distance becomes EWMA=15 after one
+            // sample, 25.5 after two, 30.9 after three; well above a
+            // typical cache_window of 2-10).  The decision threshold is
+            // just the window size: if the typical jump exceeds what the
+            // window can cover, the window can't help at all.
+            bool do_lateral_prefetch = true;
+            const int32_t window_size = static_cast<int32_t>(cache_backward_ + cache_forward_);
+            if (last_requested_chunk_ >= 0) {
+                const int32_t dist = std::abs(current_idx - last_requested_chunk_);
+                constexpr float alpha = 0.3f;
+                ewma_chunk_distance_ =
+                    alpha * static_cast<float>(dist) +
+                    (1.0f - alpha) * ewma_chunk_distance_;
+                if (window_size > 0 &&
+                    ewma_chunk_distance_ > static_cast<float>(window_size)) {
+                    do_lateral_prefetch = false;
+                }
+            }
+            last_requested_chunk_ = current_idx;
+
+            // Reap prefetches that finished naturally since the last call.
             for (auto it = pending_loads_.begin(); it != pending_loads_.end(); ) {
-                if (it->second.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+                if (it->second.future.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
                     it = pending_loads_.erase(it);
                 } else {
                     ++it;
@@ -422,6 +495,27 @@ namespace VTX {
 
             if (start == current_range_start_ && end == current_range_end_) return;
             current_range_start_ = start; current_range_end_ = end;
+
+            // Cancel in-flight prefetches whose target chunk fell outside
+            // the new window.  AsyncLoadTask checks `stop_requested()` at
+            // several points (entry, pre-decompression, and inside the
+            // per-frame deserialisation loop in ProcessChunkData); any
+            // unavoidable work already done is sunk cost, but the remaining
+            // work -- frame deserialisation and the final
+            // cache_mutex_-guarded write to chunk_cache_ -- is skipped.
+            //
+            // Kept in pending_loads_ until the worker thread observes the
+            // stop and the future transitions to ready; the next
+            // UpdateCacheWindow() call reaps it at the top of this method.
+            // This is the fix for the cache-sweep pathology where small
+            // symmetric windows were ~4-8x slower than either (0,0) or
+            // (>=chunk_count) because every random jump triggered a storm
+            // of prefetches that then thrashed eviction.
+            for (auto& kv : pending_loads_) {
+                if (kv.first < start || kv.first > end) {
+                    kv.second.stop.request_stop();
+                }
+            }
 
             // Fix A4: snapshot events_ under its mutex, then use the local
             // copy for the rest of this function.  Prevents std::function UB
@@ -445,15 +539,29 @@ namespace VTX {
                     if (pending_loads_.size() >= max_concurrent_loads) return;
 
                     if (evts.OnChunkLoadStarted) evts.OnChunkLoadStarted(i);
-                    pending_loads_[i] = std::async(std::launch::async, [this, i]() {
-                        this->AsyncLoadTask(i, stop_source_.get_token());
+
+                    // Give each prefetch its own stop_source so we can
+                    // cancel it independently from the "window changed"
+                    // path above.  The token is captured by value into the
+                    // lambda -- it's ref-counted, cheap to copy, and stays
+                    // valid even if the map entry is later erased while the
+                    // worker thread is still running (it won't be, because
+                    // we wait on the future first, but the invariant is
+                    // useful for reasoning about shutdown paths).
+                    PendingLoad pl;
+                    auto token = pl.stop.get_token();
+                    pl.future = std::async(std::launch::async, [this, i, token]() {
+                        this->AsyncLoadTask(i, token);
                     }).share();
+                    pending_loads_[i] = std::move(pl);
                 }
             };
 
             trigger(current_idx);
-            for (int32_t i = start; i <= end; ++i) {
-                if (i != current_idx) trigger(i);
+            if (do_lateral_prefetch) {
+                for (int32_t i = start; i <= end; ++i) {
+                    if (i != current_idx) trigger(i);
+                }
             }
         }
 
@@ -573,11 +681,23 @@ namespace VTX {
         std::vector<ChunkIndexEntry> chunk_index_table_;
         VTX::GameTime::VTXGameTimes game_times_;
 
+        // A pending chunk load.  Each load gets its own `stop_source` so
+        // `UpdateCacheWindow` can cancel prefetches whose target chunk has
+        // fallen outside the current cache window without affecting
+        // unrelated in-flight loads.  Pre-fix this was a single global
+        // `stop_source_` that was only fired at reader destruction, which
+        // meant every stale prefetch ran to completion and competed for
+        // `cache_mutex_` + CPU with the synchronous load the user was
+        // actually waiting on.
+        struct PendingLoad {
+            std::stop_source stop;
+            std::shared_future<void> future;
+        };
+
         std::map<int32_t, CachedChunk> chunk_cache_;
-        std::map<int32_t, std::shared_future<void>> pending_loads_;
+        std::map<int32_t, PendingLoad> pending_loads_;
 
         mutable std::mutex cache_mutex_;
-        std::stop_source stop_source_;
         ReplayReaderEvents events_;
         mutable std::mutex events_mutex_;  // protects events_ (A4)
 
@@ -586,6 +706,16 @@ namespace VTX {
 
         int32_t current_range_start_ = -1;
         int32_t current_range_end_ = -1;
+
+        // §1.B access-pattern detection state.  EWMA of chunk-index
+        // distance between consecutive GetFrame/GetRawFrameBytes calls.
+        // `last_requested_chunk_ == -1` bootstraps on the second call.
+        // Not reset by SetCacheWindow(): the EWMA reflects the access
+        // pattern (property of the caller) while the threshold reflects
+        // the window (property of the config), so the decision adapts
+        // naturally when the user reconfigures prefetch aggressiveness.
+        int32_t last_requested_chunk_ = -1;
+        float ewma_chunk_distance_ = 0.0f;
 
         PropertyAddressCache property_address_cache_={};
     };
