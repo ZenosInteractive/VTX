@@ -25,30 +25,34 @@
 
 namespace {
 
-const char* OpName(VtxDiff::DiffOperation op) {
-    switch (op) {
-        case VtxDiff::DiffOperation::Add:          return "Add";
-        case VtxDiff::DiffOperation::Remove:       return "Remove";
-        case VtxDiff::DiffOperation::Replace:      return "Replace";
-        case VtxDiff::DiffOperation::ReplaceRange: return "ReplaceRange";
+    const char* OpName(VtxDiff::DiffOperation op) {
+        switch (op) {
+        case VtxDiff::DiffOperation::Add:
+            return "Add";
+        case VtxDiff::DiffOperation::Remove:
+            return "Remove";
+        case VtxDiff::DiffOperation::Replace:
+            return "Replace";
+        case VtxDiff::DiffOperation::ReplaceRange:
+            return "ReplaceRange";
+        }
+        return "?";
     }
-    return "?";
-}
 
-std::string PathToString(const VtxDiff::DiffIndexPath& p) {
-    std::string s = "[";
-    for (size_t i = 0; i < p.count; ++i) {
-        if (i > 0) s += ",";
-        s += std::to_string(p.indices[i]);
+    std::string PathToString(const VtxDiff::DiffIndexPath& p) {
+        std::string s = "[";
+        for (size_t i = 0; i < p.count; ++i) {
+            if (i > 0)
+                s += ",";
+            s += std::to_string(p.indices[i]);
+        }
+        s += "]";
+        return s;
     }
-    s += "]";
-    return s;
-}
 
 } // namespace
 
-int main(int argc, char* argv[])
-{
+int main(int argc, char* argv[]) {
     std::string filepath = "content/reader/arena/arena_from_fbs_ds.vtx";
     bool fail_on_empty = false;
 
@@ -99,7 +103,7 @@ int main(int argc, char* argv[])
     // ---- Run the diff ----------------------------------------------------
     VtxDiff::DiffOptions opts;
     opts.compare_floats_with_epsilon = true;
-    opts.float_epsilon               = 1e-5f;
+    opts.float_epsilon = 1e-5f;
 
     VtxDiff::PatchIndex patch = differ->DiffRawFrames(bytes_a, raw_b, opts);
 
@@ -110,15 +114,11 @@ int main(int argc, char* argv[])
     constexpr size_t kDetailLimit = 20;
     for (size_t i = 0; i < patch.operations.size() && i < kDetailLimit; ++i) {
         const auto& op = patch.operations[i];
-        VTX_INFO("  {:>12} container={} path={} actor='{}'",
-                 OpName(op.Operation),
-                 VtxDiff::TypeToFieldName(op.ContainerType),
-                 PathToString(op.Path),
-                 op.ActorId);
+        VTX_INFO("  {:>12} container={} path={} actor='{}'", OpName(op.Operation),
+                 VtxDiff::TypeToFieldName(op.ContainerType), PathToString(op.Path), op.ActorId);
     }
     if (patch.operations.size() > kDetailLimit) {
-        VTX_INFO("  ... {} more operation(s) suppressed",
-                 patch.operations.size() - kDetailLimit);
+        VTX_INFO("  ... {} more operation(s) suppressed", patch.operations.size() - kDetailLimit);
     }
 
     if (fail_on_empty && patch.operations.empty()) {

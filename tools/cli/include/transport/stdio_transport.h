@@ -5,30 +5,26 @@
 
 namespace VtxCli {
 
-    class StdioTransport
-    {
+    class StdioTransport {
     public:
         explicit StdioTransport(bool verbose = false, bool json_only = false)
-            : verbose_(verbose), json_only_(json_only) {}
+            : verbose_(verbose)
+            , json_only_(json_only) {}
 
-        std::optional<std::string> ReadLine()
-        {
+        std::optional<std::string> ReadLine() {
             std::string line;
-            if(std::getline(std::cin,line))
-            {
+            if (std::getline(std::cin, line)) {
                 return line;
             }
             return std::nullopt;
         }
 
-        void WriteLine(const std::string& value)
-        {
+        void WriteLine(const std::string& value) {
             std::cout << value << '\n';
             std::cout.flush();
         }
 
-        void WriteLog(const std::string& value)
-        {
+        void WriteLog(const std::string& value) {
             if (json_only_) {
                 std::cerr << value << '\n';
                 std::cerr.flush();
@@ -38,10 +34,7 @@ namespace VtxCli {
             }
         }
 
-        bool IsOpen()
-        {
-          return !std::cin.eof();
-        }
+        bool IsOpen() { return !std::cin.eof(); }
 
         bool IsVerbose() const { return verbose_; }
         bool IsJsonOnly() const { return json_only_; }

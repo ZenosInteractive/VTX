@@ -14,9 +14,9 @@
 #include <gtest/gtest.h>
 #include "vtx/common/vtx_types.h"
 
-using VTX::GameTime::VTXGameTimes;
-using VTX::GameTime::GameTimeRegister;
 using VTX::GameTime::EFilterType;
+using VTX::GameTime::GameTimeRegister;
+using VTX::GameTime::VTXGameTimes;
 
 // ---------------------------------------------------------------------------
 // Regression: historical UTC must be accepted
@@ -32,9 +32,9 @@ TEST(VTXGameTimes, AcceptsHistoricalUtcOnFirstFrame_Regression) {
     const int64_t historical_utc = 1'745'000'000LL * 10'000'000LL;
 
     GameTimeRegister reg;
-    reg.game_time        = 0.0f;
+    reg.game_time = 0.0f;
     reg.created_utc_time = historical_utc;
-    reg.FrameFilterType  = EFilterType::OnlyIncreasing;
+    reg.FrameFilterType = EFilterType::OnlyIncreasing;
 
     EXPECT_TRUE(times.AddTimeRegistry(reg));
     EXPECT_EQ(times.LastCreatedUtc(), historical_utc);
@@ -47,7 +47,7 @@ TEST(VTXGameTimes, AcceptsFutureUtcOnFirstFrame) {
     const int64_t future_utc = VTXGameTimes::GetUtcNowTicks() + 1'000'000'000LL;
 
     GameTimeRegister reg;
-    reg.game_time        = 0.0f;
+    reg.game_time = 0.0f;
     reg.created_utc_time = future_utc;
 
     EXPECT_TRUE(times.AddTimeRegistry(reg));
@@ -59,16 +59,16 @@ TEST(VTXGameTimes, RejectsUtcRegressionAfterFirstFrame) {
     VTXGameTimes times;
 
     GameTimeRegister first;
-    first.game_time        = 0.0f;
-    first.created_utc_time = 1'745'000'000'000'000'0LL;  // 2025
+    first.game_time = 0.0f;
+    first.created_utc_time = 1'745'000'000'000'000'0LL; // 2025
     ASSERT_TRUE(times.AddTimeRegistry(first));
 
     // Simulate the "per-frame" finalize so add_used_ clears.
     times.ResolveGameTimes(1);
 
     GameTimeRegister regressing;
-    regressing.game_time        = 0.016f;
-    regressing.created_utc_time = *first.created_utc_time - 1;  // goes BACKWARD
+    regressing.game_time = 0.016f;
+    regressing.created_utc_time = *first.created_utc_time - 1; // goes BACKWARD
 
     EXPECT_FALSE(times.AddTimeRegistry(regressing));
 }
@@ -83,7 +83,7 @@ TEST(VTXGameTimes, OnlyIncreasingAcceptsGameTimeZeroOnFirstFrame_Regression) {
     VTXGameTimes times;
 
     GameTimeRegister reg;
-    reg.game_time       = 0.0f;
+    reg.game_time = 0.0f;
     reg.FrameFilterType = EFilterType::OnlyIncreasing;
 
     EXPECT_TRUE(times.AddTimeRegistry(reg));
@@ -93,7 +93,7 @@ TEST(VTXGameTimes, OnlyDecreasingAcceptsGameTimeZeroOnFirstFrame_Regression) {
     VTXGameTimes times;
 
     GameTimeRegister reg;
-    reg.game_time       = 0.0f;
+    reg.game_time = 0.0f;
     reg.FrameFilterType = EFilterType::OnlyDecreasing;
 
     EXPECT_TRUE(times.AddTimeRegistry(reg));
@@ -104,13 +104,13 @@ TEST(VTXGameTimes, OnlyIncreasingRejectsRegressionOnLaterFrame) {
     VTXGameTimes times;
 
     GameTimeRegister a;
-    a.game_time       = 1.0f;
+    a.game_time = 1.0f;
     a.FrameFilterType = EFilterType::OnlyIncreasing;
     ASSERT_TRUE(times.AddTimeRegistry(a));
     times.ResolveGameTimes(1);
 
     GameTimeRegister b;
-    b.game_time       = 0.5f;  // less than previous
+    b.game_time = 0.5f; // less than previous
     b.FrameFilterType = EFilterType::OnlyIncreasing;
 
     EXPECT_FALSE(times.AddTimeRegistry(b));
@@ -120,13 +120,13 @@ TEST(VTXGameTimes, OnlyDecreasingRejectsAscentOnLaterFrame) {
     VTXGameTimes times;
 
     GameTimeRegister a;
-    a.game_time       = 10.0f;
+    a.game_time = 10.0f;
     a.FrameFilterType = EFilterType::OnlyDecreasing;
     ASSERT_TRUE(times.AddTimeRegistry(a));
     times.ResolveGameTimes(1);
 
     GameTimeRegister b;
-    b.game_time       = 20.0f;  // greater than previous
+    b.game_time = 20.0f; // greater than previous
     b.FrameFilterType = EFilterType::OnlyDecreasing;
 
     EXPECT_FALSE(times.AddTimeRegistry(b));
@@ -147,7 +147,7 @@ TEST(VTXGameTimes, ClearResetsStartUtcToZero_Regression) {
     VTXGameTimes times;
 
     GameTimeRegister reg;
-    reg.game_time        = 0.0f;
+    reg.game_time = 0.0f;
     reg.created_utc_time = 1'745'000'000'000'000'0LL;
     ASSERT_TRUE(times.AddTimeRegistry(reg));
 
@@ -167,9 +167,9 @@ TEST(VTXGameTimes, AcceptsManyMonotonicFrames) {
 
     for (int i = 0; i < kFrames; ++i) {
         GameTimeRegister reg;
-        reg.game_time        = float(i) / 60.0f;
+        reg.game_time = float(i) / 60.0f;
         reg.created_utc_time = base_utc + int64_t(i) * 166'666LL;
-        reg.FrameFilterType  = EFilterType::OnlyIncreasing;
+        reg.FrameFilterType = EFilterType::OnlyIncreasing;
 
         EXPECT_TRUE(times.AddTimeRegistry(reg)) << "frame " << i;
         times.ResolveGameTimes(i + 1);
@@ -197,9 +197,9 @@ TEST(VTXGameTimes, RejectsSecondAddInSameFrame) {
 // ---------------------------------------------------------------------------
 
 TEST(VTXGameTimes, SecondsToTicksMatchesConventional) {
-    EXPECT_EQ(VTXGameTimes::SecondsToTicks(0.0f),    0);
-    EXPECT_EQ(VTXGameTimes::SecondsToTicks(1.0f),    10'000'000);
-    EXPECT_EQ(VTXGameTimes::SecondsToTicks(0.5f),    5'000'000);
+    EXPECT_EQ(VTXGameTimes::SecondsToTicks(0.0f), 0);
+    EXPECT_EQ(VTXGameTimes::SecondsToTicks(1.0f), 10'000'000);
+    EXPECT_EQ(VTXGameTimes::SecondsToTicks(0.5f), 5'000'000);
 }
 
 TEST(VTXGameTimes, GetUtcNowTicksIsMonotonic) {

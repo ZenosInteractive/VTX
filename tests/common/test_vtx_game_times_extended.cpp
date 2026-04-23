@@ -10,18 +10,16 @@ using VTX::GameTime::VTXGameTimes;
 
 namespace {
 
-GameTimeRegister MakeBoth(float game_time, int64_t created_utc)
-{
-    GameTimeRegister reg;
-    reg.game_time = game_time;
-    reg.created_utc_time = created_utc;
-    return reg;
-}
+    GameTimeRegister MakeBoth(float game_time, int64_t created_utc) {
+        GameTimeRegister reg;
+        reg.game_time = game_time;
+        reg.created_utc_time = created_utc;
+        return reg;
+    }
 
 } // namespace
 
-TEST(VTXGameTimesExtended, SetupUsesExplicitStartUtcAndImplicitStartUtc)
-{
+TEST(VTXGameTimesExtended, SetupUsesExplicitStartUtcAndImplicitStartUtc) {
     VTXGameTimes explicit_start;
     explicit_start.Setup(60.0f, true, 123456789LL);
     EXPECT_EQ(explicit_start.StartUtc(), 123456789LL);
@@ -31,8 +29,7 @@ TEST(VTXGameTimesExtended, SetupUsesExplicitStartUtcAndImplicitStartUtc)
     EXPECT_GT(implicit_start.StartUtc(), 0);
 }
 
-TEST(VTXGameTimesExtended, ResolveWithOnlyGameTimeSynthesizesIncreasingUtc)
-{
+TEST(VTXGameTimesExtended, ResolveWithOnlyGameTimeSynthesizesIncreasingUtc) {
     VTXGameTimes times;
     times.Setup(2.0f, true, 1000LL);
 
@@ -53,8 +50,7 @@ TEST(VTXGameTimesExtended, ResolveWithOnlyGameTimeSynthesizesIncreasingUtc)
     EXPECT_EQ(times.GetCreatedUtc()[1], times.GetCreatedUtc()[0] + 5'000'000LL);
 }
 
-TEST(VTXGameTimesExtended, ResolveWithOnlyCreatedUtcSynthesizesRelativeGameTime)
-{
+TEST(VTXGameTimesExtended, ResolveWithOnlyCreatedUtcSynthesizesRelativeGameTime) {
     VTXGameTimes times;
     times.Setup(60.0f, true, 0);
 
@@ -73,8 +69,7 @@ TEST(VTXGameTimesExtended, ResolveWithOnlyCreatedUtcSynthesizesRelativeGameTime)
     EXPECT_EQ(times.GetGameTime()[1], 2250LL);
 }
 
-TEST(VTXGameTimesExtended, ResolveWithoutInputsSynthesizesBothTimesFromFps)
-{
+TEST(VTXGameTimesExtended, ResolveWithoutInputsSynthesizesBothTimesFromFps) {
     VTXGameTimes times;
     times.Setup(2.0f, true, 1000LL);
 
@@ -90,8 +85,7 @@ TEST(VTXGameTimesExtended, ResolveWithoutInputsSynthesizesBothTimesFromFps)
     EXPECT_EQ(times.GetCreatedUtc()[1], 5'001'000LL);
 }
 
-TEST(VTXGameTimesExtended, DetectsTimelineGapWhenUtcJumpExceedsThreshold)
-{
+TEST(VTXGameTimesExtended, DetectsTimelineGapWhenUtcJumpExceedsThreshold) {
     VTXGameTimes times;
     times.Setup(60.0f, true, 0);
 
@@ -105,8 +99,7 @@ TEST(VTXGameTimesExtended, DetectsTimelineGapWhenUtcJumpExceedsThreshold)
     EXPECT_EQ(times.GetTimelineGaps()[0], 2);
 }
 
-TEST(VTXGameTimesExtended, DetectsGameSegmentWhenGameTimeDirectionReverses)
-{
+TEST(VTXGameTimesExtended, DetectsGameSegmentWhenGameTimeDirectionReverses) {
     VTXGameTimes times;
     times.Setup(60.0f, true, 0);
 
@@ -120,8 +113,7 @@ TEST(VTXGameTimesExtended, DetectsGameSegmentWhenGameTimeDirectionReverses)
     EXPECT_EQ(times.GetGameSegments()[0], 2);
 }
 
-TEST(VTXGameTimesExtended, CopyFromKeepsOnlyCurrentChunkAndInsertLiveChunkTimesAppends)
-{
+TEST(VTXGameTimesExtended, CopyFromKeepsOnlyCurrentChunkAndInsertLiveChunkTimesAppends) {
     VTXGameTimes source;
     source.Setup(60.0f, true, 1000LL);
 
@@ -152,8 +144,7 @@ TEST(VTXGameTimesExtended, CopyFromKeepsOnlyCurrentChunkAndInsertLiveChunkTimesA
     EXPECT_EQ(appended.GetCreatedUtc()[0], 3000LL);
 }
 
-TEST(VTXGameTimesExtended, SnapshotRollbackRestoresPreviousState)
-{
+TEST(VTXGameTimesExtended, SnapshotRollbackRestoresPreviousState) {
     VTXGameTimes times;
     times.Setup(60.0f, true, 1000LL);
 
@@ -167,8 +158,7 @@ TEST(VTXGameTimesExtended, SnapshotRollbackRestoresPreviousState)
     EXPECT_TRUE(times.GetCreatedUtc().empty());
 }
 
-TEST(VTXGameTimesExtended, ResolveRejectsZeroFrameCount)
-{
+TEST(VTXGameTimesExtended, ResolveRejectsZeroFrameCount) {
     VTXGameTimes times;
     EXPECT_FALSE(times.ResolveGameTimes(0));
 }

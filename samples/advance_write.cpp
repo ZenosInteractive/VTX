@@ -61,263 +61,209 @@
 
 namespace {
 
-VTX::Vector ToVtxVector(const ::arena_pb::Vec3& value)
-{
-    return {value.x(), value.y(), value.z()};
-}
+    VTX::Vector ToVtxVector(const ::arena_pb::Vec3& value) {
+        return {value.x(), value.y(), value.z()};
+    }
 
-VTX::Quat ToVtxQuat(const ::arena_pb::Rotation& value)
-{
-    return {value.x(), value.y(), value.z(), value.w()};
-}
+    VTX::Quat ToVtxQuat(const ::arena_pb::Rotation& value) {
+        return {value.x(), value.y(), value.z(), value.w()};
+    }
 
-VTX::Vector ToVtxVector(const ::arena_fb::Vec3& value)
-{
-    return {value.x(), value.y(), value.z()};
-}
+    VTX::Vector ToVtxVector(const ::arena_fb::Vec3& value) {
+        return {value.x(), value.y(), value.z()};
+    }
 
-VTX::Quat ToVtxQuat(const ::arena_fb::Rotation& value)
-{
-    return {value.x(), value.y(), value.z(), value.w()};
-}
+    VTX::Quat ToVtxQuat(const ::arena_fb::Rotation& value) {
+        return {value.x(), value.y(), value.z(), value.w()};
+    }
 
 } // namespace
 
 namespace VTX {
 
-// ===================================================================
-//  Protobuf bindings -- driven by VTX::GenericProtobufLoader
-// ===================================================================
-//  Each Transfer() method maps one protobuf message into a
-//  VTX::PropertyContainer by delegating scalar/struct/array copies to the
-//  loader, which resolves field slots via SchemaRegistry.
+    // ===================================================================
+    //  Protobuf bindings -- driven by VTX::GenericProtobufLoader
+    // ===================================================================
+    //  Each Transfer() method maps one protobuf message into a
+    //  VTX::PropertyContainer by delegating scalar/struct/array copies to the
+    //  loader, which resolves field slots via SchemaRegistry.
 
-template <>
-struct ProtoBinding<::arena_pb::Player> {
-    static void Transfer(
-        const ::arena_pb::Player& src,
-        VTX::PropertyContainer& dest,
-        VTX::GenericProtobufLoader& loader,
-        const std::string& schema_name)
-    {
-        loader.LoadField(dest, schema_name, ArenaSchema::Player::UniqueID, src.unique_id());
-        loader.LoadField(dest, schema_name, ArenaSchema::Player::Name, src.name());
-        loader.LoadField(dest, schema_name, ArenaSchema::Player::Team, src.team());
-        loader.LoadField(dest, schema_name, ArenaSchema::Player::Health, src.health());
-        loader.LoadField(dest, schema_name, ArenaSchema::Player::Armor, src.armor());
-        if (src.has_position()) {
-            loader.LoadField(dest, schema_name, ArenaSchema::Player::Position, ToVtxVector(src.position()));
+    template <>
+    struct ProtoBinding<::arena_pb::Player> {
+        static void Transfer(const ::arena_pb::Player& src, VTX::PropertyContainer& dest,
+                             VTX::GenericProtobufLoader& loader, const std::string& schema_name) {
+            loader.LoadField(dest, schema_name, ArenaSchema::Player::UniqueID, src.unique_id());
+            loader.LoadField(dest, schema_name, ArenaSchema::Player::Name, src.name());
+            loader.LoadField(dest, schema_name, ArenaSchema::Player::Team, src.team());
+            loader.LoadField(dest, schema_name, ArenaSchema::Player::Health, src.health());
+            loader.LoadField(dest, schema_name, ArenaSchema::Player::Armor, src.armor());
+            if (src.has_position()) {
+                loader.LoadField(dest, schema_name, ArenaSchema::Player::Position, ToVtxVector(src.position()));
+            }
+            if (src.has_rotation()) {
+                loader.LoadField(dest, schema_name, ArenaSchema::Player::Rotation, ToVtxQuat(src.rotation()));
+            }
+            if (src.has_velocity()) {
+                loader.LoadField(dest, schema_name, ArenaSchema::Player::Velocity, ToVtxVector(src.velocity()));
+            }
+            loader.LoadField(dest, schema_name, ArenaSchema::Player::IsAlive, src.is_alive());
+            loader.LoadField(dest, schema_name, ArenaSchema::Player::Score, src.score());
+            loader.LoadField(dest, schema_name, ArenaSchema::Player::Deaths, src.deaths());
         }
-        if (src.has_rotation()) {
-            loader.LoadField(dest, schema_name, ArenaSchema::Player::Rotation, ToVtxQuat(src.rotation()));
-        }
-        if (src.has_velocity()) {
-            loader.LoadField(dest, schema_name, ArenaSchema::Player::Velocity, ToVtxVector(src.velocity()));
-        }
-        loader.LoadField(dest, schema_name, ArenaSchema::Player::IsAlive, src.is_alive());
-        loader.LoadField(dest, schema_name, ArenaSchema::Player::Score, src.score());
-        loader.LoadField(dest, schema_name, ArenaSchema::Player::Deaths, src.deaths());
-    }
-};
+    };
 
-template <>
-struct ProtoBinding<::arena_pb::Projectile> {
-    static void Transfer(
-        const ::arena_pb::Projectile& src,
-        VTX::PropertyContainer& dest,
-        VTX::GenericProtobufLoader& loader,
-        const std::string& schema_name)
-    {
-        loader.LoadField(dest, schema_name, ArenaSchema::Projectile::UniqueID, src.unique_id());
-        loader.LoadField(dest, schema_name, ArenaSchema::Projectile::OwnerID, src.owner_id());
-        if (src.has_position()) {
-            loader.LoadField(dest, schema_name, ArenaSchema::Projectile::Position, ToVtxVector(src.position()));
+    template <>
+    struct ProtoBinding<::arena_pb::Projectile> {
+        static void Transfer(const ::arena_pb::Projectile& src, VTX::PropertyContainer& dest,
+                             VTX::GenericProtobufLoader& loader, const std::string& schema_name) {
+            loader.LoadField(dest, schema_name, ArenaSchema::Projectile::UniqueID, src.unique_id());
+            loader.LoadField(dest, schema_name, ArenaSchema::Projectile::OwnerID, src.owner_id());
+            if (src.has_position()) {
+                loader.LoadField(dest, schema_name, ArenaSchema::Projectile::Position, ToVtxVector(src.position()));
+            }
+            if (src.has_velocity()) {
+                loader.LoadField(dest, schema_name, ArenaSchema::Projectile::Velocity, ToVtxVector(src.velocity()));
+            }
+            loader.LoadField(dest, schema_name, ArenaSchema::Projectile::Damage, src.damage());
+            loader.LoadField(dest, schema_name, ArenaSchema::Projectile::Type, src.type());
         }
-        if (src.has_velocity()) {
-            loader.LoadField(dest, schema_name, ArenaSchema::Projectile::Velocity, ToVtxVector(src.velocity()));
+    };
+
+    template <>
+    struct ProtoBinding<::arena_pb::MatchState> {
+        static void Transfer(const ::arena_pb::MatchState& src, VTX::PropertyContainer& dest,
+                             VTX::GenericProtobufLoader& loader, const std::string& schema_name) {
+            loader.LoadField(dest, schema_name, ArenaSchema::MatchState::UniqueID, std::string("match_001"));
+            loader.LoadField(dest, schema_name, ArenaSchema::MatchState::ScoreTeam1, src.score_team1());
+            loader.LoadField(dest, schema_name, ArenaSchema::MatchState::ScoreTeam2, src.score_team2());
+            loader.LoadField(dest, schema_name, ArenaSchema::MatchState::Round, src.round());
+            loader.LoadField(dest, schema_name, ArenaSchema::MatchState::Phase, src.phase());
+            loader.LoadField(dest, schema_name, ArenaSchema::MatchState::TimeRemaining, src.time_remaining());
         }
-        loader.LoadField(dest, schema_name, ArenaSchema::Projectile::Damage, src.damage());
-        loader.LoadField(dest, schema_name, ArenaSchema::Projectile::Type, src.type());
-    }
-};
+    };
 
-template <>
-struct ProtoBinding<::arena_pb::MatchState> {
-    static void Transfer(
-        const ::arena_pb::MatchState& src,
-        VTX::PropertyContainer& dest,
-        VTX::GenericProtobufLoader& loader,
-        const std::string& schema_name)
-    {
-        loader.LoadField(dest, schema_name, ArenaSchema::MatchState::UniqueID, std::string("match_001"));
-        loader.LoadField(dest, schema_name, ArenaSchema::MatchState::ScoreTeam1, src.score_team1());
-        loader.LoadField(dest, schema_name, ArenaSchema::MatchState::ScoreTeam2, src.score_team2());
-        loader.LoadField(dest, schema_name, ArenaSchema::MatchState::Round, src.round());
-        loader.LoadField(dest, schema_name, ArenaSchema::MatchState::Phase, src.phase());
-        loader.LoadField(dest, schema_name, ArenaSchema::MatchState::TimeRemaining, src.time_remaining());
-    }
-};
+    template <>
+    struct ProtoBinding<::arena_pb::FrameData> {
+        static void TransferToFrame(const ::arena_pb::FrameData& src, VTX::Frame& dest,
+                                    VTX::GenericProtobufLoader& loader, const std::string& schema_name) {
+            (void)schema_name;
 
-template <>
-struct ProtoBinding<::arena_pb::FrameData> {
-    static void TransferToFrame(
-        const ::arena_pb::FrameData& src,
-        VTX::Frame& dest,
-        VTX::GenericProtobufLoader& loader,
-        const std::string& schema_name)
-    {
-        (void)schema_name;
+            dest = VTX::Frame {};
+            VTX::Bucket& entity_bucket = dest.GetBucket("entity");
+            entity_bucket.entities.clear();
+            entity_bucket.unique_ids.clear();
 
-        dest = VTX::Frame{};
-        VTX::Bucket& entity_bucket = dest.GetBucket("entity");
-        entity_bucket.entities.clear();
-        entity_bucket.unique_ids.clear();
+            loader.AppendActorList(entity_bucket, ArenaSchema::Player::StructName, src.players(),
+                                   [](const ::arena_pb::Player& player) { return player.unique_id(); });
 
-        loader.AppendActorList(
-            entity_bucket,
-            ArenaSchema::Player::StructName,
-            src.players(),
-            [](const ::arena_pb::Player& player) { return player.unique_id(); });
+            loader.AppendActorList(entity_bucket, ArenaSchema::Projectile::StructName, src.projectiles(),
+                                   [](const ::arena_pb::Projectile& projectile) { return projectile.unique_id(); });
 
-        loader.AppendActorList(
-            entity_bucket,
-            ArenaSchema::Projectile::StructName,
-            src.projectiles(),
-            [](const ::arena_pb::Projectile& projectile) { return projectile.unique_id(); });
-
-        if (src.has_match_state()) {
-            loader.AppendSingleActor(
-                entity_bucket,
-                ArenaSchema::MatchState::StructName,
-                src.match_state(),
-                [](const ::arena_pb::MatchState&) { return std::string("match_001"); });
+            if (src.has_match_state()) {
+                loader.AppendSingleActor(entity_bucket, ArenaSchema::MatchState::StructName, src.match_state(),
+                                         [](const ::arena_pb::MatchState&) { return std::string("match_001"); });
+            }
         }
-    }
-};
+    };
 
-// ===================================================================
-//  FlatBuffers bindings -- driven by VTX::GenericFlatBufferLoader
-// ===================================================================
-//  Transfer() receives a pointer to the generated FBS table (zero-copy
-//  access into the mapped buffer).  Field slots are resolved once via
-//  PropertyAddressCache -- subsequent frames hit the cached addresses.
+    // ===================================================================
+    //  FlatBuffers bindings -- driven by VTX::GenericFlatBufferLoader
+    // ===================================================================
+    //  Transfer() receives a pointer to the generated FBS table (zero-copy
+    //  access into the mapped buffer).  Field slots are resolved once via
+    //  PropertyAddressCache -- subsequent frames hit the cached addresses.
 
-template <>
-struct FlatBufferBinding<::arena_fb::Player> {
-    static void Transfer(
-        const ::arena_fb::Player* src,
-        VTX::PropertyContainer& dest,
-        VTX::GenericFlatBufferLoader& loader,
-        const std::string& schema_name)
-    {
-        if (src->unique_id()) {
-            loader.LoadField(dest, schema_name, ArenaSchema::Player::UniqueID, src->unique_id()->str());
+    template <>
+    struct FlatBufferBinding<::arena_fb::Player> {
+        static void Transfer(const ::arena_fb::Player* src, VTX::PropertyContainer& dest,
+                             VTX::GenericFlatBufferLoader& loader, const std::string& schema_name) {
+            if (src->unique_id()) {
+                loader.LoadField(dest, schema_name, ArenaSchema::Player::UniqueID, src->unique_id()->str());
+            }
+            if (src->name()) {
+                loader.LoadField(dest, schema_name, ArenaSchema::Player::Name, src->name()->str());
+            }
+            loader.LoadField(dest, schema_name, ArenaSchema::Player::Team, src->team());
+            loader.LoadField(dest, schema_name, ArenaSchema::Player::Health, src->health());
+            loader.LoadField(dest, schema_name, ArenaSchema::Player::Armor, src->armor());
+            if (src->position()) {
+                loader.LoadField(dest, schema_name, ArenaSchema::Player::Position, ToVtxVector(*src->position()));
+            }
+            if (src->rotation()) {
+                loader.LoadField(dest, schema_name, ArenaSchema::Player::Rotation, ToVtxQuat(*src->rotation()));
+            }
+            if (src->velocity()) {
+                loader.LoadField(dest, schema_name, ArenaSchema::Player::Velocity, ToVtxVector(*src->velocity()));
+            }
+            loader.LoadField(dest, schema_name, ArenaSchema::Player::IsAlive, src->is_alive());
+            loader.LoadField(dest, schema_name, ArenaSchema::Player::Score, src->score());
+            loader.LoadField(dest, schema_name, ArenaSchema::Player::Deaths, src->deaths());
         }
-        if (src->name()) {
-            loader.LoadField(dest, schema_name, ArenaSchema::Player::Name, src->name()->str());
-        }
-        loader.LoadField(dest, schema_name, ArenaSchema::Player::Team, src->team());
-        loader.LoadField(dest, schema_name, ArenaSchema::Player::Health, src->health());
-        loader.LoadField(dest, schema_name, ArenaSchema::Player::Armor, src->armor());
-        if (src->position()) {
-            loader.LoadField(dest, schema_name, ArenaSchema::Player::Position, ToVtxVector(*src->position()));
-        }
-        if (src->rotation()) {
-            loader.LoadField(dest, schema_name, ArenaSchema::Player::Rotation, ToVtxQuat(*src->rotation()));
-        }
-        if (src->velocity()) {
-            loader.LoadField(dest, schema_name, ArenaSchema::Player::Velocity, ToVtxVector(*src->velocity()));
-        }
-        loader.LoadField(dest, schema_name, ArenaSchema::Player::IsAlive, src->is_alive());
-        loader.LoadField(dest, schema_name, ArenaSchema::Player::Score, src->score());
-        loader.LoadField(dest, schema_name, ArenaSchema::Player::Deaths, src->deaths());
-    }
-};
+    };
 
-template <>
-struct FlatBufferBinding<::arena_fb::Projectile> {
-    static void Transfer(
-        const ::arena_fb::Projectile* src,
-        VTX::PropertyContainer& dest,
-        VTX::GenericFlatBufferLoader& loader,
-        const std::string& schema_name)
-    {
-        if (src->unique_id()) {
-            loader.LoadField(dest, schema_name, ArenaSchema::Projectile::UniqueID, src->unique_id()->str());
+    template <>
+    struct FlatBufferBinding<::arena_fb::Projectile> {
+        static void Transfer(const ::arena_fb::Projectile* src, VTX::PropertyContainer& dest,
+                             VTX::GenericFlatBufferLoader& loader, const std::string& schema_name) {
+            if (src->unique_id()) {
+                loader.LoadField(dest, schema_name, ArenaSchema::Projectile::UniqueID, src->unique_id()->str());
+            }
+            if (src->owner_id()) {
+                loader.LoadField(dest, schema_name, ArenaSchema::Projectile::OwnerID, src->owner_id()->str());
+            }
+            if (src->position()) {
+                loader.LoadField(dest, schema_name, ArenaSchema::Projectile::Position, ToVtxVector(*src->position()));
+            }
+            if (src->velocity()) {
+                loader.LoadField(dest, schema_name, ArenaSchema::Projectile::Velocity, ToVtxVector(*src->velocity()));
+            }
+            loader.LoadField(dest, schema_name, ArenaSchema::Projectile::Damage, src->damage());
+            if (src->type()) {
+                loader.LoadField(dest, schema_name, ArenaSchema::Projectile::Type, src->type()->str());
+            }
         }
-        if (src->owner_id()) {
-            loader.LoadField(dest, schema_name, ArenaSchema::Projectile::OwnerID, src->owner_id()->str());
+    };
+
+    template <>
+    struct FlatBufferBinding<::arena_fb::MatchState> {
+        static void Transfer(const ::arena_fb::MatchState* src, VTX::PropertyContainer& dest,
+                             VTX::GenericFlatBufferLoader& loader, const std::string& schema_name) {
+            loader.LoadField(dest, schema_name, ArenaSchema::MatchState::UniqueID, std::string("match_001"));
+            loader.LoadField(dest, schema_name, ArenaSchema::MatchState::ScoreTeam1, src->score_team1());
+            loader.LoadField(dest, schema_name, ArenaSchema::MatchState::ScoreTeam2, src->score_team2());
+            loader.LoadField(dest, schema_name, ArenaSchema::MatchState::Round, src->round());
+            if (src->phase()) {
+                loader.LoadField(dest, schema_name, ArenaSchema::MatchState::Phase, src->phase()->str());
+            }
+            loader.LoadField(dest, schema_name, ArenaSchema::MatchState::TimeRemaining, src->time_remaining());
         }
-        if (src->position()) {
-            loader.LoadField(dest, schema_name, ArenaSchema::Projectile::Position, ToVtxVector(*src->position()));
+    };
+
+    template <>
+    struct FlatBufferBinding<::arena_fb::FrameData> {
+        static void TransferToFrame(const ::arena_fb::FrameData* src, VTX::Frame& dest,
+                                    VTX::GenericFlatBufferLoader& loader, const std::string& schema_name) {
+            (void)schema_name;
+
+            dest = VTX::Frame {};
+            VTX::Bucket& entity_bucket = dest.GetBucket("entity");
+            entity_bucket.entities.clear();
+            entity_bucket.unique_ids.clear();
+
+            loader.AppendActorList(entity_bucket, ArenaSchema::Player::StructName, src->players(),
+                                   [](const ::arena_fb::Player* player) {
+                                       return player->unique_id() ? player->unique_id()->str() : std::string {};
+                                   });
+
+            loader.AppendActorList(entity_bucket, ArenaSchema::Projectile::StructName, src->projectiles(),
+                                   [](const ::arena_fb::Projectile* projectile) {
+                                       return projectile->unique_id() ? projectile->unique_id()->str() : std::string {};
+                                   });
+
+            loader.AppendSingleEntity(entity_bucket, ArenaSchema::MatchState::StructName, src->match_state(),
+                                      [](const ::arena_fb::MatchState*) { return std::string("match_001"); });
         }
-        if (src->velocity()) {
-            loader.LoadField(dest, schema_name, ArenaSchema::Projectile::Velocity, ToVtxVector(*src->velocity()));
-        }
-        loader.LoadField(dest, schema_name, ArenaSchema::Projectile::Damage, src->damage());
-        if (src->type()) {
-            loader.LoadField(dest, schema_name, ArenaSchema::Projectile::Type, src->type()->str());
-        }
-    }
-};
-
-template <>
-struct FlatBufferBinding<::arena_fb::MatchState> {
-    static void Transfer(
-        const ::arena_fb::MatchState* src,
-        VTX::PropertyContainer& dest,
-        VTX::GenericFlatBufferLoader& loader,
-        const std::string& schema_name)
-    {
-        loader.LoadField(dest, schema_name, ArenaSchema::MatchState::UniqueID, std::string("match_001"));
-        loader.LoadField(dest, schema_name, ArenaSchema::MatchState::ScoreTeam1, src->score_team1());
-        loader.LoadField(dest, schema_name, ArenaSchema::MatchState::ScoreTeam2, src->score_team2());
-        loader.LoadField(dest, schema_name, ArenaSchema::MatchState::Round, src->round());
-        if (src->phase()) {
-            loader.LoadField(dest, schema_name, ArenaSchema::MatchState::Phase, src->phase()->str());
-        }
-        loader.LoadField(dest, schema_name, ArenaSchema::MatchState::TimeRemaining, src->time_remaining());
-    }
-};
-
-template <>
-struct FlatBufferBinding<::arena_fb::FrameData> {
-    static void TransferToFrame(
-        const ::arena_fb::FrameData* src,
-        VTX::Frame& dest,
-        VTX::GenericFlatBufferLoader& loader,
-        const std::string& schema_name)
-    {
-        (void)schema_name;
-
-        dest = VTX::Frame{};
-        VTX::Bucket& entity_bucket = dest.GetBucket("entity");
-        entity_bucket.entities.clear();
-        entity_bucket.unique_ids.clear();
-
-        loader.AppendActorList(
-            entity_bucket,
-            ArenaSchema::Player::StructName,
-            src->players(),
-            [](const ::arena_fb::Player* player) {
-                return player->unique_id() ? player->unique_id()->str() : std::string{};
-            });
-
-        loader.AppendActorList(
-            entity_bucket,
-            ArenaSchema::Projectile::StructName,
-            src->projectiles(),
-            [](const ::arena_fb::Projectile* projectile) {
-                return projectile->unique_id() ? projectile->unique_id()->str() : std::string{};
-            });
-
-        loader.AppendSingleEntity(
-            entity_bucket,
-            ArenaSchema::MatchState::StructName,
-            src->match_state(),
-            [](const ::arena_fb::MatchState*) { return std::string("match_001"); });
-    }
-};
+    };
 
 } // namespace VTX
 
@@ -334,8 +280,7 @@ public:
     explicit ArenaJsonDataSource(std::string filepath)
         : filepath_(std::move(filepath)) {}
 
-    bool Initialize() override
-    {
+    bool Initialize() override {
         std::ifstream ifs(filepath_);
         if (!ifs.is_open()) {
             VTX_ERROR("[JSON ] Could not open: {}", filepath_);
@@ -355,10 +300,7 @@ public:
         return true;
     }
 
-    bool GetNextFrame(
-        VTX::Frame& out_frame,
-        VTX::GameTime::GameTimeRegister& out_time) override
-    {
+    bool GetNextFrame(VTX::Frame& out_frame, VTX::GameTime::GameTimeRegister& out_time) override {
         if (cursor_ >= total_) {
             return false;
         }
@@ -366,7 +308,7 @@ public:
         const ArenaFrame& af = replay_.frames[cursor_++];
         out_frame = ArenaToVtx::MapFrame(af);
 
-        out_time = {af.game_time,std::nullopt, VTX::GameTime::EFilterType::OnlyIncreasing};
+        out_time = {af.game_time, std::nullopt, VTX::GameTime::EFilterType::OnlyIncreasing};
 
         return true;
     }
@@ -392,10 +334,10 @@ private:
 class ArenaProtoDataSource : public VTX::IFrameDataSource {
 public:
     ArenaProtoDataSource(std::string filepath, VTX::SchemaRegistry& schema)
-        : filepath_(std::move(filepath)), loader_(schema, false) {}
+        : filepath_(std::move(filepath))
+        , loader_(schema, false) {}
 
-    bool Initialize() override
-    {
+    bool Initialize() override {
         std::ifstream ifs(filepath_, std::ios::binary);
         if (!ifs.is_open()) {
             VTX_ERROR("[Proto] Could not open: {}", filepath_);
@@ -411,19 +353,16 @@ public:
         return true;
     }
 
-    bool GetNextFrame(
-        VTX::Frame& out_frame,
-        VTX::GameTime::GameTimeRegister& out_time) override
-    {
+    bool GetNextFrame(VTX::Frame& out_frame, VTX::GameTime::GameTimeRegister& out_time) override {
         if (cursor_ >= total_) {
             return false;
         }
 
         const auto& frame = replay_.frames(static_cast<int>(cursor_++));
-        out_frame = VTX::Frame{};
+        out_frame = VTX::Frame {};
         loader_.LoadFrame(frame, out_frame, "ArenaFrame");
 
-        out_time = {frame.game_time(),std::nullopt, VTX::GameTime::EFilterType::OnlyIncreasing};
+        out_time = {frame.game_time(), std::nullopt, VTX::GameTime::EFilterType::OnlyIncreasing};
 
         return true;
     }
@@ -449,10 +388,10 @@ private:
 class ArenaFbsDataSource : public VTX::IFrameDataSource {
 public:
     ArenaFbsDataSource(std::string filepath, const VTX::PropertyAddressCache& cache)
-        : filepath_(std::move(filepath)), loader_(cache, false) {}
+        : filepath_(std::move(filepath))
+        , loader_(cache, false) {}
 
-    bool Initialize() override
-    {
+    bool Initialize() override {
         std::ifstream ifs(filepath_, std::ios::binary | std::ios::ate);
         if (!ifs.is_open()) {
             VTX_ERROR("[FBS  ] Could not open: {}", filepath_);
@@ -475,19 +414,16 @@ public:
         return true;
     }
 
-    bool GetNextFrame(
-        VTX::Frame& out_frame,
-        VTX::GameTime::GameTimeRegister& out_time) override
-    {
+    bool GetNextFrame(VTX::Frame& out_frame, VTX::GameTime::GameTimeRegister& out_time) override {
         if (cursor_ >= total_) {
             return false;
         }
 
         const auto* frame = replay_->frames()->Get(static_cast<flatbuffers::uoffset_t>(cursor_++));
-        out_frame = VTX::Frame{};
+        out_frame = VTX::Frame {};
         loader_.LoadFrame(frame, out_frame, "ArenaFrame");
 
-        out_time = {frame->game_time(),std::nullopt, VTX::GameTime::EFilterType::OnlyIncreasing};
+        out_time = {frame->game_time(), std::nullopt, VTX::GameTime::EFilterType::OnlyIncreasing};
 
         return true;
     }
@@ -507,16 +443,10 @@ private:
 //  Pipeline driver -- initialise source, stream frames into the writer
 // ===================================================================
 
-using WriterFactoryFn =
-    std::unique_ptr<VTX::IVtxWriterFacade>(*)(const VTX::WriterFacadeConfig&);
+using WriterFactoryFn = std::unique_ptr<VTX::IVtxWriterFacade> (*)(const VTX::WriterFacadeConfig&);
 
-static bool RunPipeline(
-    VTX::IFrameDataSource& source,
-    const std::string& output_path,
-    const std::string& schema_path,
-    const std::string& uuid,
-    WriterFactoryFn factory)
-{
+static bool RunPipeline(VTX::IFrameDataSource& source, const std::string& output_path, const std::string& schema_path,
+                        const std::string& uuid, WriterFactoryFn factory) {
     if (!source.Initialize()) {
         VTX_ERROR("Data source Initialize() failed.");
         return false;
@@ -551,8 +481,7 @@ static bool RunPipeline(
     return true;
 }
 
-int main()
-{
+int main() {
     const std::string schema = "content/writer/arena/arena_schema.json";
     const std::string writer_dir = "content/writer/arena";
     const std::string reader_dir = "content/reader/arena";
@@ -568,30 +497,18 @@ int main()
 
     VTX_INFO("--- 1. JSON data source ---");
     ArenaJsonDataSource json_ds(writer_dir + "/arena_replay_data.json");
-    RunPipeline(
-        json_ds,
-        reader_dir + "/arena_from_json_ds.vtx",
-        schema,
-        "arena-adv-json-0001",
-        VTX::CreateFlatBuffersWriterFacade);
+    RunPipeline(json_ds, reader_dir + "/arena_from_json_ds.vtx", schema, "arena-adv-json-0001",
+                VTX::CreateFlatBuffersWriterFacade);
 
     VTX_INFO("--- 2. Protobuf data source ---");
     ArenaProtoDataSource proto_ds(writer_dir + "/arena_replay_data.proto.bin", arena_schema);
-    RunPipeline(
-        proto_ds,
-        reader_dir + "/arena_from_proto_ds.vtx",
-        schema,
-        "arena-adv-proto-0001",
-        VTX::CreateProtobuffWriterFacade);
+    RunPipeline(proto_ds, reader_dir + "/arena_from_proto_ds.vtx", schema, "arena-adv-proto-0001",
+                VTX::CreateProtobuffWriterFacade);
 
     VTX_INFO("--- 3. FlatBuffers data source ---");
     ArenaFbsDataSource fbs_ds(writer_dir + "/arena_replay_data.fbs.bin", arena_schema.GetPropertyCache());
-    RunPipeline(
-        fbs_ds,
-        reader_dir + "/arena_from_fbs_ds.vtx",
-        schema,
-        "arena-adv-fbs-0001",
-        VTX::CreateFlatBuffersWriterFacade);
+    RunPipeline(fbs_ds, reader_dir + "/arena_from_fbs_ds.vtx", schema, "arena-adv-fbs-0001",
+                VTX::CreateFlatBuffersWriterFacade);
 
     VTX_INFO("=== Complete ===");
     VTX_INFO("Outputs (content/reader/arena/):");

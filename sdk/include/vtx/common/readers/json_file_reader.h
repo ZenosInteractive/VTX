@@ -24,10 +24,8 @@ namespace VTX {
             json j;
             try {
                 file >> j;
-            }
-            catch (const json::parse_error& e) {
-                std::cerr << "[Error Parser] JSON malformed " << filepath
-                    << "\nDetalles: " << e.what() << std::endl;
+            } catch (const json::parse_error& e) {
+                std::cerr << "[Error Parser] JSON malformed " << filepath << "\nDetalles: " << e.what() << std::endl;
                 return std::nullopt;
             }
 
@@ -46,5 +44,5 @@ namespace VTX {
 
             return buffer.str();
         }
-    };
-}
+    }; // namespace JsonFileReader
+} // namespace VTX

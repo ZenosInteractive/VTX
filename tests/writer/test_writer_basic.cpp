@@ -10,35 +10,35 @@
 
 namespace {
 
-VTX::WriterFacadeConfig MakeConfig(const std::string& out_name, const std::string& uuid) {
-    VTX::WriterFacadeConfig cfg;
-    cfg.output_filepath  = VtxTest::OutputPath(out_name);
-    cfg.schema_json_path = VtxTest::FixturePath("test_schema.json");
-    cfg.replay_name      = "WriterBasicTest";
-    cfg.replay_uuid      = uuid;
-    cfg.default_fps      = 60.0f;
-    cfg.chunk_max_frames = 50;
-    cfg.use_compression  = true;
-    return cfg;
-}
+    VTX::WriterFacadeConfig MakeConfig(const std::string& out_name, const std::string& uuid) {
+        VTX::WriterFacadeConfig cfg;
+        cfg.output_filepath = VtxTest::OutputPath(out_name);
+        cfg.schema_json_path = VtxTest::FixturePath("test_schema.json");
+        cfg.replay_name = "WriterBasicTest";
+        cfg.replay_uuid = uuid;
+        cfg.default_fps = 60.0f;
+        cfg.chunk_max_frames = 50;
+        cfg.use_compression = true;
+        return cfg;
+    }
 
-VTX::Frame MakeOneEntityFrame() {
-    VTX::Frame f;
-    auto& bucket = f.CreateBucket("entity");
+    VTX::Frame MakeOneEntityFrame() {
+        VTX::Frame f;
+        auto& bucket = f.CreateBucket("entity");
 
-    VTX::PropertyContainer pc;
-    pc.entity_type_id = 0;  // Player
-    pc.string_properties = {"id_a", "Alpha"};
-    pc.int32_properties  = {1, 0, 0};                  // Team, Score, Deaths
-    pc.float_properties  = {100.0f, 50.0f};            // Health, Armor
-    pc.vector_properties = {VTX::Vector{0.0, 0.0, 0.0}, VTX::Vector{0.0, 0.0, 0.0}};
-    pc.quat_properties   = {VTX::Quat{0.0f, 0.0f, 0.0f, 1.0f}};
-    pc.bool_properties   = {true};
+        VTX::PropertyContainer pc;
+        pc.entity_type_id = 0; // Player
+        pc.string_properties = {"id_a", "Alpha"};
+        pc.int32_properties = {1, 0, 0};       // Team, Score, Deaths
+        pc.float_properties = {100.0f, 50.0f}; // Health, Armor
+        pc.vector_properties = {VTX::Vector {0.0, 0.0, 0.0}, VTX::Vector {0.0, 0.0, 0.0}};
+        pc.quat_properties = {VTX::Quat {0.0f, 0.0f, 0.0f, 1.0f}};
+        pc.bool_properties = {true};
 
-    bucket.unique_ids.push_back("id_a");
-    bucket.entities.push_back(std::move(pc));
-    return f;
-}
+        bucket.unique_ids.push_back("id_a");
+        bucket.entities.push_back(std::move(pc));
+        return f;
+    }
 
 } // namespace
 
@@ -48,7 +48,7 @@ TEST(WriterBasic, FlatBuffersFactoryProducesValidWriter) {
         auto writer = VTX::CreateFlatBuffersWriterFacade(cfg);
         ASSERT_TRUE(writer);
         writer->Stop();
-    }  // destructor releases any remaining file handles
+    } // destructor releases any remaining file handles
     EXPECT_TRUE(std::filesystem::exists(cfg.output_filepath));
     EXPECT_GT(std::filesystem::file_size(cfg.output_filepath), 0u);
 }
@@ -78,7 +78,7 @@ TEST(WriterBasic, RecordAndStopWritesNonEmptyFile) {
         }
         writer->Flush();
         writer->Stop();
-    }  // release writer so the file is fully closed before we inspect it
+    } // release writer so the file is fully closed before we inspect it
 
     ASSERT_TRUE(std::filesystem::exists(cfg.output_filepath));
     EXPECT_GT(std::filesystem::file_size(cfg.output_filepath), 100u);

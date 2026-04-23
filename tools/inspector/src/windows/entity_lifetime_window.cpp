@@ -10,79 +10,91 @@
 
 namespace {
 
-// Extracts bucket names from the ContextualSchema property_mapping JSON.
-// The schema stores bucket names in a "buckets" array — this is the
-// authoritative source, as Frame::bucket_map may not have string keys.
-std::vector<std::string> ExtractBucketNamesFromSchema(const std::string& property_mapping) {
-    std::vector<std::string> names;
-    if (property_mapping.empty()) return names;
+    // Extracts bucket names from the ContextualSchema property_mapping JSON.
+    // The schema stores bucket names in a "buckets" array — this is the
+    // authoritative source, as Frame::bucket_map may not have string keys.
+    std::vector<std::string> ExtractBucketNamesFromSchema(const std::string& property_mapping) {
+        std::vector<std::string> names;
+        if (property_mapping.empty())
+            return names;
 
-    const std::string key = "\"buckets\"";
-    size_t key_pos = property_mapping.find(key);
-    if (key_pos == std::string::npos) return names;
+        const std::string key = "\"buckets\"";
+        size_t key_pos = property_mapping.find(key);
+        if (key_pos == std::string::npos)
+            return names;
 
-    size_t open_bracket = property_mapping.find('[', key_pos + key.size());
-    if (open_bracket == std::string::npos) return names;
+        size_t open_bracket = property_mapping.find('[', key_pos + key.size());
+        if (open_bracket == std::string::npos)
+            return names;
 
-    bool in_string = false;
-    bool escaping = false;
-    std::string current;
-    for (size_t i = open_bracket + 1; i < property_mapping.size(); ++i) {
-        char c = property_mapping[i];
-        if (c == ']' && !in_string) break;
-        if (!in_string) {
-            if (c == '"') { in_string = true; current.clear(); }
-            continue;
+        bool in_string = false;
+        bool escaping = false;
+        std::string current;
+        for (size_t i = open_bracket + 1; i < property_mapping.size(); ++i) {
+            char c = property_mapping[i];
+            if (c == ']' && !in_string)
+                break;
+            if (!in_string) {
+                if (c == '"') {
+                    in_string = true;
+                    current.clear();
+                }
+                continue;
+            }
+            if (escaping) {
+                current.push_back(c);
+                escaping = false;
+                continue;
+            }
+            if (c == '\\') {
+                escaping = true;
+                continue;
+            }
+            if (c == '"') {
+                in_string = false;
+                if (!current.empty())
+                    names.push_back(current);
+                continue;
+            }
+            current.push_back(c);
         }
-        if (escaping) { current.push_back(c); escaping = false; continue; }
-        if (c == '\\') { escaping = true; continue; }
-        if (c == '"') {
-            in_string = false;
-            if (!current.empty()) names.push_back(current);
-            continue;
-        }
-        current.push_back(c);
+        return names;
     }
-    return names;
-}
 
-std::string ToLowerCopy(const std::string& value) {
-    std::string lower = value;
-    std::transform(lower.begin(), lower.end(), lower.begin(),
-        [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-    return lower;
-}
-
-bool ContainsCaseInsensitive(const std::string& text, const std::string& query_lower) {
-    if (query_lower.empty()) return true;
-    return ToLowerCopy(text).find(query_lower) != std::string::npos;
-}
-
-// Parses comma-separated UIDs from input, trimming whitespace.
-std::vector<std::string> ParseCommaSeparated(const char* input) {
-    std::vector<std::string> result;
-    std::istringstream stream(input);
-    std::string token;
-    while (std::getline(stream, token, ',')) {
-        // Trim whitespace
-        auto start = token.find_first_not_of(" \t");
-        auto end = token.find_last_not_of(" \t");
-        if (start != std::string::npos) {
-            result.push_back(token.substr(start, end - start + 1));
-        }
+    std::string ToLowerCopy(const std::string& value) {
+        std::string lower = value;
+        std::transform(lower.begin(), lower.end(), lower.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        return lower;
     }
-    return result;
-}
+
+    bool ContainsCaseInsensitive(const std::string& text, const std::string& query_lower) {
+        if (query_lower.empty())
+            return true;
+        return ToLowerCopy(text).find(query_lower) != std::string::npos;
+    }
+
+    // Parses comma-separated UIDs from input, trimming whitespace.
+    std::vector<std::string> ParseCommaSeparated(const char* input) {
+        std::vector<std::string> result;
+        std::istringstream stream(input);
+        std::string token;
+        while (std::getline(stream, token, ',')) {
+            // Trim whitespace
+            auto start = token.find_first_not_of(" \t");
+            auto end = token.find_last_not_of(" \t");
+            if (start != std::string::npos) {
+                result.push_back(token.substr(start, end - start + 1));
+            }
+        }
+        return result;
+    }
 
 } // namespace
 
-EntityLifeTimeWindow::EntityLifeTimeWindow(
-    std::shared_ptr<InspectorSession> session,
-    int instance_id)
+EntityLifeTimeWindow::EntityLifeTimeWindow(std::shared_ptr<InspectorSession> session, int instance_id)
     : ImGuiWindow("Entity LifeTime #" + std::to_string(instance_id), session)
-    , inspector_session_(std::move(session))
-{
-}
+    , inspector_session_(std::move(session)) {}
 
 void EntityLifeTimeWindow::PopulateBucketNames() {
     bucket_names_.clear();
@@ -94,9 +106,11 @@ void EntityLifeTimeWindow::PopulateBucketNames() {
     if (bucket_names_.empty()) {
         // Fallback: try to read bucket names from the current frame's bucket_map
         auto* reader = inspector_session_->GetReader();
-        if (!reader) return;
+        if (!reader)
+            return;
         const auto* frame = reader->GetFrame(inspector_session_->GetCurrentFrame());
-        if (!frame || frame->bucket_map.empty()) return;
+        if (!frame || frame->bucket_map.empty())
+            return;
         for (const auto& [name, idx] : frame->bucket_map) {
             bucket_names_.push_back(name);
         }
@@ -160,14 +174,15 @@ void EntityLifeTimeWindow::DrawConfigPanel() {
     }
 
     // UID filter
-    ImGui::InputTextWithHint("##UidFilter", "Filter by UniqueIDs (comma-separated, empty = all)",
-        uid_filter_input_, IM_ARRAYSIZE(uid_filter_input_));
+    ImGui::InputTextWithHint("##UidFilter", "Filter by UniqueIDs (comma-separated, empty = all)", uid_filter_input_,
+                             IM_ARRAYSIZE(uid_filter_input_));
 
     ImGui::Spacing();
 
     // Run button
     bool can_run = !bucket_names_.empty() && start_frame_ <= end_frame_;
-    if (!can_run) ImGui::BeginDisabled();
+    if (!can_run)
+        ImGui::BeginDisabled();
     if (ImGui::Button("Run Analysis", ImVec2(140.0f, 0.0f))) {
         VtxServices::AnalysisScanner::ScanConfig config;
         config.start_frame = start_frame_;
@@ -180,10 +195,10 @@ void EntityLifeTimeWindow::DrawConfigPanel() {
         auto cache = reader->GetPropertyAddressCache();
         auto footer = reader->GetFooter();
 
-        scanner_.Start(VtxServices::AnalysisScanner::ScanType::EntityLifeTime,
-            config, reader, cache, footer);
+        scanner_.Start(VtxServices::AnalysisScanner::ScanType::EntityLifeTime, config, reader, cache, footer);
     }
-    if (!can_run) ImGui::EndDisabled();
+    if (!can_run)
+        ImGui::EndDisabled();
 }
 
 void EntityLifeTimeWindow::DrawProgressPanel() {
@@ -209,12 +224,11 @@ void EntityLifeTimeWindow::DrawResultsPanel() {
 
     // Top bar: search + export + new scan
     ImGui::SetNextItemWidth(250.0f);
-    ImGui::InputTextWithHint("##SearchFilter", "Search results...",
-        search_filter_, IM_ARRAYSIZE(search_filter_));
+    ImGui::InputTextWithHint("##SearchFilter", "Search results...", search_filter_, IM_ARRAYSIZE(search_filter_));
     ImGui::SameLine();
     if (ImGui::Button("Export CSV")) {
         auto dest = pfd::save_file("Export Entity LifeTime CSV", "entity_lifetime.csv",
-            { "CSV Files (.csv)", "*.csv", "All Files", "*" });
+                                   {"CSV Files (.csv)", "*.csv", "All Files", "*"});
         if (!dest.result().empty()) {
             VtxServices::ExportEntityLifeTimeCsv(dest.result(), result);
         }
@@ -244,10 +258,9 @@ void EntityLifeTimeWindow::DrawResultsPanel() {
     }
 
     // Results table
-    constexpr ImGuiTableFlags table_flags =
-        ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
-        ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY |
-        ImGuiTableFlags_Sortable;
+    constexpr ImGuiTableFlags table_flags = ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
+                                            ImGuiTableFlags_Resizable | ImGuiTableFlags_ScrollY |
+                                            ImGuiTableFlags_Sortable;
 
     if (ImGui::BeginTable("##LifeTimeTable", 4, table_flags)) {
         ImGui::TableSetupScrollFreeze(0, 1);
@@ -266,11 +279,12 @@ void EntityLifeTimeWindow::DrawResultsPanel() {
 
             // Apply search filter across all columns
             if (!filter_query.empty()) {
-                bool matches = ContainsCaseInsensitive(entry.unique_id, filter_query)
-                    || ContainsCaseInsensitive(type_label, filter_query)
-                    || ContainsCaseInsensitive(frame_ranges, filter_query)
-                    || ContainsCaseInsensitive(time_ranges, filter_query);
-                if (!matches) continue;
+                bool matches = ContainsCaseInsensitive(entry.unique_id, filter_query) ||
+                               ContainsCaseInsensitive(type_label, filter_query) ||
+                               ContainsCaseInsensitive(frame_ranges, filter_query) ||
+                               ContainsCaseInsensitive(time_ranges, filter_query);
+                if (!matches)
+                    continue;
             }
 
             ImGui::TableNextRow();

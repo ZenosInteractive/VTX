@@ -19,16 +19,16 @@
 
 namespace {
 
-std::string FixturePath(const char* name) {
-    return std::string(VTX_BENCH_FIXTURES_DIR) + "/" + name;
-}
+    std::string FixturePath(const char* name) {
+        return std::string(VTX_BENCH_FIXTURES_DIR) + "/" + name;
+    }
 
-struct SilenceDebugLogsOnce {
-    SilenceDebugLogsOnce() { VTX::Logger::Instance().SetDebugEnabled(false); }
-};
-const SilenceDebugLogsOnce silence_differ_debug_logs_once{};
+    struct SilenceDebugLogsOnce {
+        SilenceDebugLogsOnce() { VTX::Logger::Instance().SetDebugEnabled(false); }
+    };
+    const SilenceDebugLogsOnce silence_differ_debug_logs_once {};
 
-}  // namespace
+} // namespace
 
 // Diff cost between two consecutive frames.  Opens the fixture once and the
 // differ once; the measured loop only does DiffRawFrames over sliding pairs.

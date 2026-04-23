@@ -11,26 +11,26 @@
 
 namespace {
 
-// Renders editable std::string via fixed temporary buffer for ImGui input APIs.
-bool InputTextString(const char* label, std::string& value, size_t min_buffer_size = 256, ImGuiInputTextFlags flags = 0) {
-    const size_t buffer_size = std::max(min_buffer_size, value.size() + 64);
-    std::vector<char> buffer(buffer_size, '\0');
-    std::snprintf(buffer.data(), buffer.size(), "%s", value.c_str());
+    // Renders editable std::string via fixed temporary buffer for ImGui input APIs.
+    bool InputTextString(const char* label, std::string& value, size_t min_buffer_size = 256,
+                         ImGuiInputTextFlags flags = 0) {
+        const size_t buffer_size = std::max(min_buffer_size, value.size() + 64);
+        std::vector<char> buffer(buffer_size, '\0');
+        std::snprintf(buffer.data(), buffer.size(), "%s", value.c_str());
 
-    if (!ImGui::InputText(label, buffer.data(), buffer.size(), flags)) {
-        return false;
+        if (!ImGui::InputText(label, buffer.data(), buffer.size(), flags)) {
+            return false;
+        }
+        value = buffer.data();
+        return true;
     }
-    value = buffer.data();
-    return true;
-}
 
 } // namespace
 
 // Constructs buckets/bone-mapping window bound to schema creator session.
 SchemaBucketsMappingWindow::SchemaBucketsMappingWindow(std::shared_ptr<SchemaCreatorSession> session)
     : ImGuiWindow("Buckets & Bone Mapping", session)
-    , schema_session_(std::move(session)) {
-}
+    , schema_session_(std::move(session)) {}
 
 // Renders window shell only while buckets/mapping panel visibility is enabled.
 void SchemaBucketsMappingWindow::OnRender() {
@@ -53,11 +53,9 @@ void SchemaBucketsMappingWindow::DrawContent() {
     auto& document = schema_session_->MutableDocument();
     ClampSelectionIndices();
 
-    if (ImGui::BeginTable(
-            "BucketsMappingRoot",
-            2,
-            ImGuiTableFlags_Resizable | ImGuiTableFlags_Borders | ImGuiTableFlags_SizingStretchProp,
-            ImVec2(-FLT_MIN, ImGui::GetContentRegionAvail().y))) {
+    if (ImGui::BeginTable("BucketsMappingRoot", 2,
+                          ImGuiTableFlags_Resizable | ImGuiTableFlags_Borders | ImGuiTableFlags_SizingStretchProp,
+                          ImVec2(-FLT_MIN, ImGui::GetContentRegionAvail().y))) {
         ImGui::TableSetupColumn("Buckets", ImGuiTableColumnFlags_WidthStretch, 0.42f);
         ImGui::TableSetupColumn("Bone Mapping", ImGuiTableColumnFlags_WidthStretch, 0.58f);
         ImGui::TableNextRow();
@@ -110,8 +108,8 @@ void SchemaBucketsMappingWindow::DrawContent() {
                 for (int i = 0; i < static_cast<int>(document.buckets.size()); ++i) {
                     const bool is_selected = selected_bucket_index_ == i;
                     const std::string label = document.buckets[i].empty()
-                        ? ("<unnamed bucket##" + std::to_string(i) + ">")
-                        : (document.buckets[i] + "##" + std::to_string(i));
+                                                  ? ("<unnamed bucket##" + std::to_string(i) + ">")
+                                                  : (document.buckets[i] + "##" + std::to_string(i));
                     if (ImGui::Selectable(label.c_str(), is_selected, ImGuiSelectableFlags_SpanAllColumns)) {
                         selected_bucket_index_ = i;
                     }
@@ -200,11 +198,10 @@ void SchemaBucketsMappingWindow::DrawContent() {
             ImGui::Separator();
             ImGui::Spacing();
 
-            if (ImGui::BeginTable(
-                    "BoneMappingTables",
-                    2,
-                    ImGuiTableFlags_Resizable | ImGuiTableFlags_Borders | ImGuiTableFlags_SizingStretchProp,
-                    ImVec2(-FLT_MIN, ImGui::GetContentRegionAvail().y))) {
+            if (ImGui::BeginTable("BoneMappingTables", 2,
+                                  ImGuiTableFlags_Resizable | ImGuiTableFlags_Borders |
+                                      ImGuiTableFlags_SizingStretchProp,
+                                  ImVec2(-FLT_MIN, ImGui::GetContentRegionAvail().y))) {
                 ImGui::TableSetupColumn("Models", ImGuiTableColumnFlags_WidthStretch, 0.45f);
                 ImGui::TableSetupColumn("Bones", ImGuiTableColumnFlags_WidthStretch, 0.55f);
                 ImGui::TableNextRow();
@@ -215,8 +212,8 @@ void SchemaBucketsMappingWindow::DrawContent() {
                         const auto& mapping = document.bone_mapping[i];
                         const bool is_selected = selected_model_index_ == i;
                         const std::string label = mapping.model_name.empty()
-                            ? ("<unnamed model##" + std::to_string(i) + ">")
-                            : (mapping.model_name + "##" + std::to_string(i));
+                                                      ? ("<unnamed model##" + std::to_string(i) + ">")
+                                                      : (mapping.model_name + "##" + std::to_string(i));
                         if (ImGui::Selectable(label.c_str(), is_selected, ImGuiSelectableFlags_SpanAllColumns)) {
                             selected_model_index_ = i;
                             selected_bone_index_ = document.bone_mapping[i].bones.empty() ? -1 : 0;
@@ -232,8 +229,8 @@ void SchemaBucketsMappingWindow::DrawContent() {
                         for (int i = 0; i < static_cast<int>(selected_mapping.bones.size()); ++i) {
                             const bool is_selected = selected_bone_index_ == i;
                             const std::string label = selected_mapping.bones[i].empty()
-                                ? ("<unnamed bone##" + std::to_string(i) + ">")
-                                : (selected_mapping.bones[i] + "##" + std::to_string(i));
+                                                          ? ("<unnamed bone##" + std::to_string(i) + ">")
+                                                          : (selected_mapping.bones[i] + "##" + std::to_string(i));
                             if (ImGui::Selectable(label.c_str(), is_selected, ImGuiSelectableFlags_SpanAllColumns)) {
                                 selected_bone_index_ = i;
                             }

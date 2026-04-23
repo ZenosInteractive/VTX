@@ -3,9 +3,7 @@
 #include <vector>
 
 VtxSessionBase::VtxSessionBase() {
-    logger_sink_id_ = VTX::Logger::Instance().AddSink([this](const VTX::Logger::Entry& entry) {
-        AppendLog(entry);
-    });
+    logger_sink_id_ = VTX::Logger::Instance().AddSink([this](const VTX::Logger::Entry& entry) { AppendLog(entry); });
 
     AddGuiInfoLog("Log sink connected to VTX::Logger.");
 }
@@ -67,12 +65,7 @@ std::vector<std::string> VtxSessionBase::GetRecentFilesSnapshot() const {
 void VtxSessionBase::AppendLog(const VTX::Logger::Entry& entry) {
     std::lock_guard<std::mutex> lock(logs_mutex_);
 
-    logs_.push_back(VtxLogEntry{
-        next_log_sequence_++,
-        entry.level,
-        entry.timestamp,
-        entry.message
-    });
+    logs_.push_back(VtxLogEntry {next_log_sequence_++, entry.level, entry.timestamp, entry.message});
 
     while (logs_.size() > kMaxLogEntries) {
         logs_.pop_front();

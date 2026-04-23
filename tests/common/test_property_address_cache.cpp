@@ -8,8 +8,10 @@
 #include "util/test_fixtures.h"
 
 namespace {
-    std::string SchemaPath() { return VtxTest::FixturePath("test_schema.json"); }
-}
+    std::string SchemaPath() {
+        return VtxTest::FixturePath("test_schema.json");
+    }
+} // namespace
 
 TEST(PropertyAddressCache, PopulatedAfterSchemaLoad) {
     VTX::SchemaRegistry schema;
@@ -41,10 +43,11 @@ TEST(PropertyAddressCache, PlayerPropertiesResolveToValidAddresses) {
     const auto& cache = schema.GetPropertyCache();
 
     const int32_t player_id = cache.name_to_id.at("Player");
-    const auto&   player    = cache.structs.at(player_id);
+    const auto& player = cache.structs.at(player_id);
     EXPECT_EQ(player.name, "Player");
 
-    for (const char* field : {"UniqueID","Name","Team","Health","Armor","Position","Rotation","Velocity","IsAlive","Score","Deaths"}) {
+    for (const char* field : {"UniqueID", "Name", "Team", "Health", "Armor", "Position", "Rotation", "Velocity",
+                              "IsAlive", "Score", "Deaths"}) {
         ASSERT_TRUE(player.properties.contains(field)) << field;
         const auto& addr = player.properties.at(field);
         EXPECT_TRUE(addr.IsValid()) << field;
@@ -57,17 +60,17 @@ TEST(PropertyAddressCache, PropertyOrderMatchesSchemaFieldOrder) {
     const auto& cache = schema.GetPropertyCache();
 
     const int32_t player_id = cache.name_to_id.at("Player");
-    const auto&   player    = cache.structs.at(player_id);
+    const auto& player = cache.structs.at(player_id);
     auto ordered = player.GetPropertiesInOrder();
     ASSERT_EQ(ordered.size(), 11u);
-    EXPECT_EQ(ordered[0].name,  "UniqueID");
+    EXPECT_EQ(ordered[0].name, "UniqueID");
     EXPECT_EQ(ordered[10].name, "Deaths");
 }
 
 TEST(PropertyAddressCache, MakeLookupKeyIsDeterministic) {
-    using VTX::MakePropertyLookupKey;
-    using VTX::FieldType;
     using VTX::FieldContainerType;
+    using VTX::FieldType;
+    using VTX::MakePropertyLookupKey;
     EXPECT_EQ(MakePropertyLookupKey(0, FieldType::Float, FieldContainerType::None),
               MakePropertyLookupKey(0, FieldType::Float, FieldContainerType::None));
     EXPECT_NE(MakePropertyLookupKey(0, FieldType::Float, FieldContainerType::None),

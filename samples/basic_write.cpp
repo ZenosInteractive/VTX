@@ -18,26 +18,21 @@
 
 #include <string>
 
-int main(int argc, char* argv[])
-{
-    const std::string schema_path = (argc > 1)
-        ? argv[1]
-        : "content/writer/arena/arena_schema.json";
-    const std::string output_path = (argc > 2)
-        ? argv[2]
-        : "sample_output.vtx";
+int main(int argc, char* argv[]) {
+    const std::string schema_path = (argc > 1) ? argv[1] : "content/writer/arena/arena_schema.json";
+    const std::string output_path = (argc > 2) ? argv[2] : "sample_output.vtx";
 
     const int frame_count = (argc > 3) ? std::max(1, std::atoi(argv[3])) : 100;
 
     // Configure the writer.
     VTX::WriterFacadeConfig config;
-    config.output_filepath  = output_path;
+    config.output_filepath = output_path;
     config.schema_json_path = schema_path;
-    config.replay_name      = "BasicWriteSample";
-    config.replay_uuid      = "sample-0001";
-    config.default_fps      = 60.0f;
+    config.replay_name = "BasicWriteSample";
+    config.replay_uuid = "sample-0001";
+    config.default_fps = 60.0f;
     config.chunk_max_frames = 500;
-    config.use_compression  = true;
+    config.use_compression = true;
 
     // Create a FlatBuffers writer (use CreateProtobuffWriterFacade for Protobuf).
     auto writer = VTX::CreateFlatBuffersWriterFacade(config);
@@ -61,9 +56,9 @@ int main(int argc, char* argv[])
 
         // Add a transform property (index 0).
         VTX::Transform t;
-        t.translation = { static_cast<double>(i), 0.0, 50.0 };
-        t.rotation    = { 0.0f, 0.0f, 0.0f, 1.0f };
-        t.scale       = { 1.0, 1.0, 1.0 };
+        t.translation = {static_cast<double>(i), 0.0, 50.0};
+        t.rotation = {0.0f, 0.0f, 0.0f, 1.0f};
+        t.scale = {1.0, 1.0, 1.0};
         entity.transform_properties.push_back(t);
 
         bucket.unique_ids.push_back("player_" + std::to_string(i % 10));
@@ -79,6 +74,6 @@ int main(int argc, char* argv[])
     writer->Flush();
     writer->Stop();
 
-    VTX_INFO("Wrote {} frames to {}",frame_count, output_path);
+    VTX_INFO("Wrote {} frames to {}", frame_count, output_path);
     return 0;
 }

@@ -7,63 +7,55 @@
 namespace VtxDiff {
 
 
-class FlatBuffersDifferFacade final : public IVtxDifferFacade {
-public:
-    FlatBuffersDifferFacade() {
-        factory_.InitFromMemory(nullptr, 0, "fbsvtx.Bucket");
-    }
+    class FlatBuffersDifferFacade final : public IVtxDifferFacade {
+    public:
+        FlatBuffersDifferFacade() { factory_.InitFromMemory(nullptr, 0, "fbsvtx.Bucket"); }
 
-    PatchIndex DiffRawFrames(
-        std::span<const std::byte> frame_a,
-        std::span<const std::byte> frame_b,
-        const DiffOptions& options) override
-    {
-        auto node_a = factory_.CreateRoot(frame_a);
-        auto node_b = factory_.CreateRoot(frame_b);
-        if (!node_a || !node_b) return {};
+        PatchIndex DiffRawFrames(std::span<const std::byte> frame_a, std::span<const std::byte> frame_b,
+                                 const DiffOptions& options) override {
+            auto node_a = factory_.CreateRoot(frame_a);
+            auto node_b = factory_.CreateRoot(frame_b);
+            if (!node_a || !node_b)
+                return {};
 
-        DefaultTreeDiff<Flatbuffers::FlatbufferViewAdapter> engine;
-        return engine.ComputeDiff(*node_a, *node_b, options);
-    }
+            DefaultTreeDiff<Flatbuffers::FlatbufferViewAdapter> engine;
+            return engine.ComputeDiff(*node_a, *node_b, options);
+        }
 
-private:
-    Flatbuffers::FbViewFactory factory_;
-};
+    private:
+        Flatbuffers::FbViewFactory factory_;
+    };
 
 
-class ProtobufDifferFacade final : public IVtxDifferFacade {
-public:
-    ProtobufDifferFacade() {
-        factory_.InitFromMemory(nullptr, 0, "cppvtx.Bucket");
-    }
+    class ProtobufDifferFacade final : public IVtxDifferFacade {
+    public:
+        ProtobufDifferFacade() { factory_.InitFromMemory(nullptr, 0, "cppvtx.Bucket"); }
 
-    PatchIndex DiffRawFrames(
-        std::span<const std::byte> frame_a,
-        std::span<const std::byte> frame_b,
-        const DiffOptions& options) override
-    {
-        auto node_a = factory_.CreateRoot(frame_a);
-        auto node_b = factory_.CreateRoot(frame_b);
-        if (!node_a || !node_b) return {};
+        PatchIndex DiffRawFrames(std::span<const std::byte> frame_a, std::span<const std::byte> frame_b,
+                                 const DiffOptions& options) override {
+            auto node_a = factory_.CreateRoot(frame_a);
+            auto node_b = factory_.CreateRoot(frame_b);
+            if (!node_a || !node_b)
+                return {};
 
-        DefaultTreeDiff<Protobuf::FProtobufViewAdapter> engine;
-        return engine.ComputeDiff(*node_a, *node_b, options);
-    }
+            DefaultTreeDiff<Protobuf::FProtobufViewAdapter> engine;
+            return engine.ComputeDiff(*node_a, *node_b, options);
+        }
 
-private:
-    Protobuf::PbViewFactory factory_;
-};
+    private:
+        Protobuf::PbViewFactory factory_;
+    };
 
 
-std::unique_ptr<IVtxDifferFacade> CreateDifferFacade(VTX::VtxFormat format) {
-    switch (format) {
+    std::unique_ptr<IVtxDifferFacade> CreateDifferFacade(VTX::VtxFormat format) {
+        switch (format) {
         case VTX::VtxFormat::FlatBuffers:
             return std::make_unique<FlatBuffersDifferFacade>();
         case VTX::VtxFormat::Protobuf:
             return std::make_unique<ProtobufDifferFacade>();
         default:
             return nullptr;
+        }
     }
-}
 
 } // namespace VtxDiff

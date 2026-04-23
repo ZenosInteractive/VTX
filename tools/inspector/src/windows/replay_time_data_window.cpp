@@ -11,32 +11,32 @@
 
 namespace {
 
-enum class TimeDataTabKind : int {
-    GameTimestamps = 0,
-    UtcTimestamps = 1,
-    Gaps = 2,
-    Segments = 3,
-};
+    enum class TimeDataTabKind : int {
+        GameTimestamps = 0,
+        UtcTimestamps = 1,
+        Gaps = 2,
+        Segments = 3,
+    };
 
-struct TimeDataTabInteraction {
-    bool should_seek = false;
-    int seek_frame = 0;
-    bool should_switch_to_game_timestamp_tab = false;
-    bool consumed_scroll_request = false;
-    bool tab_opened = false;
-};
+    struct TimeDataTabInteraction {
+        bool should_seek = false;
+        int seek_frame = 0;
+        bool should_switch_to_game_timestamp_tab = false;
+        bool consumed_scroll_request = false;
+        bool tab_opened = false;
+    };
 
-// Clamps requested frame index into currently loaded replay frame bounds.
-int ClampFrameIndex(int frame_index, int total_frames) {
-    if (total_frames <= 0) {
-        return 0;
+    // Clamps requested frame index into currently loaded replay frame bounds.
+    int ClampFrameIndex(int frame_index, int total_frames) {
+        if (total_frames <= 0) {
+            return 0;
+        }
+        return std::clamp(frame_index, 0, total_frames - 1);
     }
-    return std::clamp(frame_index, 0, total_frames - 1);
-}
 
-// Resolves clicked row to target replay frame index for each time-data tab.
-int ResolveFrameForTabRow(TimeDataTabKind tab_kind, int row, const VTX::ReplayTimeData& time_data) {
-    switch (tab_kind) {
+    // Resolves clicked row to target replay frame index for each time-data tab.
+    int ResolveFrameForTabRow(TimeDataTabKind tab_kind, int row, const VTX::ReplayTimeData& time_data) {
+        switch (tab_kind) {
         case TimeDataTabKind::GameTimestamps:
         case TimeDataTabKind::UtcTimestamps:
             return row;
@@ -50,111 +50,98 @@ int ResolveFrameForTabRow(TimeDataTabKind tab_kind, int row, const VTX::ReplayTi
                 return time_data.segments[static_cast<size_t>(row)];
             }
             return row;
-    }
-    return row;
-}
-
-// Draws a styled bullet entry for the time-data guide panel.
-void DrawTimeDataGuideItem(const char* title, const char* description) {
-    ImGui::Bullet();
-    ImGui::SameLine();
-    ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.35f, 0.72f, 0.96f, 1.0f));
-    ImGui::TextUnformatted(title);
-    ImGui::PopStyleColor();
-    ImGui::Indent();
-    ImGui::PushTextWrapPos();
-    ImGui::TextWrapped("%s", description);
-    ImGui::PopTextWrapPos();
-    ImGui::Unindent();
-    ImGui::Spacing();
-}
-
-// Draws a quick reference for the meaning and usage of each replay time stream.
-void DrawTimeDataGuide() {
-    ImGui::SetNextItemOpen(false, ImGuiCond_FirstUseEver);
-    if (ImGui::CollapsingHeader("Time Data Guide")) {
-        if (ImGui::BeginChild("TimeDataGuideBody", ImVec2(0.0f, 220.0f), true)) {
-            ImGui::Spacing();
-            DrawTimeDataGuideItem(
-                "GameTime",
-                "The internal timer captured directly from the source. It can increase, decrease, or jump "
-                "forward/backward depending on the source, and it can be affected by engine time dilation. "
-                "Use this mainly for display purposes. When the source supports it, it can also help binary "
-                "search to locate the correct frame.");
-            DrawTimeDataGuideItem(
-                "UTC Timestamp",
-                "The time each frame was captured. This is guaranteed to be monotonically increasing. If the "
-                "source start UTC is known, timestamps begin from that value; otherwise they begin when data "
-                "is written to VTX. Use this for internal playback timing by making values relative to the "
-                "first entry.");
-            DrawTimeDataGuideItem(
-                "Gaps",
-                "Frame numbers where a gap is detected in UTC timestamps. This can represent pauses, frame "
-                "loss, or similar capture interruptions.");
-            DrawTimeDataGuideItem(
-                "Segments",
-                "Frame numbers where game-time direction changes, or where developers manually mark important "
-                "parts of the data. This is commonly used to indicate new rounds.");
         }
-        ImGui::EndChild();
+        return row;
     }
-}
 
-// Renders one time-data tab as a clickable table and emits navigation actions.
-TimeDataTabInteraction DrawTimeDataTab(
-    const VtxServices::ReplayTimeTabViewModel& tab,
-    const char* table_id,
-    TimeDataTabKind tab_kind,
-    const VTX::ReplayTimeData& time_data,
-    int total_frames,
-    int highlighted_frame_row,
-    bool should_scroll_to_highlighted_game_row,
-    bool should_select_tab) {
-    TimeDataTabInteraction interaction;
-    const ImGuiTabItemFlags tab_flags = should_select_tab ? ImGuiTabItemFlags_SetSelected : ImGuiTabItemFlags_None;
-    if (ImGui::BeginTabItem(tab.label.c_str(), nullptr, tab_flags)) {
-        interaction.tab_opened = true;
-        if (tab.values.empty()) {
-            ImGui::TextDisabled("No entries.");
-        } else if (ImGui::BeginTable(
-                       table_id,
-                       2,
-                       ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg |
-                           ImGuiTableFlags_ScrollY | ImGuiTableFlags_Resizable,
-                       ImVec2(0, ImGui::GetContentRegionAvail().y))) {
-            ImGui::TableSetupScrollFreeze(0, 1);
-            ImGui::TableSetupColumn("Index", ImGuiTableColumnFlags_WidthFixed, 80.0f);
-            ImGui::TableSetupColumn(tab.value_column_label.c_str(), ImGuiTableColumnFlags_WidthStretch);
-            ImGui::TableHeadersRow();
+    // Draws a styled bullet entry for the time-data guide panel.
+    void DrawTimeDataGuideItem(const char* title, const char* description) {
+        ImGui::Bullet();
+        ImGui::SameLine();
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.35f, 0.72f, 0.96f, 1.0f));
+        ImGui::TextUnformatted(title);
+        ImGui::PopStyleColor();
+        ImGui::Indent();
+        ImGui::PushTextWrapPos();
+        ImGui::TextWrapped("%s", description);
+        ImGui::PopTextWrapPos();
+        ImGui::Unindent();
+        ImGui::Spacing();
+    }
 
-            const bool render_all_rows_for_scroll =
-                should_scroll_to_highlighted_game_row && tab_kind == TimeDataTabKind::GameTimestamps;
+    // Draws a quick reference for the meaning and usage of each replay time stream.
+    void DrawTimeDataGuide() {
+        ImGui::SetNextItemOpen(false, ImGuiCond_FirstUseEver);
+        if (ImGui::CollapsingHeader("Time Data Guide")) {
+            if (ImGui::BeginChild("TimeDataGuideBody", ImVec2(0.0f, 220.0f), true)) {
+                ImGui::Spacing();
+                DrawTimeDataGuideItem(
+                    "GameTime",
+                    "The internal timer captured directly from the source. It can increase, decrease, or jump "
+                    "forward/backward depending on the source, and it can be affected by engine time dilation. "
+                    "Use this mainly for display purposes. When the source supports it, it can also help binary "
+                    "search to locate the correct frame.");
+                DrawTimeDataGuideItem(
+                    "UTC Timestamp",
+                    "The time each frame was captured. This is guaranteed to be monotonically increasing. If the "
+                    "source start UTC is known, timestamps begin from that value; otherwise they begin when data "
+                    "is written to VTX. Use this for internal playback timing by making values relative to the "
+                    "first entry.");
+                DrawTimeDataGuideItem(
+                    "Gaps", "Frame numbers where a gap is detected in UTC timestamps. This can represent pauses, frame "
+                            "loss, or similar capture interruptions.");
+                DrawTimeDataGuideItem(
+                    "Segments",
+                    "Frame numbers where game-time direction changes, or where developers manually mark important "
+                    "parts of the data. This is commonly used to indicate new rounds.");
+            }
+            ImGui::EndChild();
+        }
+    }
 
-            auto render_row = [&](int row) {
+    // Renders one time-data tab as a clickable table and emits navigation actions.
+    TimeDataTabInteraction DrawTimeDataTab(const VtxServices::ReplayTimeTabViewModel& tab, const char* table_id,
+                                           TimeDataTabKind tab_kind, const VTX::ReplayTimeData& time_data,
+                                           int total_frames, int highlighted_frame_row,
+                                           bool should_scroll_to_highlighted_game_row, bool should_select_tab) {
+        TimeDataTabInteraction interaction;
+        const ImGuiTabItemFlags tab_flags = should_select_tab ? ImGuiTabItemFlags_SetSelected : ImGuiTabItemFlags_None;
+        if (ImGui::BeginTabItem(tab.label.c_str(), nullptr, tab_flags)) {
+            interaction.tab_opened = true;
+            if (tab.values.empty()) {
+                ImGui::TextDisabled("No entries.");
+            } else if (ImGui::BeginTable(table_id, 2,
+                                         ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY |
+                                             ImGuiTableFlags_Resizable,
+                                         ImVec2(0, ImGui::GetContentRegionAvail().y))) {
+                ImGui::TableSetupScrollFreeze(0, 1);
+                ImGui::TableSetupColumn("Index", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+                ImGui::TableSetupColumn(tab.value_column_label.c_str(), ImGuiTableColumnFlags_WidthStretch);
+                ImGui::TableHeadersRow();
+
+                const bool render_all_rows_for_scroll =
+                    should_scroll_to_highlighted_game_row && tab_kind == TimeDataTabKind::GameTimestamps;
+
+                auto render_row = [&](int row) {
                     const bool is_highlighted_timeline_row =
-                        (tab_kind == TimeDataTabKind::GameTimestamps ||
-                         tab_kind == TimeDataTabKind::UtcTimestamps) &&
+                        (tab_kind == TimeDataTabKind::GameTimestamps || tab_kind == TimeDataTabKind::UtcTimestamps) &&
                         (row == highlighted_frame_row);
 
                     ImGui::TableNextRow();
                     ImGui::TableSetColumnIndex(0);
-                    const std::string selectable_id =
-                        "[" + std::to_string(row) + "]##TimeDataRow_" +
-                        std::to_string(static_cast<int>(tab_kind)) + "_" + std::to_string(row);
-                    if (ImGui::Selectable(
-                            selectable_id.c_str(),
-                            is_highlighted_timeline_row,
-                            ImGuiSelectableFlags_SpanAllColumns)) {
+                    const std::string selectable_id = "[" + std::to_string(row) + "]##TimeDataRow_" +
+                                                      std::to_string(static_cast<int>(tab_kind)) + "_" +
+                                                      std::to_string(row);
+                    if (ImGui::Selectable(selectable_id.c_str(), is_highlighted_timeline_row,
+                                          ImGuiSelectableFlags_SpanAllColumns)) {
                         interaction.should_seek = true;
-                        interaction.seek_frame = ClampFrameIndex(
-                            ResolveFrameForTabRow(tab_kind, row, time_data),
-                            total_frames);
+                        interaction.seek_frame =
+                            ClampFrameIndex(ResolveFrameForTabRow(tab_kind, row, time_data), total_frames);
                         interaction.should_switch_to_game_timestamp_tab =
                             tab_kind == TimeDataTabKind::Gaps || tab_kind == TimeDataTabKind::Segments;
                     }
 
-                    if ((tab_kind == TimeDataTabKind::GameTimestamps) &&
-                        is_highlighted_timeline_row &&
+                    if ((tab_kind == TimeDataTabKind::GameTimestamps) && is_highlighted_timeline_row &&
                         should_scroll_to_highlighted_game_row) {
                         ImGui::SetScrollHereY(0.25f);
                         interaction.consumed_scroll_request = true;
@@ -162,34 +149,33 @@ TimeDataTabInteraction DrawTimeDataTab(
 
                     ImGui::TableSetColumnIndex(1);
                     ImGui::Text("%s", tab.values[row].c_str());
-            };
+                };
 
-            if (render_all_rows_for_scroll) {
-                for (int row = 0; row < static_cast<int>(tab.values.size()); ++row) {
-                    render_row(row);
-                }
-            } else {
-                ImGuiListClipper clipper;
-                clipper.Begin(static_cast<int>(tab.values.size()));
-                while (clipper.Step()) {
-                    for (int row = clipper.DisplayStart; row < clipper.DisplayEnd; ++row) {
+                if (render_all_rows_for_scroll) {
+                    for (int row = 0; row < static_cast<int>(tab.values.size()); ++row) {
                         render_row(row);
                     }
+                } else {
+                    ImGuiListClipper clipper;
+                    clipper.Begin(static_cast<int>(tab.values.size()));
+                    while (clipper.Step()) {
+                        for (int row = clipper.DisplayStart; row < clipper.DisplayEnd; ++row) {
+                            render_row(row);
+                        }
+                    }
                 }
+                ImGui::EndTable();
             }
-            ImGui::EndTable();
+            ImGui::EndTabItem();
         }
-        ImGui::EndTabItem();
+        return interaction;
     }
-    return interaction;
-}
 
 } // namespace
 
 ReplayTimeDataWindow::ReplayTimeDataWindow(std::shared_ptr<InspectorSession> session)
     : ImGuiWindow(VtxGuiNames::ReplayTimeDataWindow, session)
-    , inspector_session_(std::move(session)) {
-}
+    , inspector_session_(std::move(session)) {}
 
 void ReplayTimeDataWindow::DrawContent() {
     if (!inspector_session_->HasLoadedReplay()) {
@@ -199,10 +185,9 @@ void ReplayTimeDataWindow::DrawContent() {
 
     // Step 1: Build the view model with the current display format.
     TimeDisplayFormat current_format = inspector_session_->GetTimeDisplayFormat();
-    
-    auto view_model = VtxServices::FooterSummaryService::BuildReplayTimeViewModel(
-        inspector_session_->GetFooter().times,
-        current_format);
+
+    auto view_model = VtxServices::FooterSummaryService::BuildReplayTimeViewModel(inspector_session_->GetFooter().times,
+                                                                                  current_format);
 
     // Step 2: Draw summary and format controls.
     if (ImGui::BeginTable("TimeDataSummary", 2, ImGuiTableFlags_BordersInnerH | ImGuiTableFlags_RowBg)) {
@@ -228,9 +213,8 @@ void ReplayTimeDataWindow::DrawContent() {
     if (ImGui::Checkbox("Formatted", &formatted)) {
         current_format = formatted ? TimeDisplayFormat::Formatted : TimeDisplayFormat::Ticks;
         inspector_session_->SetTimeDisplayFormat(current_format);
-        view_model = VtxServices::FooterSummaryService::BuildReplayTimeViewModel(
-            inspector_session_->GetFooter().times,
-            current_format);
+        view_model = VtxServices::FooterSummaryService::BuildReplayTimeViewModel(inspector_session_->GetFooter().times,
+                                                                                 current_format);
     }
     ImGui::Separator();
 
@@ -257,14 +241,8 @@ void ReplayTimeDataWindow::DrawContent() {
                 pending_scroll_to_highlighted_game_row_ && (tab_kind == TimeDataTabKind::GameTimestamps);
 
             const TimeDataTabInteraction interaction = DrawTimeDataTab(
-                view_model.tabs[i],
-                kTableIds[i],
-                tab_kind,
-                time_data,
-                total_frames,
-                highlighted_game_timestamp_row_,
-                should_scroll_to_highlighted_game_row,
-                should_select_tab);
+                view_model.tabs[i], kTableIds[i], tab_kind, time_data, total_frames, highlighted_game_timestamp_row_,
+                should_scroll_to_highlighted_game_row, should_select_tab);
 
             if (interaction.should_seek) {
                 inspector_session_->SetCurrentFrame(interaction.seek_frame);

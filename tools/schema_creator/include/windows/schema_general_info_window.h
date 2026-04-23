@@ -20,4 +20,3 @@ protected:
 private:
     std::shared_ptr<SchemaCreatorSession> schema_session_;
 };
-

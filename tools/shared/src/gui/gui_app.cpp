@@ -1,8 +1,8 @@
 #include "GLFW/glfw3.h"
 
 #if defined(_WIN32)
-    #define GLFW_EXPOSE_NATIVE_WIN32
-    #include "GLFW/glfw3native.h"
+#define GLFW_EXPOSE_NATIVE_WIN32
+#include "GLFW/glfw3native.h"
 #endif
 
 #include <GL/gl.h>
@@ -12,78 +12,70 @@
 #include "gui/gui_scale_controller.h"
 
 namespace {
-constexpr float kClearColor = 0.1f;
+    constexpr float kClearColor = 0.1f;
 
 #if defined(_WIN32)
-using SetProcessDpiAwarenessContextFn = BOOL(WINAPI*)(HANDLE);
-using SetProcessDpiAwarenessFn = HRESULT(WINAPI*)(int);
+    using SetProcessDpiAwarenessContextFn = BOOL(WINAPI*)(HANDLE);
+    using SetProcessDpiAwarenessFn = HRESULT(WINAPI*)(int);
 
-// Opts the process into per-monitor DPI awareness before GLFW creates any windows.
-void ApplyProcessDpiAwareness() {
-    const HMODULE user32_module = GetModuleHandleW(L"user32.dll");
-    if (user32_module != nullptr) {
-        const auto set_context = reinterpret_cast<SetProcessDpiAwarenessContextFn>(
-            GetProcAddress(user32_module, "SetProcessDpiAwarenessContext"));
-        if (set_context != nullptr && set_context(reinterpret_cast<HANDLE>(-4))) {
-            return;
+    // Opts the process into per-monitor DPI awareness before GLFW creates any windows.
+    void ApplyProcessDpiAwareness() {
+        const HMODULE user32_module = GetModuleHandleW(L"user32.dll");
+        if (user32_module != nullptr) {
+            const auto set_context = reinterpret_cast<SetProcessDpiAwarenessContextFn>(
+                GetProcAddress(user32_module, "SetProcessDpiAwarenessContext"));
+            if (set_context != nullptr && set_context(reinterpret_cast<HANDLE>(-4))) {
+                return;
+            }
         }
-    }
 
-    const HMODULE shcore_module = LoadLibraryW(L"shcore.dll");
-    if (shcore_module != nullptr) {
-        const auto set_awareness = reinterpret_cast<SetProcessDpiAwarenessFn>(
-            GetProcAddress(shcore_module, "SetProcessDpiAwareness"));
-        if (set_awareness != nullptr && SUCCEEDED(set_awareness(2))) {
+        const HMODULE shcore_module = LoadLibraryW(L"shcore.dll");
+        if (shcore_module != nullptr) {
+            const auto set_awareness =
+                reinterpret_cast<SetProcessDpiAwarenessFn>(GetProcAddress(shcore_module, "SetProcessDpiAwareness"));
+            if (set_awareness != nullptr && SUCCEEDED(set_awareness(2))) {
+                FreeLibrary(shcore_module);
+                return;
+            }
             FreeLibrary(shcore_module);
+        }
+
+        SetProcessDPIAware();
+    }
+
+    void ApplyWindowIcon(GLFWwindow* window) {
+        if (!window) {
             return;
         }
-        FreeLibrary(shcore_module);
-    }
 
-    SetProcessDPIAware();
-}
+        const HMODULE module_handle = GetModuleHandleW(nullptr);
+        if (!module_handle) {
+            return;
+        }
 
-void ApplyWindowIcon(GLFWwindow* window) {
-    if (!window) {
-        return;
-    }
+        const auto* resource_name = L"IDI_ICON1";
+        HICON large_icon =
+            static_cast<HICON>(LoadImageW(module_handle, resource_name, IMAGE_ICON, GetSystemMetrics(SM_CXICON),
+                                          GetSystemMetrics(SM_CYICON), LR_DEFAULTCOLOR | LR_SHARED));
+        HICON small_icon =
+            static_cast<HICON>(LoadImageW(module_handle, resource_name, IMAGE_ICON, GetSystemMetrics(SM_CXSMICON),
+                                          GetSystemMetrics(SM_CYSMICON), LR_DEFAULTCOLOR | LR_SHARED));
+        if (!large_icon && !small_icon) {
+            return;
+        }
 
-    const HMODULE module_handle = GetModuleHandleW(nullptr);
-    if (!module_handle) {
-        return;
-    }
+        HWND hwnd = glfwGetWin32Window(window);
+        if (!hwnd) {
+            return;
+        }
 
-    const auto* resource_name = L"IDI_ICON1";
-    HICON large_icon = static_cast<HICON>(LoadImageW(
-        module_handle,
-        resource_name,
-        IMAGE_ICON,
-        GetSystemMetrics(SM_CXICON),
-        GetSystemMetrics(SM_CYICON),
-        LR_DEFAULTCOLOR | LR_SHARED));
-    HICON small_icon = static_cast<HICON>(LoadImageW(
-        module_handle,
-        resource_name,
-        IMAGE_ICON,
-        GetSystemMetrics(SM_CXSMICON),
-        GetSystemMetrics(SM_CYSMICON),
-        LR_DEFAULTCOLOR | LR_SHARED));
-    if (!large_icon && !small_icon) {
-        return;
+        if (large_icon) {
+            SendMessageW(hwnd, WM_SETICON, ICON_BIG, reinterpret_cast<LPARAM>(large_icon));
+        }
+        if (small_icon) {
+            SendMessageW(hwnd, WM_SETICON, ICON_SMALL, reinterpret_cast<LPARAM>(small_icon));
+        }
     }
-
-    HWND hwnd = glfwGetWin32Window(window);
-    if (!hwnd) {
-        return;
-    }
-
-    if (large_icon) {
-        SendMessageW(hwnd, WM_SETICON, ICON_BIG, reinterpret_cast<LPARAM>(large_icon));
-    }
-    if (small_icon) {
-        SendMessageW(hwnd, WM_SETICON, ICON_SMALL, reinterpret_cast<LPARAM>(small_icon));
-    }
-}
 #endif
 
 } // namespace
@@ -104,8 +96,7 @@ GuiApplication::~GuiApplication() {
 }
 
 // Legacy hook kept for compatibility with older monolithic startup flow.
-void GuiApplication::CreateMainLayout()
-{
+void GuiApplication::CreateMainLayout() {
     // No-op in shared build. Each tool sets up its own layout via AddLayer().
 }
 
@@ -163,8 +154,7 @@ void GuiApplication::AddLayer(std::shared_ptr<IGuiLayer> layer) {
 }
 
 // Reports whether app window has been closed or destroyed.
-bool GuiApplication::ShouldClose() const
-{
+bool GuiApplication::ShouldClose() const {
     return window_ == nullptr || glfwWindowShouldClose(window_) != 0;
 }
 

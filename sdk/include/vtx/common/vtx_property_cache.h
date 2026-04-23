@@ -5,14 +5,14 @@
 #include <string_view>
 #include <vector>
 #include "vtx/common/vtx_types.h"
-#include  "vtx/common/readers/schema_reader/game_schema_types.h"
-namespace VTX
-{
+#include "vtx/common/readers/schema_reader/game_schema_types.h"
+namespace VTX {
 
-    constexpr uint64_t MakePropertyLookupKey(int32_t index, VTX::FieldType type_id, VTX::FieldContainerType container_type) {
+    constexpr uint64_t MakePropertyLookupKey(int32_t index, VTX::FieldType type_id,
+                                             VTX::FieldContainerType container_type) {
         return (static_cast<uint64_t>(static_cast<uint32_t>(index)) << 32) |
-            (static_cast<uint64_t>(static_cast<uint8_t>(type_id)) << 16) |
-            static_cast<uint64_t>(static_cast<uint8_t>(container_type));
+               (static_cast<uint64_t>(static_cast<uint8_t>(type_id)) << 16) |
+               static_cast<uint64_t>(static_cast<uint8_t>(container_type));
     }
 
     /**
@@ -21,18 +21,29 @@ namespace VTX
      */
     template <typename T>
     constexpr VTX::FieldType GetExpectedFieldType() {
-        if constexpr (std::same_as<T, bool>) return VTX::FieldType::Bool;
-        else if constexpr (std::same_as<T, int32_t>) return VTX::FieldType::Int32;
-        else if constexpr (std::same_as<T, int64_t>) return VTX::FieldType::Int64;
-        else if constexpr (std::same_as<T, float>) return VTX::FieldType::Float;
-        else if constexpr (std::same_as<T, double>) return VTX::FieldType::Double;
-        else if constexpr (std::same_as<T, std::string>) return VTX::FieldType::String;
-        else if constexpr (std::same_as<T, VTX::Vector>) return VTX::FieldType::Vector;
-        else if constexpr (std::same_as<T, VTX::Quat>) return VTX::FieldType::Quat;
-        else if constexpr (std::same_as<T, VTX::Transform>) return VTX::FieldType::Transform;
-        else if constexpr (std::same_as<T, VTX::FloatRange>) return VTX::FieldType::FloatRange;
+        if constexpr (std::same_as<T, bool>)
+            return VTX::FieldType::Bool;
+        else if constexpr (std::same_as<T, int32_t>)
+            return VTX::FieldType::Int32;
+        else if constexpr (std::same_as<T, int64_t>)
+            return VTX::FieldType::Int64;
+        else if constexpr (std::same_as<T, float>)
+            return VTX::FieldType::Float;
+        else if constexpr (std::same_as<T, double>)
+            return VTX::FieldType::Double;
+        else if constexpr (std::same_as<T, std::string>)
+            return VTX::FieldType::String;
+        else if constexpr (std::same_as<T, VTX::Vector>)
+            return VTX::FieldType::Vector;
+        else if constexpr (std::same_as<T, VTX::Quat>)
+            return VTX::FieldType::Quat;
+        else if constexpr (std::same_as<T, VTX::Transform>)
+            return VTX::FieldType::Transform;
+        else if constexpr (std::same_as<T, VTX::FloatRange>)
+            return VTX::FieldType::FloatRange;
         // else if constexpr (std::same_as<T, VTX::PropertyContainer>) return VTX::FieldType::Struct;
-        else return VTX::FieldType::None; 
+        else
+            return VTX::FieldType::None;
     }
 
     /**
@@ -43,11 +54,9 @@ namespace VTX
     struct PropertyKey {
         int32_t index = -1;
         bool IsValid() const { return index > -1; }
-        bool operator==(const PropertyKey& other) const {
-            return index == other.index;
-        }
+        bool operator==(const PropertyKey& other) const { return index == other.index; }
     };
-    
+
     /**
      * @brief Represents the metadata of a property in the schema.
      * Now includes the type (and optionally array flag) for safety validation.
@@ -55,7 +64,8 @@ namespace VTX
     struct PropertyAddress {
         int32_t index = -1;                            ///< Index in the SoA vector or FlatArray offset list.
         VTX::FieldType type_id = VTX::FieldType::None; ///< Stored to validate the type at runtime.
-        VTX::FieldContainerType container_type = VTX::FieldContainerType::None; ///< Full container metadata from schema.
+        VTX::FieldContainerType container_type =
+            VTX::FieldContainerType::None; ///< Full container metadata from schema.
         std::string child_type_name;
         bool IsValid() const { return index > -1; }
     };
@@ -82,7 +92,7 @@ namespace VTX
                 for (const auto& property_name : property_order) {
                     const auto it = properties.find(property_name);
                     if (it != properties.end()) {
-                        ordered_properties.push_back(OrderedPropertyView{
+                        ordered_properties.push_back(OrderedPropertyView {
                             .name = it->first,
                             .address = &it->second,
                         });
@@ -93,7 +103,7 @@ namespace VTX
 
             ordered_properties.reserve(properties.size());
             for (const auto& [property_name, property_address] : properties) {
-                ordered_properties.push_back(OrderedPropertyView{
+                ordered_properties.push_back(OrderedPropertyView {
                     .name = property_name,
                     .address = &property_address,
                 });
@@ -111,20 +121,16 @@ namespace VTX
         // Value: The schema cache containing its specific properties
         std::unordered_map<int32_t, StructSchemaCache> structs;
         std::unordered_map<std::string, int32_t> name_to_id;
-        void Clear()
-        {
+        void Clear() {
             structs.clear();
             name_to_id.clear();
         }
     };
-}
+} // namespace VTX
 
-namespace std
-{
+namespace std {
     template <typename T>
     struct hash<VTX::PropertyKey<T>> {
-        size_t operator()(const VTX::PropertyKey<T>& key) const noexcept {
-            return std::hash<int32_t>()(key.index);
-        }
+        size_t operator()(const VTX::PropertyKey<T>& key) const noexcept { return std::hash<int32_t>()(key.index); }
     };
-}
+} // namespace std

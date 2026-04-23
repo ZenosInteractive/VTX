@@ -12,7 +12,8 @@ namespace VtxDiff {
     public:
         virtual ~IVtxDifferFacade() = default;
 
-        virtual PatchIndex DiffRawFrames(std::span<const std::byte> frame_a,std::span<const std::byte> frame_b,const DiffOptions& options = {}) = 0;
+        virtual PatchIndex DiffRawFrames(std::span<const std::byte> frame_a, std::span<const std::byte> frame_b,
+                                         const DiffOptions& options = {}) = 0;
     };
 
     // Returns nullptr only if format is Unknown.

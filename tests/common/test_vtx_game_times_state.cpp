@@ -7,19 +7,20 @@
 #include <gtest/gtest.h>
 #include "vtx/common/vtx_types.h"
 
-using VTX::GameTime::VTXGameTimes;
-using VTX::GameTime::GameTimeRegister;
 using VTX::GameTime::EFilterType;
+using VTX::GameTime::GameTimeRegister;
+using VTX::GameTime::VTXGameTimes;
 
 namespace {
 
-GameTimeRegister MakeReg(float game_time, int64_t utc = -1) {
-    GameTimeRegister r;
-    r.game_time = game_time;
-    if (utc >= 0) r.created_utc_time = utc;
-    r.FrameFilterType = EFilterType::OnlyIncreasing;
-    return r;
-}
+    GameTimeRegister MakeReg(float game_time, int64_t utc = -1) {
+        GameTimeRegister r;
+        r.game_time = game_time;
+        if (utc >= 0)
+            r.created_utc_time = utc;
+        r.FrameFilterType = EFilterType::OnlyIncreasing;
+        return r;
+    }
 
 } // namespace
 
@@ -38,7 +39,7 @@ TEST(VTXGameTimesState, RollbackWithoutPriorSnapshotIsSafe) {
     ASSERT_TRUE(t.AddTimeRegistry(MakeReg(0.1f)));
     t.ResolveGameTimes(2);
 
-    t.Rollback();  // no snapshot -- must not crash
+    t.Rollback(); // no snapshot -- must not crash
     SUCCEED();
 
     // After Rollback with no snapshot, we must still be able to Clear safely.
@@ -102,7 +103,7 @@ TEST(VTXGameTimesState, ClearThenReuseReturnsToEmptyState) {
 
     t.Clear();
     EXPECT_TRUE(t.IsEmpty());
-    EXPECT_EQ(t.StartUtc(), 0);   // regression for the 2026-04-17 fix
+    EXPECT_EQ(t.StartUtc(), 0); // regression for the 2026-04-17 fix
 
     // Fresh state must accept the same data again, including the first frame
     // being t=0 without triggering the monotonicity filter.

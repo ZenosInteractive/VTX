@@ -11,4 +11,4 @@ namespace VTX {
         virtual size_t GetExpectedTotalFrames() const = 0;
     };
 
-}
+} // namespace VTX

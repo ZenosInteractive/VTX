@@ -34,4 +34,3 @@ private:
     std::string pending_model_name_;
     std::string pending_bone_name_;
 };
-

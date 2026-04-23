@@ -19,20 +19,15 @@
 #include "vtx/common/vtx_types.h"
 
 namespace VTX {
-    
-    
+
+
     /**
      * @class SchemaRegistry
      * @brief Singleton-like registry that holds all loaded structure definitions.
      */
     class SchemaRegistry {
     public:
-        enum class ELoadMethod: uint32_t
-        {
-            LoadToBuffer = 0,
-            LoadToSchema,
-            Both
-        };
+        enum class ELoadMethod : uint32_t { LoadToBuffer = 0, LoadToSchema, Both };
         /**
          * @brief Default constructor. Initializes the registry as valid.
          */
@@ -44,7 +39,7 @@ namespace VTX {
          * @return true If loading and parsing were successful.
          * @return false If the file could not be opened or parsed.
          */
-        bool LoadFromJson(const std::string& json_path,ELoadMethod = ELoadMethod::Both);
+        bool LoadFromJson(const std::string& json_path, ELoadMethod = ELoadMethod::Both);
 
         /**
          * @brief
@@ -53,7 +48,7 @@ namespace VTX {
          * @return
          */
         bool LoadFromRawString(const std::string& raw_json);
-        
+
         /**
          * @brief Retrieves the numeric index for a specific field within a struct.
          * @param structName The name of the structure (e.g., "PlayerState").
@@ -81,28 +76,26 @@ namespace VTX {
          * @return 
          */
         const VTX::SchemaField* GetField(const std::string& struct_name, const std::string& field_name) const;
-        
+
         /**
          * @brief Retrieves the unique integer ID for a structure (matches the generated Enum).
          * @param name The name of the structure.
          * @return int32_t The TypeId, or -1 if the struct is not registered.
          */
         int32_t GetStructTypeId(const std::string& name) const;
-        
+
         /**/
-        std::string GetContentAsString() const{return json_content_;}
-        
-        const VTX::PropertyAddressCache& GetPropertyCache() const
-        {
-            return property_cache_;
-        }
+        std::string GetContentAsString() const { return json_content_; }
+
+        const VTX::PropertyAddressCache& GetPropertyCache() const { return property_cache_; }
+
     private:
         std::string json_content_;
         std::unordered_map<std::string, SchemaStruct> structs_; ///< Storage map: Struct Name -> Definition.
         std::unordered_map<std::string, int32_t> struct_type_ids_;
         VTX::PropertyAddressCache property_cache_;
-        int32_t current_type_id_=0;
-        bool b_is_valid_;///< Internal validity flag.
+        int32_t current_type_id_ = 0;
+        bool b_is_valid_; ///< Internal validity flag.
     };
-            
+
 } // namespace VTX

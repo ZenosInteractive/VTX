@@ -8,7 +8,7 @@ namespace cppvtx {
     class PropertyContainer;
     class Bucket;
     class Frame;
-}
+} // namespace cppvtx
 
 namespace VTX {
     namespace Serialization {
@@ -19,5 +19,5 @@ namespace VTX {
         void FromProto(const cppvtx::PropertyContainer& proto, VTX::PropertyContainer& out);
         void FromProto(const cppvtx::Bucket& proto, VTX::Bucket& out);
         void FromProto(const cppvtx::Frame& proto, VTX::Frame& out);
-    }
-}
+    } // namespace Serialization
+} // namespace VTX

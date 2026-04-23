@@ -13,53 +13,53 @@
 #include <sstream>
 
 namespace {
-constexpr float kMinEffectiveScale = 0.75f;
-constexpr float kMaxEffectiveScale = 4.00f;
-constexpr float kMinScaleAdjustment = 0.75f;
-constexpr float kMaxScaleAdjustment = 2.00f;
-constexpr float kScaleEpsilon = 0.01f;
-constexpr char kSettingsFileName[] = "gui_settings.ini";
-constexpr char kScaleKey[] = "scale_adjustment";
-constexpr char kAutoValue[] = "auto";
+    constexpr float kMinEffectiveScale = 0.75f;
+    constexpr float kMaxEffectiveScale = 4.00f;
+    constexpr float kMinScaleAdjustment = 0.75f;
+    constexpr float kMaxScaleAdjustment = 2.00f;
+    constexpr float kScaleEpsilon = 0.01f;
+    constexpr char kSettingsFileName[] = "gui_settings.ini";
+    constexpr char kScaleKey[] = "scale_adjustment";
+    constexpr char kAutoValue[] = "auto";
 
-// Returns a stable LOCALAPPDATA-backed settings path for shared GUI preferences.
-std::filesystem::path BuildSettingsPath() {
+    // Returns a stable LOCALAPPDATA-backed settings path for shared GUI preferences.
+    std::filesystem::path BuildSettingsPath() {
 #if defined(_WIN32)
-    char* local_app_data = nullptr;
-    size_t size = 0;
-    if (_dupenv_s(&local_app_data, &size, "LOCALAPPDATA") == 0 && local_app_data != nullptr) {
-        std::filesystem::path path = std::filesystem::path(local_app_data) / "VTX" / kSettingsFileName;
-        free(local_app_data);
-        return path;
-    }
+        char* local_app_data = nullptr;
+        size_t size = 0;
+        if (_dupenv_s(&local_app_data, &size, "LOCALAPPDATA") == 0 && local_app_data != nullptr) {
+            std::filesystem::path path = std::filesystem::path(local_app_data) / "VTX" / kSettingsFileName;
+            free(local_app_data);
+            return path;
+        }
 #endif
-    return std::filesystem::current_path() / kSettingsFileName;
-}
-
-// Formats float values consistently for INI persistence.
-std::string FormatScaleValue(float value) {
-    std::ostringstream stream;
-    stream.setf(std::ios::fixed, std::ios::floatfield);
-    stream.precision(2);
-    stream << value;
-    return stream.str();
-}
-
-// Chooses a single scale factor from GLFW's platform-provided content scale pair.
-float ResolveContentScale(float x_scale, float y_scale) {
-    const float resolved = std::max(x_scale, y_scale);
-    if (resolved <= 0.0f) {
-        return 1.0f;
+        return std::filesystem::current_path() / kSettingsFileName;
     }
-    return resolved;
-}
+
+    // Formats float values consistently for INI persistence.
+    std::string FormatScaleValue(float value) {
+        std::ostringstream stream;
+        stream.setf(std::ios::fixed, std::ios::floatfield);
+        stream.precision(2);
+        stream << value;
+        return stream.str();
+    }
+
+    // Chooses a single scale factor from GLFW's platform-provided content scale pair.
+    float ResolveContentScale(float x_scale, float y_scale) {
+        const float resolved = std::max(x_scale, y_scale);
+        if (resolved <= 0.0f) {
+            return 1.0f;
+        }
+        return resolved;
+    }
 
 } // namespace
 
 // Seeds scale state from persisted per-tool preferences.
 GuiScaleController::GuiScaleController(std::string tool_id)
-    : tool_id_(std::move(tool_id)),
-      settings_path_(BuildSettingsPath()) {
+    : tool_id_(std::move(tool_id))
+    , settings_path_(BuildSettingsPath()) {
     LoadSettings();
 }
 
@@ -198,7 +198,8 @@ void GuiScaleController::LoadSettings() {
     }
 
     char buffer[64] = {};
-    GetPrivateProfileStringA(tool_id_.c_str(), kScaleKey, kAutoValue, buffer, static_cast<DWORD>(std::size(buffer)), settings_path_.string().c_str());
+    GetPrivateProfileStringA(tool_id_.c_str(), kScaleKey, kAutoValue, buffer, static_cast<DWORD>(std::size(buffer)),
+                             settings_path_.string().c_str());
     const std::string stored_value = buffer;
     if (stored_value.empty() || stored_value == kAutoValue) {
         return;
@@ -218,9 +219,8 @@ void GuiScaleController::SaveSettings() const {
     std::error_code error;
     std::filesystem::create_directories(settings_path_.parent_path(), error);
 
-    const std::string value = scale_adjustment_.has_value()
-        ? FormatScaleValue(scale_adjustment_.value())
-        : std::string(kAutoValue);
+    const std::string value =
+        scale_adjustment_.has_value() ? FormatScaleValue(scale_adjustment_.value()) : std::string(kAutoValue);
     WritePrivateProfileStringA(tool_id_.c_str(), kScaleKey, value.c_str(), settings_path_.string().c_str());
 #endif
 }

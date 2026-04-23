@@ -57,10 +57,9 @@ namespace VTX {
     * @tparam ErrorPolicy Policy class determining how to handle missing keys or type mismatches (e.g., Strict, Lenient).
     * @tparam NamingPolicy Policy class determining how to transform key names before lookup (e.g., Exact, Lowercase).
     */
-    template <typename ErrorPolicy = VTX::StrictErrorPolicy, typename NamingPolicy = VTX::ExactNamingPolicy >
+    template <typename ErrorPolicy = VTX::StrictErrorPolicy, typename NamingPolicy = VTX::ExactNamingPolicy>
     class UniversalDeserializer {
     public:
-
         /**
          * @brief Main entry point to load data into a struct.
          * @details This function orchestrates the process:
@@ -72,9 +71,8 @@ namespace VTX {
          * @param adapter The adapter instance pointing to the current data node.
          * @return T A fully populated instance of the struct.
          */
-        template <typename T,typename FormatAdapter>
+        template <typename T, typename FormatAdapter>
         static T Load(const FormatAdapter& adapter) {
-
             // Compile-time check to ensure T has been registered with the reflection system.
             using RawAdapter = std::decay_t<FormatAdapter>;
             using Selector = MappingSelector<RawAdapter, T>;
@@ -82,22 +80,19 @@ namespace VTX {
 
             // Compile-time validation
             static_assert(Selector::HasMapping,
-                "ERROR: The target struct T does not have a registered Mapping for this format.");
+                          "ERROR: The target struct T does not have a registered Mapping for this format.");
 
-            T instance{};
+            T instance {};
 
             // Retrieve fields from the selected mapping (JsonMapping or FlatBufferMapping)
             constexpr auto mapping = Mapping::GetFields();
 
-            std::apply([&](auto&&... fields) {
-                (ProcessField(instance, adapter, fields), ...);
-                }, mapping);
+            std::apply([&](auto&&... fields) { (ProcessField(instance, adapter, fields), ...); }, mapping);
 
             return instance;
         }
 
     private:
-       
         /**
          * @brief Recursive function to deserialize a specific value based on its type.
          * @details Uses `if constexpr` to select the correct loading strategy (Vector, Map, Struct, or Primitive).
@@ -107,11 +102,11 @@ namespace VTX {
          * @param out[out] Reference to the variable where the value will be stored.
          */
         template <typename T, typename FormatAdapter>
-        static void DeserializeValue(const FormatAdapter& adapter, T& out)
-        {
+        static void DeserializeValue(const FormatAdapter& adapter, T& out) {
             //std::vector<T>
             if constexpr (is_vector_v<T>) {
-                if (!adapter.IsArray()) return;
+                if (!adapter.IsArray())
+                    return;
                 using ElementType = typename T::value_type;
                 for (size_t i = 0; i < adapter.Size(); ++i) {
                     ElementType element;
@@ -121,7 +116,8 @@ namespace VTX {
             }
             //std::map<K, V>
             else if constexpr (is_map_v<T>) {
-                if (!adapter.IsMap()) return;
+                if (!adapter.IsMap())
+                    return;
 
                 using KeyType = typename T::key_type;
                 using MappedType = typename T::mapped_type;
@@ -141,10 +137,9 @@ namespace VTX {
                 out = Load<T>(adapter);
             }
             //basic types (int, float, bool, std::string)
-            else 
-            {
-                static_assert(std::is_default_constructible_v<T>,
-                    "ERROR: T is not a basic type_max_indices or vector or map, or is not registered as StructMapping.");
+            else {
+                static_assert(std::is_default_constructible_v<T>, "ERROR: T is not a basic type_max_indices or vector "
+                                                                  "or map, or is not registered as StructMapping.");
 
                 out = adapter.template GetValue<T>();
             }
@@ -162,7 +157,6 @@ namespace VTX {
          */
         template <typename T, typename FormatAdapter, typename FieldType>
         static void ProcessField(T& instance, const FormatAdapter& adapter, const FieldType& field) {
-
             // Transform the code name to the data name (e.g. "MyVar" -> "my_var")
             std::string target_key = NamingPolicy::Transform(field.json_key);
 
@@ -174,6 +168,5 @@ namespace VTX {
 
             DeserializeValue(adapter.GetChild(target_key), instance.*(field.member_ptr));
         }
-
     };
-}
+} // namespace VTX

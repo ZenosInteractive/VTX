@@ -15,7 +15,7 @@ public:
     GuiManager& operator=(const GuiManager&) = delete;
 
     void AddLayer(std::shared_ptr<IGuiLayer> layer);
-    
+
     void BeginFrame();
     void Update();
     void Render();
