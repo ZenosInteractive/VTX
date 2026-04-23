@@ -10,7 +10,8 @@ class SchemaCreatorSession;
 
 class SchemaCreatorLayout : public IGuiLayer {
 public:
-    SchemaCreatorLayout(const std::shared_ptr<SchemaCreatorSession>& session, const std::shared_ptr<GuiScaleController>& scale_controller);
+    SchemaCreatorLayout(const std::shared_ptr<SchemaCreatorSession>& session,
+                        const std::shared_ptr<GuiScaleController>& scale_controller);
     ~SchemaCreatorLayout() override = default;
 
     void OnUpdate() override;

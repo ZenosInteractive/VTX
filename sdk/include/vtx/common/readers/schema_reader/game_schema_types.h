@@ -30,51 +30,48 @@ namespace VTX {
         Transform,
         FloatRange,
         Struct,
-        Enum 
+        Enum
     };
 
-    enum class FieldContainerType : uint8_t {
-        None = 0,
-        Array,
-        Map
-    };
-    
+    enum class FieldContainerType : uint8_t { None = 0, Array, Map };
+
     /**
     * @brief Metadata of a field.
     */
     struct SchemaMeta {
-        std::string type;      ///< Bucket type_max_indices string (e.g., "int32", "float", "vector","struct"). For debugging
-        std::string key_type;   ///< If this is a Map, the type_max_indices of the key (e.g., "string", "enum").
-        std::string category;  ///< Organizational category (e.g., "Stats", "Transform").
-        std::string display_name;   ///< Human-readable name for UI.
+        std::string type; ///< Bucket type_max_indices string (e.g., "int32", "float", "vector","struct"). For debugging
+        std::string key_type;      ///< If this is a Map, the type_max_indices of the key (e.g., "string", "enum").
+        std::string category;      ///< Organizational category (e.g., "Stats", "Transform").
+        std::string display_name;  ///< Human-readable name for UI.
         std::string tooltip;       ///< Description or help text.
-        std::string default_value;  ///< Default value as a string.
+        std::string default_value; ///< Default value as a string.
         int32_t version;           ///< Version of this specific field definition.
-        
+
         //internal only, schema resolver will generate this
-        int32_t fixed_array_dim;     ///< If > 0, indicates this field is a fixed-size array.
+        int32_t fixed_array_dim; ///< If > 0, indicates this field is a fixed-size array.
     };
 
     /**
      * @brief Definition of a single property/field within a struct.
      */
-    struct SchemaField { 
-        std::string name;      ///< Internal variable name (e.g., "health_current").
-        std::string struct_type;      ///< If type_max_indices is a struct, the struct name
-        FieldType type_id;      ///< Bucket type_max_indices string (e.g., "int32", "float", "vector"). For quick swithc-case
-        FieldType key_id;     
-        FieldContainerType container_type;      ///< Bucket type_max_indices `container(e.g., "struct", "array", ",a"). For quick swithc-case
-        SchemaMeta meta;       ///< Additional UI metadata.
-        
+    struct SchemaField {
+        std::string name;        ///< Internal variable name (e.g., "health_current").
+        std::string struct_type; ///< If type_max_indices is a struct, the struct name
+        FieldType type_id; ///< Bucket type_max_indices string (e.g., "int32", "float", "vector"). For quick swithc-case
+        FieldType key_id;
+        FieldContainerType
+            container_type; ///< Bucket type_max_indices `container(e.g., "struct", "array", ",a"). For quick swithc-case
+        SchemaMeta meta;    ///< Additional UI metadata.
+
         //internal only, schema resolver will generate this
-        int32_t index;         ///< The index in the generic PropertyContainer arrays.
+        int32_t index; ///< The index in the generic PropertyContainer arrays.
     };
 
     /**
     * @brief Definition of a complex structure (like a Class or Struct in C++).
     */
     struct SchemaStruct {
-        std::string struct_name; ///< Name of the structure.
+        std::string struct_name;         ///< Name of the structure.
         std::vector<SchemaField> fields; ///< List of fields contained in this structure.
 
         /** * @brief Max indices required for each type in this struct.
@@ -95,6 +92,6 @@ namespace VTX {
             return result;
         }
     };
-    
+
 
 } // namespace VTX

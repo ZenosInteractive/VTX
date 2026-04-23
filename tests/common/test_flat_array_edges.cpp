@@ -71,7 +71,7 @@ TEST(FlatArrayEdges, InsertSubArrayAtSizeEqualsAppend) {
     FlatArray<int> a, b;
     a.AppendSubArray({1, 2});
     a.AppendSubArray({3});
-    a.AppendSubArray({4, 5, 6});          // append via AppendSubArray
+    a.AppendSubArray({4, 5, 6}); // append via AppendSubArray
 
     b.AppendSubArray({1, 2});
     b.AppendSubArray({3});
@@ -142,7 +142,7 @@ TEST(FlatArrayEdges, EraseLastRemainingSubArray) {
 
     EXPECT_EQ(arr.SubArrayCount(), 0u);
     EXPECT_EQ(arr.TotalElementCount(), 0u);
-    EXPECT_TRUE(arr.GetSubArray(0).empty());  // OOB -> empty silently
+    EXPECT_TRUE(arr.GetSubArray(0).empty()); // OOB -> empty silently
 }
 
 TEST(FlatArrayEdges, EraseRangeZeroLengthIsNoOp) {
@@ -156,7 +156,9 @@ TEST(FlatArrayEdges, EraseRangeZeroLengthIsNoOp) {
 
     auto sub = arr.GetSubArray(0);
     ASSERT_EQ(sub.size(), 5u);
-    EXPECT_EQ(sub[0], 1);  EXPECT_EQ(sub[2], 3);  EXPECT_EQ(sub[4], 5);
+    EXPECT_EQ(sub[0], 1);
+    EXPECT_EQ(sub[2], 3);
+    EXPECT_EQ(sub[4], 5);
 }
 
 // ---------------------------------------------------------------------------
@@ -168,13 +170,14 @@ TEST(FlatArrayEdges, InsertAtEndEqualsPushBack) {
     a.AppendSubArray({10, 20, 30});
     b.AppendSubArray({10, 20, 30});
 
-    ASSERT_TRUE(a.Insert(0, a.GetSubArray(0).size(), 99));   // Insert at end
-    ASSERT_TRUE(b.PushBack(0, 99));                           // PushBack
+    ASSERT_TRUE(a.Insert(0, a.GetSubArray(0).size(), 99)); // Insert at end
+    ASSERT_TRUE(b.PushBack(0, 99));                        // PushBack
 
     auto sa = a.GetSubArray(0);
     auto sb = b.GetSubArray(0);
     ASSERT_EQ(sa.size(), sb.size());
-    for (size_t i = 0; i < sa.size(); ++i) EXPECT_EQ(sa[i], sb[i]);
+    for (size_t i = 0; i < sa.size(); ++i)
+        EXPECT_EQ(sa[i], sb[i]);
 }
 
 // ---------------------------------------------------------------------------
@@ -183,8 +186,8 @@ TEST(FlatArrayEdges, InsertAtEndEqualsPushBack) {
 
 TEST(FlatArrayEdges, DoubleCreateEmptyThenPushBackOnLast) {
     FlatArray<int> arr;
-    arr.CreateEmptySubArray();  // sub 0
-    arr.CreateEmptySubArray();  // sub 1
+    arr.CreateEmptySubArray(); // sub 0
+    arr.CreateEmptySubArray(); // sub 1
     ASSERT_TRUE(arr.PushBack(1, 42));
 
     EXPECT_EQ(arr.SubArrayCount(), 2u);
@@ -204,12 +207,10 @@ TEST(FlatArrayEdges, ReplaceSubArrayWithLargerSpanContainingMoves) {
     arr.AppendSubArray({std::string("alpha"), std::string("beta")});
     arr.AppendSubArray({std::string("gamma")});
 
-    const std::vector<std::string> replacement = {
-        std::string(128, 'x'),              // large string (no SSO)
-        std::string("short"),
-        std::string(""),                    // empty
-        std::string(64, 'y')
-    };
+    const std::vector<std::string> replacement = {std::string(128, 'x'), // large string (no SSO)
+                                                  std::string("short"),
+                                                  std::string(""), // empty
+                                                  std::string(64, 'y')};
     ASSERT_TRUE(arr.ReplaceSubArray(0, std::span<const std::string>(replacement)));
 
     ASSERT_EQ(arr.GetSubArray(0).size(), 4u);
@@ -225,13 +226,8 @@ TEST(FlatArrayEdges, OpsOnStringFlatArrayAcrossSsoBoundary) {
     // SSO (small string optimization) typically crosses around 15-22 chars.
     // Mix short and long strings in the same sub-array, then erase/insert.
     FlatArray<std::string> arr;
-    arr.AppendSubArray({
-        std::string("a"),
-        std::string(""),
-        std::string("short-ish"),
-        std::string(100, 'A'),
-        std::string(1, 'Z')
-    });
+    arr.AppendSubArray(
+        {std::string("a"), std::string(""), std::string("short-ish"), std::string(100, 'A'), std::string(1, 'Z')});
 
     // Delete the middle (long) element.
     ASSERT_TRUE(arr.Erase(0, 3));
@@ -263,7 +259,7 @@ TEST(FlatArrayEdges, FlatBoolArrayIsUint8Based_Regression) {
                   "FlatBoolArray must remain FlatArray<uint8_t> for SoA safety");
 
     VTX::FlatBoolArray arr;
-    arr.AppendSubArray({uint8_t{1}, uint8_t{0}, uint8_t{1}});
+    arr.AppendSubArray({uint8_t {1}, uint8_t {0}, uint8_t {1}});
     ASSERT_EQ(arr.GetSubArray(0).size(), 3u);
     EXPECT_EQ(arr.GetSubArray(0)[0], 1);
     EXPECT_EQ(arr.GetSubArray(0)[1], 0);

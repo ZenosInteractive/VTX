@@ -11,38 +11,35 @@
 
 namespace {
 
-std::string ToLowerCopy(const std::string& value) {
-    std::string lower = value;
-    std::transform(
-        lower.begin(),
-        lower.end(),
-        lower.begin(),
-        [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-    return lower;
-}
-
-bool ContainsCaseInsensitive(const std::string& text, const std::string& query_lower) {
-    if (query_lower.empty()) {
-        return true;
-    }
-    return ToLowerCopy(text).find(query_lower) != std::string::npos;
-}
-
-bool EntityMatchesFilter(const VtxServices::EntityListItem& entity, const std::string& query_lower) {
-    if (query_lower.empty()) {
-        return true;
+    std::string ToLowerCopy(const std::string& value) {
+        std::string lower = value;
+        std::transform(lower.begin(), lower.end(), lower.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        return lower;
     }
 
-    if (ContainsCaseInsensitive(entity.entity_id, query_lower)) {
-        return true;
+    bool ContainsCaseInsensitive(const std::string& text, const std::string& query_lower) {
+        if (query_lower.empty()) {
+            return true;
+        }
+        return ToLowerCopy(text).find(query_lower) != std::string::npos;
     }
 
-    if (ContainsCaseInsensitive(entity.entity_type_name, query_lower)) {
-        return true;
-    }
+    bool EntityMatchesFilter(const VtxServices::EntityListItem& entity, const std::string& query_lower) {
+        if (query_lower.empty()) {
+            return true;
+        }
 
-    return ContainsCaseInsensitive("type " + std::to_string(entity.entity_type_id), query_lower);
-}
+        if (ContainsCaseInsensitive(entity.entity_id, query_lower)) {
+            return true;
+        }
+
+        if (ContainsCaseInsensitive(entity.entity_type_name, query_lower)) {
+            return true;
+        }
+
+        return ContainsCaseInsensitive("type " + std::to_string(entity.entity_type_id), query_lower);
+    }
 
 } // namespace
 
@@ -59,17 +56,14 @@ void BucketsWindow::DrawContent() {
 
     auto& state = inspector_session_->MutableEntityInspectorState();
     const auto screen = VtxServices::EntityInspectorViewService::BuildScreen(
-        reader,
-        inspector_session_->HasLoadedReplay(),
-        inspector_session_->IsScrubbingTimeline(),
-        inspector_session_->GetCurrentFrame(),
-        state);
+        reader, inspector_session_->HasLoadedReplay(), inspector_session_->IsScrubbingTimeline(),
+        inspector_session_->GetCurrentFrame(), state);
     state = screen.state;
 
     if (screen.view_model.is_loading) {
         const ImVec4 color = screen.view_model.status_tone == VtxServices::EntityStatusTone::Warning
-            ? ImVec4(1.0f, 0.8f, 0.0f, 1.0f)
-            : ImVec4(1.0f, 0.4f, 0.4f, 1.0f);
+                                 ? ImVec4(1.0f, 0.8f, 0.0f, 1.0f)
+                                 : ImVec4(1.0f, 0.4f, 0.4f, 1.0f);
         ImGui::TextColored(color, "%s", screen.view_model.status_message.c_str());
         if (!screen.view_model.stale_frame_message.empty()) {
             ImGui::SameLine();
@@ -105,11 +99,8 @@ void BucketsWindow::DrawEntityListPanel(const VtxServices::EntityInspectorViewMo
     bool& show_schema_names = inspector_session_->MutableShowSchemaNames();
     ImGui::Checkbox("Show Schema Names", &show_schema_names);
     ImGui::SetNextItemWidth(-1.0f);
-    ImGui::InputTextWithHint(
-        "##EntityFilter",
-        "Filter by UniqueID or Type...",
-        entity_filter_,
-        IM_ARRAYSIZE(entity_filter_));
+    ImGui::InputTextWithHint("##EntityFilter", "Filter by UniqueID or Type...", entity_filter_,
+                             IM_ARRAYSIZE(entity_filter_));
     ImGui::Separator();
 
     const std::string filter_query = ToLowerCopy(entity_filter_);
@@ -128,11 +119,8 @@ void BucketsWindow::DrawEntityListPanel(const VtxServices::EntityInspectorViewMo
         }
         has_visible_entities = true;
 
-        if (ImGui::TreeNodeEx(
-                bucket_view.id.c_str(),
-                ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen,
-                "%s",
-                bucket_view.label.c_str())) {
+        if (ImGui::TreeNodeEx(bucket_view.id.c_str(), ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_DefaultOpen, "%s",
+                              bucket_view.label.c_str())) {
             for (const size_t i : visible_indices) {
                 const auto& entity = bucket_view.entities[i];
                 ImGuiTreeNodeFlags node_flags = ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
@@ -142,18 +130,16 @@ void BucketsWindow::DrawEntityListPanel(const VtxServices::EntityInspectorViewMo
 
                 const std::string node_id = bucket_view.id + "_entity_" + std::to_string(i);
                 const std::string type_label = show_schema_names && !entity.entity_type_name.empty()
-                    ? entity.entity_type_name
-                    : "Type " + std::to_string(entity.entity_type_id);
-                const std::string display_label = "Entity " + std::to_string(i) +
-                    " (UniqueID: " + entity.entity_id + ") - " + type_label;
+                                                   ? entity.entity_type_name
+                                                   : "Type " + std::to_string(entity.entity_type_id);
+                const std::string display_label =
+                    "Entity " + std::to_string(i) + " (UniqueID: " + entity.entity_id + ") - " + type_label;
 
                 ImGui::TreeNodeEx(node_id.c_str(), node_flags, "%s", display_label.c_str());
                 if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()) {
                     auto& state = inspector_session_->MutableEntityInspectorState();
-                    state = VtxServices::EntityInspectorViewService::SelectEntity(
-                        state,
-                        bucket_view.bucket_index,
-                        entity.entity_id);
+                    state = VtxServices::EntityInspectorViewService::SelectEntity(state, bucket_view.bucket_index,
+                                                                                  entity.entity_id);
                     ImGui::SetWindowFocus(VtxGuiNames::EntityDetailsWindow);
                 }
             }

@@ -11,111 +11,108 @@
 
 namespace {
 
-// Converts selected type token to default meta text token.
-std::string BuildMetaTypeToken(const std::string& type_id) {
-    if (type_id.empty()) {
-        return "";
-    }
-
-    std::string out = type_id;
-    std::transform(out.begin(), out.end(), out.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-    if (out == "none") {
-        return "";
-    }
-    return out;
-}
-
-// Renders editable string using temporary buffer sized for ImGui input widget.
-bool InputTextString(const char* label, std::string& value, size_t min_buffer_size = 256, ImGuiInputTextFlags flags = 0) {
-    const size_t buffer_size = std::max(min_buffer_size, value.size() + 64);
-    std::vector<char> buffer(buffer_size, '\0');
-    std::snprintf(buffer.data(), buffer.size(), "%s", value.c_str());
-
-    if (!ImGui::InputText(label, buffer.data(), buffer.size(), flags)) {
-        return false;
-    }
-    value = buffer.data();
-    return true;
-}
-
-// Renders containerType combo and writes selection into provided field.
-bool DrawContainerCombo(const char* label, std::string& container_type) {
-    static const char* kLabels[] = {"None", "Array", "Map"};
-    static const char* kValues[] = {"None", "Array", "Map"};
-
-    int current_index = 0;
-    for (int i = 0; i < 3; ++i) {
-        if (container_type == kValues[i]) {
-            current_index = i;
-            break;
+    // Converts selected type token to default meta text token.
+    std::string BuildMetaTypeToken(const std::string& type_id) {
+        if (type_id.empty()) {
+            return "";
         }
+
+        std::string out = type_id;
+        std::transform(out.begin(), out.end(), out.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        if (out == "none") {
+            return "";
+        }
+        return out;
     }
 
-    bool changed = false;
-    if (ImGui::BeginCombo(label, kLabels[current_index])) {
+    // Renders editable string using temporary buffer sized for ImGui input widget.
+    bool InputTextString(const char* label, std::string& value, size_t min_buffer_size = 256,
+                         ImGuiInputTextFlags flags = 0) {
+        const size_t buffer_size = std::max(min_buffer_size, value.size() + 64);
+        std::vector<char> buffer(buffer_size, '\0');
+        std::snprintf(buffer.data(), buffer.size(), "%s", value.c_str());
+
+        if (!ImGui::InputText(label, buffer.data(), buffer.size(), flags)) {
+            return false;
+        }
+        value = buffer.data();
+        return true;
+    }
+
+    // Renders containerType combo and writes selection into provided field.
+    bool DrawContainerCombo(const char* label, std::string& container_type) {
+        static const char* kLabels[] = {"None", "Array", "Map"};
+        static const char* kValues[] = {"None", "Array", "Map"};
+
+        int current_index = 0;
         for (int i = 0; i < 3; ++i) {
-            const bool is_selected = current_index == i;
-            if (ImGui::Selectable(kLabels[i], is_selected)) {
-                container_type = kValues[i];
-                changed = true;
-            }
-            if (is_selected) {
-                ImGui::SetItemDefaultFocus();
+            if (container_type == kValues[i]) {
+                current_index = i;
+                break;
             }
         }
-        ImGui::EndCombo();
-    }
-    return changed;
-}
 
-// Renders typeId/keyId preset combo to speed up authoring.
-bool DrawTypePresetCombo(const char* label, std::string& type_id, bool include_none) {
-    static const char* kTypePresets[] = {
-        "Int8", "Int32", "Int64", "Float", "Double", "Bool", "String",
-        "Vector", "Quat", "Transform", "FloatRange", "Struct"
-    };
-    static const char* kKeyPresets[] = {
-        "None", "Int8", "Int32", "Int64", "Float", "Double", "Bool", "String"
-    };
-
-    const char* preview = type_id.empty() ? "<unset>" : type_id.c_str();
-    bool changed = false;
-    if (ImGui::BeginCombo(label, preview)) {
-        if (include_none) {
-            for (const char* preset : kKeyPresets) {
-                const bool is_selected = type_id == preset;
-                if (ImGui::Selectable(preset, is_selected)) {
-                    type_id = preset;
+        bool changed = false;
+        if (ImGui::BeginCombo(label, kLabels[current_index])) {
+            for (int i = 0; i < 3; ++i) {
+                const bool is_selected = current_index == i;
+                if (ImGui::Selectable(kLabels[i], is_selected)) {
+                    container_type = kValues[i];
                     changed = true;
                 }
                 if (is_selected) {
                     ImGui::SetItemDefaultFocus();
                 }
             }
-        } else {
-            for (const char* preset : kTypePresets) {
-                const bool is_selected = type_id == preset;
-                if (ImGui::Selectable(preset, is_selected)) {
-                    type_id = preset;
-                    changed = true;
+            ImGui::EndCombo();
+        }
+        return changed;
+    }
+
+    // Renders typeId/keyId preset combo to speed up authoring.
+    bool DrawTypePresetCombo(const char* label, std::string& type_id, bool include_none) {
+        static const char* kTypePresets[] = {"Int8",   "Int32",  "Int64", "Float",     "Double",     "Bool",
+                                             "String", "Vector", "Quat",  "Transform", "FloatRange", "Struct"};
+        static const char* kKeyPresets[] = {"None", "Int8", "Int32", "Int64", "Float", "Double", "Bool", "String"};
+
+        const char* preview = type_id.empty() ? "<unset>" : type_id.c_str();
+        bool changed = false;
+        if (ImGui::BeginCombo(label, preview)) {
+            if (include_none) {
+                for (const char* preset : kKeyPresets) {
+                    const bool is_selected = type_id == preset;
+                    if (ImGui::Selectable(preset, is_selected)) {
+                        type_id = preset;
+                        changed = true;
+                    }
+                    if (is_selected) {
+                        ImGui::SetItemDefaultFocus();
+                    }
                 }
-                if (is_selected) {
-                    ImGui::SetItemDefaultFocus();
+            } else {
+                for (const char* preset : kTypePresets) {
+                    const bool is_selected = type_id == preset;
+                    if (ImGui::Selectable(preset, is_selected)) {
+                        type_id = preset;
+                        changed = true;
+                    }
+                    if (is_selected) {
+                        ImGui::SetItemDefaultFocus();
+                    }
                 }
             }
+            ImGui::EndCombo();
         }
-        ImGui::EndCombo();
+        return changed;
     }
-    return changed;
-}
 
 } // namespace
 
 // Constructs schema editor window bound to schema creator session.
 SchemaCreatorWindow::SchemaCreatorWindow(std::shared_ptr<SchemaCreatorSession> session)
     : ImGuiWindow("Property Mappings", session)
-    , schema_session_(std::move(session)) {
-}
+    , schema_session_(std::move(session)) {}
 
 // Renders window shell while editor visibility is enabled.
 void SchemaCreatorWindow::OnRender() {
@@ -143,15 +140,10 @@ void SchemaCreatorWindow::DrawContent() {
     ImGui::Spacing();
 
     const ImVec2 available = ImGui::GetContentRegionAvail();
-    if (ImGui::BeginTable(
-            "SchemaCreatorMain",
-            2,
-            ImGuiTableFlags_Resizable |
-                ImGuiTableFlags_Borders |
-                ImGuiTableFlags_SizingStretchProp |
-                ImGuiTableFlags_NoPadOuterX |
-                ImGuiTableFlags_NoPadInnerX,
-            ImVec2(-FLT_MIN, available.y))) {
+    if (ImGui::BeginTable("SchemaCreatorMain", 2,
+                          ImGuiTableFlags_Resizable | ImGuiTableFlags_Borders | ImGuiTableFlags_SizingStretchProp |
+                              ImGuiTableFlags_NoPadOuterX | ImGuiTableFlags_NoPadInnerX,
+                          ImVec2(-FLT_MIN, available.y))) {
         ImGui::TableSetupColumn("Structs", ImGuiTableColumnFlags_WidthStretch, 0.30f);
         ImGui::TableSetupColumn("Editor", ImGuiTableColumnFlags_WidthStretch, 0.70f);
         ImGui::TableNextRow();
@@ -168,9 +160,7 @@ void SchemaCreatorWindow::DrawContent() {
 
 // Renders top toolbar with document status and quick actions.
 void SchemaCreatorWindow::DrawToolbar() {
-    const std::string path_text = schema_session_->HasActivePath()
-        ? schema_session_->GetActivePath()
-        : "<unsaved>";
+    const std::string path_text = schema_session_->HasActivePath() ? schema_session_->GetActivePath() : "<unsaved>";
 
     ImGui::TextColored(ImVec4(0.55f, 0.82f, 1.0f, 1.0f), "Schema Document");
     ImGui::Text("Path: %s", path_text.c_str());
@@ -183,10 +173,8 @@ void SchemaCreatorWindow::DrawToolbar() {
     bool next_generation_mode = schema_session_->IsNextGenerationMode();
     if (ImGui::Checkbox("Next Generation (additive only)", &next_generation_mode)) {
         schema_session_->SetNextGenerationMode(next_generation_mode);
-        schema_session_->AddGuiInfoLog(
-            next_generation_mode
-                ? "Mode changed: Next Generation."
-                : "Mode changed: Overwrite Current Generation.");
+        schema_session_->AddGuiInfoLog(next_generation_mode ? "Mode changed: Next Generation."
+                                                            : "Mode changed: Overwrite Current Generation.");
     }
     if (ImGui::IsItemHovered()) {
         ImGui::SetTooltip("When enabled, save enforces schema evolution checks and blocks removals/signature breaks.");
@@ -227,8 +215,8 @@ void SchemaCreatorWindow::DrawStructListPane() {
             ImGui::EndDisabled();
         }
 
-        const bool has_selected_struct = selected_struct_index_ >= 0 &&
-            selected_struct_index_ < static_cast<int>(document.structs.size());
+        const bool has_selected_struct =
+            selected_struct_index_ >= 0 && selected_struct_index_ < static_cast<int>(document.structs.size());
         ImGui::SameLine();
         if (!has_selected_struct) {
             ImGui::BeginDisabled();
@@ -260,8 +248,8 @@ void SchemaCreatorWindow::DrawStructListPane() {
             for (int i = 0; i < static_cast<int>(document.structs.size()); ++i) {
                 const bool is_selected = selected_struct_index_ == i;
                 const std::string label = document.structs[i].struct_name.empty()
-                    ? ("<unnamed struct##" + std::to_string(i) + ">")
-                    : document.structs[i].struct_name;
+                                              ? ("<unnamed struct##" + std::to_string(i) + ">")
+                                              : document.structs[i].struct_name;
                 if (ImGui::Selectable(label.c_str(), is_selected, ImGuiSelectableFlags_SpanAllColumns)) {
                     selected_struct_index_ = i;
                     selected_field_index_ = document.structs[i].fields.empty() ? -1 : 0;
@@ -328,13 +316,9 @@ void SchemaCreatorWindow::DrawStructEditorPane() {
         ImGui::Spacing();
 
         // Step 1: Render field list and field details side-by-side.
-        if (ImGui::BeginTable(
-                "FieldEditorTable",
-                2,
-                ImGuiTableFlags_Resizable |
-                    ImGuiTableFlags_Borders |
-                    ImGuiTableFlags_SizingStretchProp,
-                ImVec2(-FLT_MIN, ImGui::GetContentRegionAvail().y))) {
+        if (ImGui::BeginTable("FieldEditorTable", 2,
+                              ImGuiTableFlags_Resizable | ImGuiTableFlags_Borders | ImGuiTableFlags_SizingStretchProp,
+                              ImVec2(-FLT_MIN, ImGui::GetContentRegionAvail().y))) {
             ImGui::TableSetupColumn("Field List", ImGuiTableColumnFlags_WidthStretch, 0.33f);
             ImGui::TableSetupColumn("Field Details", ImGuiTableColumnFlags_WidthStretch, 0.67f);
             ImGui::TableNextRow();
@@ -343,10 +327,10 @@ void SchemaCreatorWindow::DrawStructEditorPane() {
             if (ImGui::BeginChild("FieldList", ImVec2(0.0f, 0.0f), true, ImGuiWindowFlags_NavFlattened)) {
                 for (int i = 0; i < static_cast<int>(schema_struct.fields.size()); ++i) {
                     const auto& field = schema_struct.fields[i];
-                    const std::string label = field.name.empty()
-                        ? ("<unnamed field##" + std::to_string(i) + ">")
-                        : (field.name + "##" + std::to_string(i));
-                    if (ImGui::Selectable(label.c_str(), selected_field_index_ == i, ImGuiSelectableFlags_SpanAllColumns)) {
+                    const std::string label = field.name.empty() ? ("<unnamed field##" + std::to_string(i) + ">")
+                                                                 : (field.name + "##" + std::to_string(i));
+                    if (ImGui::Selectable(label.c_str(), selected_field_index_ == i,
+                                          ImGuiSelectableFlags_SpanAllColumns)) {
                         selected_field_index_ = i;
                     }
                 }
@@ -355,7 +339,8 @@ void SchemaCreatorWindow::DrawStructEditorPane() {
 
             ImGui::TableSetColumnIndex(1);
             if (ImGui::BeginChild("FieldDetails", ImVec2(0.0f, 0.0f), true)) {
-                if (selected_field_index_ < 0 || selected_field_index_ >= static_cast<int>(schema_struct.fields.size())) {
+                if (selected_field_index_ < 0 ||
+                    selected_field_index_ >= static_cast<int>(schema_struct.fields.size())) {
                     ImGui::TextDisabled("Select a field to edit.");
                 } else {
                     // Edit the selected field in-place; dirty mark is applied once per frame.

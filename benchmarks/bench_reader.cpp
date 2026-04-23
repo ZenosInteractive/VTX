@@ -24,23 +24,21 @@
 
 namespace {
 
-constexpr int32_t kFixtureFrameCount = 10'000;
+    constexpr int32_t kFixtureFrameCount = 10'000;
 
-std::string FixturePath(const char* name) {
-    return std::string(VTX_BENCH_FIXTURES_DIR) + "/" + name;
-}
-
-// Silence VTX::Logger Debug messages once (e.g. "Chunk N loaded into RAM").
-// Info/Warning/Error still print so real problems remain visible.  This runs
-// once at static init, before google/benchmark starts its measured loops.
-struct SilenceDebugLogsAtInit {
-    SilenceDebugLogsAtInit() {
-        VTX::Logger::Instance().SetDebugEnabled(false);
+    std::string FixturePath(const char* name) {
+        return std::string(VTX_BENCH_FIXTURES_DIR) + "/" + name;
     }
-};
-const SilenceDebugLogsAtInit silence_debug_logs_at_init{};
 
-}  // namespace
+    // Silence VTX::Logger Debug messages once (e.g. "Chunk N loaded into RAM").
+    // Info/Warning/Error still print so real problems remain visible.  This runs
+    // once at static init, before google/benchmark starts its measured loops.
+    struct SilenceDebugLogsAtInit {
+        SilenceDebugLogsAtInit() { VTX::Logger::Instance().SetDebugEnabled(false); }
+    };
+    const SilenceDebugLogsAtInit silence_debug_logs_at_init {};
+
+} // namespace
 
 // Open the .vtx and linearly iterate every frame, touching the bucket list
 // so the reader is forced to deserialize every chunk along the way.  This

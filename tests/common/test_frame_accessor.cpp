@@ -9,91 +9,63 @@
 
 namespace {
 
-VTX::PropertyContainer MakeCompanion(int32_t level)
-{
-    VTX::PropertyContainer pc;
-    pc.int32_properties = {level};
-    return pc;
-}
+    VTX::PropertyContainer MakeCompanion(int32_t level) {
+        VTX::PropertyContainer pc;
+        pc.int32_properties = {level};
+        return pc;
+    }
 
-VTX::PropertyAddressCache BuildCache()
-{
-    VTX::PropertyAddressCache cache;
+    VTX::PropertyAddressCache BuildCache() {
+        VTX::PropertyAddressCache cache;
 
-    cache.name_to_id["Player"] = 7;
-    auto& player = cache.structs[7];
-    player.name = "Player";
-    player.properties["Name"] = {
-        .index = 0,
-        .type_id = VTX::FieldType::String,
-        .container_type = VTX::FieldContainerType::None
-    };
-    player.properties["Score"] = {
-        .index = 0,
-        .type_id = VTX::FieldType::Int32,
-        .container_type = VTX::FieldContainerType::None
-    };
-    player.properties["Health"] = {
-        .index = 0,
-        .type_id = VTX::FieldType::Float,
-        .container_type = VTX::FieldContainerType::None
-    };
-    player.properties["IsAlive"] = {
-        .index = 0,
-        .type_id = VTX::FieldType::Bool,
-        .container_type = VTX::FieldContainerType::None
-    };
-    player.properties["Inventory"] = {
-        .index = 0,
-        .type_id = VTX::FieldType::Int32,
-        .container_type = VTX::FieldContainerType::Array
-    };
-    player.properties["Companion"] = {
-        .index = 0,
-        .type_id = VTX::FieldType::Struct,
-        .container_type = VTX::FieldContainerType::None,
-        .child_type_name = "Companion"
-    };
-    player.properties["History"] = {
-        .index = 0,
-        .type_id = VTX::FieldType::Struct,
-        .container_type = VTX::FieldContainerType::Array,
-        .child_type_name = "Companion"
-    };
-    player.property_order = {
-        "Name", "Score", "Health", "IsAlive", "Inventory", "Companion", "History"
-    };
+        cache.name_to_id["Player"] = 7;
+        auto& player = cache.structs[7];
+        player.name = "Player";
+        player.properties["Name"] = {
+            .index = 0, .type_id = VTX::FieldType::String, .container_type = VTX::FieldContainerType::None};
+        player.properties["Score"] = {
+            .index = 0, .type_id = VTX::FieldType::Int32, .container_type = VTX::FieldContainerType::None};
+        player.properties["Health"] = {
+            .index = 0, .type_id = VTX::FieldType::Float, .container_type = VTX::FieldContainerType::None};
+        player.properties["IsAlive"] = {
+            .index = 0, .type_id = VTX::FieldType::Bool, .container_type = VTX::FieldContainerType::None};
+        player.properties["Inventory"] = {
+            .index = 0, .type_id = VTX::FieldType::Int32, .container_type = VTX::FieldContainerType::Array};
+        player.properties["Companion"] = {.index = 0,
+                                          .type_id = VTX::FieldType::Struct,
+                                          .container_type = VTX::FieldContainerType::None,
+                                          .child_type_name = "Companion"};
+        player.properties["History"] = {.index = 0,
+                                        .type_id = VTX::FieldType::Struct,
+                                        .container_type = VTX::FieldContainerType::Array,
+                                        .child_type_name = "Companion"};
+        player.property_order = {"Name", "Score", "Health", "IsAlive", "Inventory", "Companion", "History"};
 
-    cache.name_to_id["Companion"] = 8;
-    auto& companion = cache.structs[8];
-    companion.name = "Companion";
-    companion.properties["Level"] = {
-        .index = 0,
-        .type_id = VTX::FieldType::Int32,
-        .container_type = VTX::FieldContainerType::None
-    };
-    companion.property_order = {"Level"};
+        cache.name_to_id["Companion"] = 8;
+        auto& companion = cache.structs[8];
+        companion.name = "Companion";
+        companion.properties["Level"] = {
+            .index = 0, .type_id = VTX::FieldType::Int32, .container_type = VTX::FieldContainerType::None};
+        companion.property_order = {"Level"};
 
-    return cache;
-}
+        return cache;
+    }
 
-VTX::PropertyContainer BuildEntity()
-{
-    VTX::PropertyContainer pc;
-    pc.string_properties = {"Alpha"};
-    pc.int32_properties = {7};
-    pc.float_properties = {75.0f};
-    pc.bool_properties = {true};
-    pc.int32_arrays.AppendSubArray({10, 20, 30});
-    pc.any_struct_properties = {MakeCompanion(42)};
-    pc.any_struct_arrays.AppendSubArray({MakeCompanion(1), MakeCompanion(2)});
-    return pc;
-}
+    VTX::PropertyContainer BuildEntity() {
+        VTX::PropertyContainer pc;
+        pc.string_properties = {"Alpha"};
+        pc.int32_properties = {7};
+        pc.float_properties = {75.0f};
+        pc.bool_properties = {true};
+        pc.int32_arrays.AppendSubArray({10, 20, 30});
+        pc.any_struct_properties = {MakeCompanion(42)};
+        pc.any_struct_arrays.AppendSubArray({MakeCompanion(1), MakeCompanion(2)});
+        return pc;
+    }
 
 } // namespace
 
-TEST(FrameAccessor, ResolvesKeysAndReportsAvailableMetadata)
-{
+TEST(FrameAccessor, ResolvesKeysAndReportsAvailableMetadata) {
     VTX::FrameAccessor accessor;
     accessor.InitializeFromCache(BuildCache());
 
@@ -119,8 +91,7 @@ TEST(FrameAccessor, ResolvesKeysAndReportsAvailableMetadata)
     EXPECT_TRUE(accessor.GetPropertiesForStruct("Ghost").empty());
 }
 
-TEST(FrameAccessor, EntityViewReadsScalarArrayAndNestedProperties)
-{
+TEST(FrameAccessor, EntityViewReadsScalarArrayAndNestedProperties) {
     VTX::FrameAccessor accessor;
     accessor.InitializeFromCache(BuildCache());
 
@@ -155,8 +126,7 @@ TEST(FrameAccessor, EntityViewReadsScalarArrayAndNestedProperties)
     EXPECT_EQ(VTX::EntityView(history[1]).Get(level_key), 2);
 }
 
-TEST(FrameAccessor, InvalidKeysReturnDefaultsOrEmptyViews)
-{
+TEST(FrameAccessor, InvalidKeysReturnDefaultsOrEmptyViews) {
     VTX::FrameAccessor accessor;
     accessor.InitializeFromCache(BuildCache());
 

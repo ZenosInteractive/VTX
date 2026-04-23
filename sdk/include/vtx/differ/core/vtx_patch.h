@@ -8,11 +8,10 @@
 #include "vtx/differ/core/vtx_default_tree_diff.h"
 #include "vtx/differ/core/vtx_diff_types.h"
 
-namespace DiffUtils
-{
-    template<typename TNodeView>
-    VtxDiff::PatchIndex DiffSingleActorByIndex(const TNodeView& FrameA, const TNodeView& FrameB, uint32_t ActorIndexA, uint32_t ActorIndexB, const VtxDiff::DiffOptions& Opt)
-    {
+namespace DiffUtils {
+    template <typename TNodeView>
+    VtxDiff::PatchIndex DiffSingleActorByIndex(const TNodeView& FrameA, const TNodeView& FrameB, uint32_t ActorIndexA,
+                                               uint32_t ActorIndexB, const VtxDiff::DiffOptions& Opt) {
         VtxDiff::FieldDesc entities_field;
         entities_field.name = "entities";
         entities_field.type = VtxDiff::EVTXContainerType::AnyStructArrays;
@@ -23,12 +22,12 @@ namespace DiffUtils
         VtxDiff::DefaultTreeDiff<TNodeView> differ;
         return differ.ComputeEntityDiff(entity_a, entity_b, Opt);
     }
-}
+} // namespace DiffUtils
 
 namespace VtxDiff {
 
     template <typename TNodeView>
-    requires CBinaryNodeView<TNodeView>
+        requires CBinaryNodeView<TNodeView>
     class PatchAccessor {
     public:
         static TNodeView GetTargetNode(const TNodeView& Root, const DiffIndexPath& Path) {
@@ -44,14 +43,12 @@ namespace VtxDiff {
         }
 
     private:
-        static constexpr size_t InvalidIndex() {
-            return std::numeric_limits<size_t>::max();
-        }
+        static constexpr size_t InvalidIndex() { return std::numeric_limits<size_t>::max(); }
 
         struct ResolvedPath {
             bool Exists = false;
-            std::span<const std::byte> Bytes{};
-            TNodeView Node{};
+            std::span<const std::byte> Bytes {};
+            TNodeView Node {};
         };
 
         static FieldDesc MakeField(EVTXContainerType Type) {
@@ -83,14 +80,16 @@ namespace VtxDiff {
             const size_t count = Node.GetArraySize(entities_field);
             for (size_t i = 0; i < count; ++i) {
                 auto actor = Node.GetArrayElementAsStruct(entities_field, i);
-                if (!actor.IsValid()) continue;
+                if (!actor.IsValid())
+                    continue;
 
                 auto span_id = actor.GetFieldBytes(id_field);
-                if (span_id.empty()) continue;
+                if (span_id.empty())
+                    continue;
 
-                const int32_t current_hash = static_cast<int32_t>(VtxDiff::StableHash64(
-                    { reinterpret_cast<const char*>(span_id.data()), span_id.size() }
-                ) & 0x7FFFFFFF);
+                const int32_t current_hash = static_cast<int32_t>(
+                    VtxDiff::StableHash64({reinterpret_cast<const char*>(span_id.data()), span_id.size()}) &
+                    0x7FFFFFFF);
 
                 if (current_hash == TargetHash) {
                     return i;
@@ -99,15 +98,19 @@ namespace VtxDiff {
             return InvalidIndex();
         }
 
-        static size_t FindMapIndexByHash(const TNodeView& Node, const FieldDesc& Field, int32_t TargetHash, const std::string& ExpectedKey) {
+        static size_t FindMapIndexByHash(const TNodeView& Node, const FieldDesc& Field, int32_t TargetHash,
+                                         const std::string& ExpectedKey) {
             const size_t count = Node.GetMapSize(Field);
             for (size_t i = 0; i < count; ++i) {
                 const std::string key = Node.GetMapKey(Field, i);
-                if (key.empty()) continue;
+                if (key.empty())
+                    continue;
 
                 const int32_t key_hash = static_cast<int32_t>(VtxDiff::StableHash64(key) & 0x7FFFFFFF);
-                if (key_hash != TargetHash) continue;
-                if (!ExpectedKey.empty() && key != ExpectedKey) continue;
+                if (key_hash != TargetHash)
+                    continue;
+                if (!ExpectedKey.empty() && key != ExpectedKey)
+                    continue;
                 return i;
             }
             return InvalidIndex();
@@ -119,7 +122,7 @@ namespace VtxDiff {
             }
 
             if (Path.size() == 0) {
-                return { true, {}, Root };
+                return {true, {}, Root};
             }
 
             if (Path[0] == static_cast<int32_t>(EVTXContainerType::AnyStructArrays) && Path.size() >= 2) {
@@ -138,7 +141,7 @@ namespace VtxDiff {
                 }
 
                 if (Path.size() == 2) {
-                    return { true, Root.GetArrayElementBytes(entities_field, actor_index), actor_node };
+                    return {true, Root.GetArrayElementBytes(entities_field, actor_index), actor_node};
                 }
 
                 return ResolveNode(actor_node, Path, 2, MapKey);
@@ -147,7 +150,8 @@ namespace VtxDiff {
             return ResolveNode(Root, Path, 0, MapKey);
         }
 
-        static ResolvedPath ResolveNode(const TNodeView& Node, const DiffIndexPath& Path, size_t PathIndex, const std::string& MapKey) {
+        static ResolvedPath ResolveNode(const TNodeView& Node, const DiffIndexPath& Path, size_t PathIndex,
+                                        const std::string& MapKey) {
             if (!Node.IsValid() || PathIndex >= Path.size()) {
                 return {};
             }
@@ -157,7 +161,7 @@ namespace VtxDiff {
             const bool field_exists = HasField(Node, field);
 
             if (PathIndex + 1 >= Path.size()) {
-                return { field_exists, Node.GetFieldBytes(field), Node.GetNestedStruct(field) };
+                return {field_exists, Node.GetFieldBytes(field), Node.GetNestedStruct(field)};
             }
 
             const int32_t RawIndex = Path[PathIndex + 1];
@@ -177,7 +181,7 @@ namespace VtxDiff {
                 }
 
                 if (PathIndex + 2 >= Path.size()) {
-                    return { true, Node.GetArrayElementBytes(field, struct_index), child };
+                    return {true, Node.GetArrayElementBytes(field, struct_index), child};
                 }
 
                 return ResolveNode(child, Path, PathIndex + 2, MapKey);
@@ -191,11 +195,11 @@ namespace VtxDiff {
 
                 auto child = Node.GetMapValueAsStruct(field, map_index);
                 if (!child.IsValid()) {
-                    return { true, {}, {} };
+                    return {true, {}, {}};
                 }
 
                 if (PathIndex + 2 >= Path.size()) {
-                    return { true, {}, child };
+                    return {true, {}, child};
                 }
 
                 return ResolveNode(child, Path, PathIndex + 2, MapKey);
@@ -207,7 +211,7 @@ namespace VtxDiff {
                     return {};
                 }
 
-                return { true, Node.GetSubArrayBytes(field, array_index), {} };
+                return {true, Node.GetSubArrayBytes(field, array_index), {}};
             }
 
             const size_t element_index = static_cast<size_t>(RawIndex);
@@ -215,7 +219,7 @@ namespace VtxDiff {
                 return {};
             }
 
-            return { true, Node.GetArrayElementBytes(field, element_index), {} };
+            return {true, Node.GetArrayElementBytes(field, element_index), {}};
         }
     };
-}
+} // namespace VtxDiff

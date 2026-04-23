@@ -42,7 +42,7 @@ TEST(ContentHashEdges, HashDistinguishesDifferentNaNBitPatterns) {
     // diffs between containers that happened to land on different NaNs.
     float qnan = std::nanf("");
     float snan = 0.0f;
-    const uint32_t snan_bits = 0x7FA00000u;   // quiet bit clear, payload set
+    const uint32_t snan_bits = 0x7FA00000u; // quiet bit clear, payload set
     std::memcpy(&snan, &snan_bits, sizeof(snan));
 
     PropertyContainer a, b;
@@ -54,7 +54,7 @@ TEST(ContentHashEdges, HashDistinguishesDifferentNaNBitPatterns) {
     // long as it's consistent, but we expect a bitwise hasher to differ.
     (void)CalculateContainerHash(a);
     (void)CalculateContainerHash(b);
-    SUCCEED();  // the real invariant: no crash on NaN of any kind
+    SUCCEED(); // the real invariant: no crash on NaN of any kind
 }
 
 // ---------------------------------------------------------------------------
@@ -68,7 +68,7 @@ TEST(ContentHashEdges, HashDistinguishesEmptyVsDefault_DocumentsInvariant) {
     // change makes them differ, the test surfaces the contract shift.
     PropertyContainer a;
     PropertyContainer b;
-    b.float_properties = {};    // explicitly empty
+    b.float_properties = {}; // explicitly empty
 
     EXPECT_EQ(CalculateContainerHash(a), CalculateContainerHash(b));
 }
@@ -121,11 +121,11 @@ TEST(ContentHashEdges, HashLargeStringVectorsDoesntCrashAndIsStable) {
 
 TEST(ContentHashEdges, HashIsStableAcrossMove) {
     PropertyContainer original;
-    original.entity_type_id   = 7;
+    original.entity_type_id = 7;
     original.int32_properties = {1, 2, 3};
     original.string_properties = {"alpha", "bravo"};
     original.float_properties = {3.14f, -2.71f};
-    original.vector_properties = {VTX::Vector{1.0, 2.0, 3.0}};
+    original.vector_properties = {VTX::Vector {1.0, 2.0, 3.0}};
 
     const uint64_t before = CalculateContainerHash(original);
 

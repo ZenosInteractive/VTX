@@ -8,7 +8,8 @@ class InspectorSession;
 
 class InspectorLayout : public IGuiLayer {
 public:
-    InspectorLayout(const std::shared_ptr<InspectorSession>& session, const std::shared_ptr<GuiScaleController>& scale_controller);
+    InspectorLayout(const std::shared_ptr<InspectorSession>& session,
+                    const std::shared_ptr<GuiScaleController>& scale_controller);
     ~InspectorLayout() override = default;
     void OnUpdate() override;
     void OnRender() override;

@@ -22,10 +22,10 @@ namespace VTX {
     template <typename Class, typename Type>
     struct Field {
         const char* json_key;
-        Type Class::* member_ptr;
+        Type Class::*member_ptr;
     };
 
-    
+
     /**
      * @brief Helper function to create a Field object with automatic type deduction.
      * @details Simplifies the syntax for defining mappings.
@@ -37,7 +37,7 @@ namespace VTX {
      * @return Field<Class, Type> A initialized Field structure.
      */
     template <typename Class, typename Type>
-    constexpr auto MakeField(const char* name, Type Class::* ptr) {
-        return Field<Class, Type>{name, ptr};
+    constexpr auto MakeField(const char* name, Type Class::*ptr) {
+        return Field<Class, Type> {name, ptr};
     }
-}
+} // namespace VTX

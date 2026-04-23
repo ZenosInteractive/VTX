@@ -39,24 +39,24 @@
 
 namespace {
 
-std::string CsReplayPath(const char* backend_filename) {
-    return (std::filesystem::path(VTX_BENCH_FIXTURES_DIR).parent_path().parent_path()
-            / "samples" / "content" / "reader" / "cs" / backend_filename)
-        .string();
-}
+    std::string CsReplayPath(const char* backend_filename) {
+        return (std::filesystem::path(VTX_BENCH_FIXTURES_DIR).parent_path().parent_path() / "samples" / "content" /
+                "reader" / "cs" / backend_filename)
+            .string();
+    }
 
-std::string ArenaReplayPath() {
-    return (std::filesystem::path(VTX_BENCH_FIXTURES_DIR).parent_path().parent_path()
-            / "samples" / "content" / "reader" / "arena" / "arena_from_fbs_ds.vtx")
-        .string();
-}
+    std::string ArenaReplayPath() {
+        return (std::filesystem::path(VTX_BENCH_FIXTURES_DIR).parent_path().parent_path() / "samples" / "content" /
+                "reader" / "arena" / "arena_from_fbs_ds.vtx")
+            .string();
+    }
 
-struct SilenceDebugLogsOnce {
-    SilenceDebugLogsOnce() { VTX::Logger::Instance().SetDebugEnabled(false); }
-};
-const SilenceDebugLogsOnce silence_scenarios_debug_logs_once{};
+    struct SilenceDebugLogsOnce {
+        SilenceDebugLogsOnce() { VTX::Logger::Instance().SetDebugEnabled(false); }
+    };
+    const SilenceDebugLogsOnce silence_scenarios_debug_logs_once {};
 
-}  // namespace
+} // namespace
 
 // ============================================================================
 // Partial / windowed scans (CS fixture)
@@ -79,7 +79,10 @@ static void BM_CS_PreviewFirst1000Frames_FBS(benchmark::State& state) {
     constexpr int32_t kPreviewFrames = 1000;
     for (auto _ : state) {
         auto result = VTX::OpenReplayFile(path);
-        if (!result) { state.SkipWithError("OpenReplayFile failed"); break; }
+        if (!result) {
+            state.SkipWithError("OpenReplayFile failed");
+            break;
+        }
         const int32_t limit = std::min(kPreviewFrames, result.reader->GetTotalFrames());
         int64_t bucket_count = 0;
         for (int32_t i = 0; i < limit; ++i) {
@@ -92,9 +95,7 @@ static void BM_CS_PreviewFirst1000Frames_FBS(benchmark::State& state) {
     state.SetItemsProcessed(state.iterations() * kPreviewFrames);
     VtxBench::SetNsPerFrame(state, kPreviewFrames);
 }
-BENCHMARK(BM_CS_PreviewFirst1000Frames_FBS)
-    ->Unit(benchmark::kMillisecond)
-    BENCH_HEAVY_FIXTURE_SUFFIX;
+BENCHMARK(BM_CS_PreviewFirst1000Frames_FBS)->Unit(benchmark::kMillisecond) BENCH_HEAVY_FIXTURE_SUFFIX;
 
 // "User seeks to 50% and plays 300 frames" -- typical scrubbing-UI shape.
 // The middle-of-file seek forces a cold chunk load even on a warm OS cache,
@@ -111,10 +112,13 @@ static void BM_CS_SeekMiddlePlay300Frames_FBS(benchmark::State& state) {
     constexpr int32_t kPlayFrames = 300;
     for (auto _ : state) {
         auto result = VTX::OpenReplayFile(path);
-        if (!result) { state.SkipWithError("OpenReplayFile failed"); break; }
+        if (!result) {
+            state.SkipWithError("OpenReplayFile failed");
+            break;
+        }
         const int32_t total = result.reader->GetTotalFrames();
         const int32_t start = total / 2;
-        const int32_t end   = std::min(total, start + kPlayFrames);
+        const int32_t end = std::min(total, start + kPlayFrames);
         int64_t bucket_count = 0;
         for (int32_t i = start; i < end; ++i) {
             if (const auto* frame = result.reader->GetFrameSync(i)) {
@@ -126,9 +130,7 @@ static void BM_CS_SeekMiddlePlay300Frames_FBS(benchmark::State& state) {
     state.SetItemsProcessed(state.iterations() * kPlayFrames);
     VtxBench::SetNsPerFrame(state, kPlayFrames);
 }
-BENCHMARK(BM_CS_SeekMiddlePlay300Frames_FBS)
-    ->Unit(benchmark::kMillisecond)
-    BENCH_HEAVY_FIXTURE_SUFFIX;
+BENCHMARK(BM_CS_SeekMiddlePlay300Frames_FBS)->Unit(benchmark::kMillisecond) BENCH_HEAVY_FIXTURE_SUFFIX;
 
 // "Timeline thumbnails" -- one frame every 100, covering the whole replay.
 // Each sample is in a different chunk, so this is effectively a chunk-miss
@@ -146,7 +148,10 @@ static void BM_CS_StridedScan_Every100th_FBS(benchmark::State& state) {
     int64_t samples_total = 0;
     for (auto _ : state) {
         auto result = VTX::OpenReplayFile(path);
-        if (!result) { state.SkipWithError("OpenReplayFile failed"); break; }
+        if (!result) {
+            state.SkipWithError("OpenReplayFile failed");
+            break;
+        }
         const int32_t total = result.reader->GetTotalFrames();
         int64_t bucket_count = 0;
         int64_t samples = 0;
@@ -162,9 +167,7 @@ static void BM_CS_StridedScan_Every100th_FBS(benchmark::State& state) {
     state.SetItemsProcessed(state.iterations() * samples_total);
     VtxBench::SetNsPerFrame(state, samples_total);
 }
-BENCHMARK(BM_CS_StridedScan_Every100th_FBS)
-    ->Unit(benchmark::kMillisecond)
-    BENCH_HEAVY_FIXTURE_SUFFIX;
+BENCHMARK(BM_CS_StridedScan_Every100th_FBS)->Unit(benchmark::kMillisecond) BENCH_HEAVY_FIXTURE_SUFFIX;
 
 // ============================================================================
 // Cache-window sweep (CS fixture)
@@ -195,14 +198,16 @@ static void BM_CS_AccessorRandomAccess_CacheSweep_FBS(benchmark::State& state) {
     VtxBench::WarmFileCache(path);
 
     auto result = VTX::OpenReplayFile(path);
-    if (!result) { state.SkipWithError("OpenReplayFile failed"); return; }
+    if (!result) {
+        state.SkipWithError("OpenReplayFile failed");
+        return;
+    }
     auto& reader = result.reader;
-    reader->SetCacheWindow(static_cast<uint32_t>(cache_window),
-                           static_cast<uint32_t>(cache_window));
+    reader->SetCacheWindow(static_cast<uint32_t>(cache_window), static_cast<uint32_t>(cache_window));
 
-    auto accessor      = reader->CreateAccessor();
+    auto accessor = reader->CreateAccessor();
     auto key_transform = accessor.Get<VTX::Transform>("Player", "Transform");
-    auto key_health    = accessor.Get<int32_t>("Player", "Health");
+    auto key_health = accessor.Get<int32_t>("Player", "Health");
     if (!key_transform.IsValid() || !key_health.IsValid()) {
         state.SkipWithError("Player keys did not resolve");
         return;
@@ -213,14 +218,15 @@ static void BM_CS_AccessorRandomAccess_CacheSweep_FBS(benchmark::State& state) {
     std::uniform_int_distribution<int32_t> dist(0, total - 1);
 
     constexpr int kAccessesPerIter = 50;
-    double  tx_accum = 0.0;
+    double tx_accum = 0.0;
     int64_t hp_accum = 0;
 
     for (auto _ : state) {
         for (int i = 0; i < kAccessesPerIter; ++i) {
             const int32_t idx = dist(rng);
             const auto* frame = reader->GetFrameSync(idx);
-            if (!frame) continue;
+            if (!frame)
+                continue;
             for (const auto& bucket : frame->GetBuckets()) {
                 for (const auto& entity : bucket.entities) {
                     VTX::EntityView view(entity);
@@ -245,7 +251,11 @@ static void BM_CS_AccessorRandomAccess_CacheSweep_FBS(benchmark::State& state) {
 // Reps aren't useful here: the RNG is seeded (seed=42) so the access
 // sequence is identical across runs.  Single iteration is deterministic.
 BENCHMARK(BM_CS_AccessorRandomAccess_CacheSweep_FBS)
-    ->Arg(0)->Arg(2)->Arg(5)->Arg(10)->Arg(20)
+    ->Arg(0)
+    ->Arg(2)
+    ->Arg(5)
+    ->Arg(10)
+    ->Arg(20)
     ->Unit(benchmark::kMicrosecond);
 
 // ============================================================================
@@ -263,8 +273,7 @@ BENCHMARK(BM_CS_AccessorRandomAccess_CacheSweep_FBS)
 // dangling.  Copying the bytes once, pre-measured loop, keeps the diff
 // path free of that footgun.  (It also makes the measured number "pure
 // diff cost" instead of "diff + cache lookup + potential chunk reload".)
-static std::vector<std::byte> SnapshotFrame(VTX::IVtxReaderFacade* reader,
-                                            int32_t frame_index) {
+static std::vector<std::byte> SnapshotFrame(VTX::IVtxReaderFacade* reader, int32_t frame_index) {
     auto span = reader->GetRawFrameBytes(frame_index);
     return std::vector<std::byte>(span.begin(), span.end());
 }
@@ -281,14 +290,23 @@ static void BM_Arena_DifferIdenticalFrames_FBS(benchmark::State& state) {
     VtxBench::WarmFileCache(path);
 
     auto result = VTX::OpenReplayFile(path);
-    if (!result) { state.SkipWithError("OpenReplayFile failed"); return; }
+    if (!result) {
+        state.SkipWithError("OpenReplayFile failed");
+        return;
+    }
     auto& reader = result.reader;
 
     auto differ = VtxDiff::CreateDifferFacade(VTX::VtxFormat::FlatBuffers);
-    if (!differ) { state.SkipWithError("CreateDifferFacade failed"); return; }
+    if (!differ) {
+        state.SkipWithError("CreateDifferFacade failed");
+        return;
+    }
 
     auto frame_a = SnapshotFrame(reader.get(), 0);
-    if (frame_a.empty()) { state.SkipWithError("GetRawFrameBytes returned empty"); return; }
+    if (frame_a.empty()) {
+        state.SkipWithError("GetRawFrameBytes returned empty");
+        return;
+    }
 
     for (auto _ : state) {
         auto patch = differ->DiffRawFrames(frame_a, frame_a);
@@ -310,14 +328,23 @@ static void BM_Arena_DifferFirstVsLast_FBS(benchmark::State& state) {
     VtxBench::WarmFileCache(path);
 
     auto result = VTX::OpenReplayFile(path);
-    if (!result) { state.SkipWithError("OpenReplayFile failed"); return; }
+    if (!result) {
+        state.SkipWithError("OpenReplayFile failed");
+        return;
+    }
     auto& reader = result.reader;
 
     auto differ = VtxDiff::CreateDifferFacade(VTX::VtxFormat::FlatBuffers);
-    if (!differ) { state.SkipWithError("CreateDifferFacade failed"); return; }
+    if (!differ) {
+        state.SkipWithError("CreateDifferFacade failed");
+        return;
+    }
 
     const int32_t total = reader->GetTotalFrames();
-    if (total < 2) { state.SkipWithError("fixture has fewer than 2 frames"); return; }
+    if (total < 2) {
+        state.SkipWithError("fixture has fewer than 2 frames");
+        return;
+    }
 
     // Copy *both* frames out before the measured loop.  The first span
     // becomes invalid the moment the second call evicts its chunk.
@@ -348,14 +375,23 @@ static void BM_CS_DifferIdenticalFrames_FBS(benchmark::State& state) {
     VtxBench::WarmFileCache(path);
 
     auto result = VTX::OpenReplayFile(path);
-    if (!result) { state.SkipWithError("OpenReplayFile failed"); return; }
+    if (!result) {
+        state.SkipWithError("OpenReplayFile failed");
+        return;
+    }
     auto& reader = result.reader;
 
     auto differ = VtxDiff::CreateDifferFacade(VTX::VtxFormat::FlatBuffers);
-    if (!differ) { state.SkipWithError("CreateDifferFacade failed"); return; }
+    if (!differ) {
+        state.SkipWithError("CreateDifferFacade failed");
+        return;
+    }
 
     auto frame_a = SnapshotFrame(reader.get(), 0);
-    if (frame_a.empty()) { state.SkipWithError("GetRawFrameBytes returned empty"); return; }
+    if (frame_a.empty()) {
+        state.SkipWithError("GetRawFrameBytes returned empty");
+        return;
+    }
 
     for (auto _ : state) {
         auto patch = differ->DiffRawFrames(frame_a, frame_a);
@@ -377,14 +413,23 @@ static void BM_CS_DifferFirstVsLast_FBS(benchmark::State& state) {
     VtxBench::WarmFileCache(path);
 
     auto result = VTX::OpenReplayFile(path);
-    if (!result) { state.SkipWithError("OpenReplayFile failed"); return; }
+    if (!result) {
+        state.SkipWithError("OpenReplayFile failed");
+        return;
+    }
     auto& reader = result.reader;
 
     auto differ = VtxDiff::CreateDifferFacade(VTX::VtxFormat::FlatBuffers);
-    if (!differ) { state.SkipWithError("CreateDifferFacade failed"); return; }
+    if (!differ) {
+        state.SkipWithError("CreateDifferFacade failed");
+        return;
+    }
 
     const int32_t total = reader->GetTotalFrames();
-    if (total < 2) { state.SkipWithError("fixture has fewer than 2 frames"); return; }
+    if (total < 2) {
+        state.SkipWithError("fixture has fewer than 2 frames");
+        return;
+    }
 
     auto frame_a = SnapshotFrame(reader.get(), 0);
     auto frame_b = SnapshotFrame(reader.get(), total - 1);

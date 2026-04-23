@@ -5,7 +5,7 @@
 
 class InspectorSession;
 namespace VTX {
-class IVtxReaderFacade;
+    class IVtxReaderFacade;
 }
 
 class ReaderInspectorWindow : public ImGuiWindow {

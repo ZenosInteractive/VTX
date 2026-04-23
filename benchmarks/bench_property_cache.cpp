@@ -20,35 +20,36 @@
 
 namespace {
 
-std::string FixturePath(const char* name) {
-    return std::string(VTX_BENCH_FIXTURES_DIR) + "/" + name;
-}
-
-struct SilenceDebugLogsOnce {
-    SilenceDebugLogsOnce() { VTX::Logger::Instance().SetDebugEnabled(false); }
-};
-const SilenceDebugLogsOnce silence_pcache_debug_logs_once{};
-
-// Collect every (struct_name, property_name) pair present in the cache so
-// the benchmark can iterate them in a round-robin.
-struct ResolutionKey {
-    std::string struct_name;
-    std::string property_name;
-};
-
-std::vector<ResolutionKey> CollectResolutionKeys(const VTX::PropertyAddressCache& cache) {
-    std::vector<ResolutionKey> keys;
-    for (const auto& [struct_name, struct_id] : cache.name_to_id) {
-        auto it = cache.structs.find(struct_id);
-        if (it == cache.structs.end()) continue;
-        for (const auto& [property_name, _addr] : it->second.properties) {
-            keys.push_back({struct_name, property_name});
-        }
+    std::string FixturePath(const char* name) {
+        return std::string(VTX_BENCH_FIXTURES_DIR) + "/" + name;
     }
-    return keys;
-}
 
-}  // namespace
+    struct SilenceDebugLogsOnce {
+        SilenceDebugLogsOnce() { VTX::Logger::Instance().SetDebugEnabled(false); }
+    };
+    const SilenceDebugLogsOnce silence_pcache_debug_logs_once {};
+
+    // Collect every (struct_name, property_name) pair present in the cache so
+    // the benchmark can iterate them in a round-robin.
+    struct ResolutionKey {
+        std::string struct_name;
+        std::string property_name;
+    };
+
+    std::vector<ResolutionKey> CollectResolutionKeys(const VTX::PropertyAddressCache& cache) {
+        std::vector<ResolutionKey> keys;
+        for (const auto& [struct_name, struct_id] : cache.name_to_id) {
+            auto it = cache.structs.find(struct_id);
+            if (it == cache.structs.end())
+                continue;
+            for (const auto& [property_name, _addr] : it->second.properties) {
+                keys.push_back({struct_name, property_name});
+            }
+        }
+        return keys;
+    }
+
+} // namespace
 
 // Three hash lookups per resolution: name -> struct_id -> schema cache ->
 // property address.  Per-iteration loops through every known (struct,
@@ -63,7 +64,7 @@ static void BM_PropertyAddressCacheLookup(benchmark::State& state) {
     }
 
     const auto cache = result.reader->GetPropertyAddressCache();
-    const auto keys  = CollectResolutionKeys(cache);
+    const auto keys = CollectResolutionKeys(cache);
     if (keys.empty()) {
         state.SkipWithError("empty PropertyAddressCache");
         return;
@@ -74,9 +75,11 @@ static void BM_PropertyAddressCacheLookup(benchmark::State& state) {
     for (auto _ : state) {
         for (const auto& key : keys) {
             const auto id_it = cache.name_to_id.find(key.struct_name);
-            if (id_it == cache.name_to_id.end()) continue;
+            if (id_it == cache.name_to_id.end())
+                continue;
             const auto struct_it = cache.structs.find(id_it->second);
-            if (struct_it == cache.structs.end()) continue;
+            if (struct_it == cache.structs.end())
+                continue;
             const auto prop_it = struct_it->second.properties.find(key.property_name);
             if (prop_it != struct_it->second.properties.end()) {
                 benchmark::DoNotOptimize(prop_it->second);
@@ -85,8 +88,7 @@ static void BM_PropertyAddressCacheLookup(benchmark::State& state) {
         }
     }
 
-    state.SetItemsProcessed(static_cast<int64_t>(state.iterations()) *
-                            static_cast<int64_t>(keys.size()));
+    state.SetItemsProcessed(static_cast<int64_t>(state.iterations()) * static_cast<int64_t>(keys.size()));
     state.counters["keys_per_iter"] = static_cast<double>(keys.size());
     benchmark::DoNotOptimize(hit_count);
 }

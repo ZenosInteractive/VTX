@@ -5,7 +5,7 @@
 class InspectorSession;
 
 class ReplayTimeDataWindow : public ImGuiWindow {
-public:    
+public:
     ReplayTimeDataWindow(std::shared_ptr<InspectorSession> session);
 
 protected:

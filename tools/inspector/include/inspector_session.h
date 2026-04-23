@@ -48,7 +48,8 @@ public:
 
     /// Chunk state snapshot from the SDK reader (events wired automatically).
     VTX::ReaderChunkSnapshot GetReaderChunkSnapshot() const {
-        if (reader_context_.chunk_state) return reader_context_.chunk_state->GetSnapshot();
+        if (reader_context_.chunk_state)
+            return reader_context_.chunk_state->GetSnapshot();
         return {};
     }
 

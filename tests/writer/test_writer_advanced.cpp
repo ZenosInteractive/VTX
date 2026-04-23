@@ -14,96 +14,81 @@
 
 namespace {
 
-const char* FormatName(VTX::VtxFormat format)
-{
-    return format == VTX::VtxFormat::FlatBuffers ? "FlatBuffers" : "Protobuf";
-}
+    const char* FormatName(VTX::VtxFormat format) {
+        return format == VTX::VtxFormat::FlatBuffers ? "FlatBuffers" : "Protobuf";
+    }
 
-std::string UniqueOutputPath(VTX::VtxFormat format, const std::string& suffix)
-{
-    const auto* info = ::testing::UnitTest::GetInstance()->current_test_info();
-    return VtxTest::OutputPath(
-        VtxTest::SanitizePathComponent(std::string(info->test_suite_name())) + "_" +
-        VtxTest::SanitizePathComponent(std::string(info->name())) + "_" +
-        FormatName(format) + "_" + suffix + ".vtx");
-}
+    std::string UniqueOutputPath(VTX::VtxFormat format, const std::string& suffix) {
+        const auto* info = ::testing::UnitTest::GetInstance()->current_test_info();
+        return VtxTest::OutputPath(VtxTest::SanitizePathComponent(std::string(info->test_suite_name())) + "_" +
+                                   VtxTest::SanitizePathComponent(std::string(info->name())) + "_" +
+                                   FormatName(format) + "_" + suffix + ".vtx");
+    }
 
-VTX::WriterFacadeConfig MakeConfig(VTX::VtxFormat format,
-                                   const std::string& suffix,
-                                   int32_t chunk_max_frames,
-                                   bool use_compression)
-{
-    VTX::WriterFacadeConfig cfg;
-    cfg.output_filepath = UniqueOutputPath(format, suffix);
-    cfg.schema_json_path = VtxTest::FixturePath("test_schema.json");
-    cfg.replay_name = "WriterAdvancedTest";
-    cfg.replay_uuid = "";
-    cfg.default_fps = 60.0f;
-    cfg.chunk_max_frames = chunk_max_frames;
-    cfg.use_compression = use_compression;
-    return cfg;
-}
+    VTX::WriterFacadeConfig MakeConfig(VTX::VtxFormat format, const std::string& suffix, int32_t chunk_max_frames,
+                                       bool use_compression) {
+        VTX::WriterFacadeConfig cfg;
+        cfg.output_filepath = UniqueOutputPath(format, suffix);
+        cfg.schema_json_path = VtxTest::FixturePath("test_schema.json");
+        cfg.replay_name = "WriterAdvancedTest";
+        cfg.replay_uuid = "";
+        cfg.default_fps = 60.0f;
+        cfg.chunk_max_frames = chunk_max_frames;
+        cfg.use_compression = use_compression;
+        return cfg;
+    }
 
-std::unique_ptr<VTX::IVtxWriterFacade> CreateWriter(VTX::VtxFormat format,
-                                                    const VTX::WriterFacadeConfig& cfg)
-{
-    return format == VTX::VtxFormat::FlatBuffers
-        ? VTX::CreateFlatBuffersWriterFacade(cfg)
-        : VTX::CreateProtobuffWriterFacade(cfg);
-}
+    std::unique_ptr<VTX::IVtxWriterFacade> CreateWriter(VTX::VtxFormat format, const VTX::WriterFacadeConfig& cfg) {
+        return format == VTX::VtxFormat::FlatBuffers ? VTX::CreateFlatBuffersWriterFacade(cfg)
+                                                     : VTX::CreateProtobuffWriterFacade(cfg);
+    }
 
-VTX::Frame MakeSimpleFrame(int frame_index)
-{
-    VTX::Frame f;
-    auto& bucket = f.CreateBucket("entity");
+    VTX::Frame MakeSimpleFrame(int frame_index) {
+        VTX::Frame f;
+        auto& bucket = f.CreateBucket("entity");
 
-    VTX::PropertyContainer pc;
-    pc.entity_type_id = 0;
-    pc.string_properties = {"player_0", "Alpha"};
-    pc.int32_properties = {1, frame_index, 0};
-    pc.float_properties = {100.0f - float(frame_index), 50.0f};
-    pc.vector_properties = {
-        VTX::Vector{double(frame_index), 0.0, 0.0},
-        VTX::Vector{1.0, 0.0, 0.0}
-    };
-    pc.quat_properties = {VTX::Quat{0.0f, 0.0f, 0.0f, 1.0f}};
-    pc.bool_properties = {true};
+        VTX::PropertyContainer pc;
+        pc.entity_type_id = 0;
+        pc.string_properties = {"player_0", "Alpha"};
+        pc.int32_properties = {1, frame_index, 0};
+        pc.float_properties = {100.0f - float(frame_index), 50.0f};
+        pc.vector_properties = {VTX::Vector {double(frame_index), 0.0, 0.0}, VTX::Vector {1.0, 0.0, 0.0}};
+        pc.quat_properties = {VTX::Quat {0.0f, 0.0f, 0.0f, 1.0f}};
+        pc.bool_properties = {true};
 
-    bucket.unique_ids.push_back("player_0");
-    bucket.entities.push_back(std::move(pc));
-    return f;
-}
+        bucket.unique_ids.push_back("player_0");
+        bucket.entities.push_back(std::move(pc));
+        return f;
+    }
 
-VTX::Frame MakeUnsortedTypesFrame()
-{
-    VTX::Frame f;
-    auto& bucket = f.CreateBucket("entity");
+    VTX::Frame MakeUnsortedTypesFrame() {
+        VTX::Frame f;
+        auto& bucket = f.CreateBucket("entity");
 
-    VTX::PropertyContainer type1_a;
-    type1_a.entity_type_id = 1;
-    type1_a.string_properties = {"id_b", "Bravo"};
+        VTX::PropertyContainer type1_a;
+        type1_a.entity_type_id = 1;
+        type1_a.string_properties = {"id_b", "Bravo"};
 
-    VTX::PropertyContainer type0;
-    type0.entity_type_id = 0;
-    type0.string_properties = {"id_a", "Alpha"};
+        VTX::PropertyContainer type0;
+        type0.entity_type_id = 0;
+        type0.string_properties = {"id_a", "Alpha"};
 
-    VTX::PropertyContainer type1_b;
-    type1_b.entity_type_id = 1;
-    type1_b.string_properties = {"id_c", "Charlie"};
+        VTX::PropertyContainer type1_b;
+        type1_b.entity_type_id = 1;
+        type1_b.string_properties = {"id_c", "Charlie"};
 
-    bucket.unique_ids = {"id_b", "id_a", "id_c"};
-    bucket.entities.push_back(type1_a);
-    bucket.entities.push_back(type0);
-    bucket.entities.push_back(type1_b);
-    return f;
-}
+        bucket.unique_ids = {"id_b", "id_a", "id_c"};
+        bucket.entities.push_back(type1_a);
+        bucket.entities.push_back(type0);
+        bucket.entities.push_back(type1_b);
+        return f;
+    }
 
 } // namespace
 
 class WriterAdvancedTest : public ::testing::TestWithParam<VTX::VtxFormat> {};
 
-TEST_P(WriterAdvancedTest, ChunkMaxFramesProducesExpectedSeekTable)
-{
+TEST_P(WriterAdvancedTest, ChunkMaxFramesProducesExpectedSeekTable) {
     const auto cfg = MakeConfig(GetParam(), "chunking", 1, false);
 
     {
@@ -134,8 +119,7 @@ TEST_P(WriterAdvancedTest, ChunkMaxFramesProducesExpectedSeekTable)
     EXPECT_EQ(seek_table[2].end_frame, 2);
 }
 
-TEST_P(WriterAdvancedTest, SortsEntitiesByTypeAndBuildsTypeRanges)
-{
+TEST_P(WriterAdvancedTest, SortsEntitiesByTypeAndBuildsTypeRanges) {
     const auto cfg = MakeConfig(GetParam(), "sorted_types", 8, true);
 
     {
@@ -173,8 +157,7 @@ TEST_P(WriterAdvancedTest, SortsEntitiesByTypeAndBuildsTypeRanges)
     EXPECT_EQ(bucket.type_ranges[1].count, 2);
 }
 
-TEST_P(WriterAdvancedTest, UncompressedFilesRemainReadableAndUseDefaultUuid)
-{
+TEST_P(WriterAdvancedTest, UncompressedFilesRemainReadableAndUseDefaultUuid) {
     const auto cfg = MakeConfig(GetParam(), "uncompressed", 8, false);
 
     {
@@ -201,8 +184,7 @@ TEST_P(WriterAdvancedTest, UncompressedFilesRemainReadableAndUseDefaultUuid)
     EXPECT_EQ(footer.total_frames, 2);
 }
 
-TEST_P(WriterAdvancedTest, StopWithoutFramesProducesReadableEmptyReplay)
-{
+TEST_P(WriterAdvancedTest, StopWithoutFramesProducesReadableEmptyReplay) {
     const auto cfg = MakeConfig(GetParam(), "empty", 8, true);
 
     {
@@ -217,8 +199,7 @@ TEST_P(WriterAdvancedTest, StopWithoutFramesProducesReadableEmptyReplay)
     EXPECT_TRUE(ctx.reader->GetSeekTable().empty());
 }
 
-TEST_P(WriterAdvancedTest, ThrowsWhenParentDirectoryDoesNotExist)
-{
+TEST_P(WriterAdvancedTest, ThrowsWhenParentDirectoryDoesNotExist) {
     auto cfg = MakeConfig(GetParam(), "missing_dir", 8, true);
     const std::filesystem::path missing_dir =
         std::filesystem::path(VtxTest::OutputPath("writer_missing_dir")) / "nested";
@@ -233,10 +214,8 @@ TEST_P(WriterAdvancedTest, ThrowsWhenParentDirectoryDoesNotExist)
         std::runtime_error);
 }
 
-INSTANTIATE_TEST_SUITE_P(
-    BothBackends,
-    WriterAdvancedTest,
-    ::testing::Values(VTX::VtxFormat::FlatBuffers, VTX::VtxFormat::Protobuf),
-    [](const ::testing::TestParamInfo<VTX::VtxFormat>& info) {
-        return std::string(FormatName(info.param));
-    });
+INSTANTIATE_TEST_SUITE_P(BothBackends, WriterAdvancedTest,
+                         ::testing::Values(VTX::VtxFormat::FlatBuffers, VTX::VtxFormat::Protobuf),
+                         [](const ::testing::TestParamInfo<VTX::VtxFormat>& info) {
+                             return std::string(FormatName(info.param));
+                         });

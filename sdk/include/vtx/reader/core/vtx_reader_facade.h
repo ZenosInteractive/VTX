@@ -42,7 +42,8 @@ namespace VTX {
         virtual const VTX::Frame* GetFrame(int32_t frame_index) = 0;
         virtual const VTX::Frame* GetFrameSync(int frame_index) = 0;
         virtual void GetFrameRange(int32_t start_frame, int32_t range, std::vector<VTX::Frame>& out_frames) = 0;
-        virtual std::vector<VTX::Frame> GetFrameContext(int32_t center_frame, int32_t back_range, int32_t forward_range) = 0;
+        virtual std::vector<VTX::Frame> GetFrameContext(int32_t center_frame, int32_t back_range,
+                                                        int32_t forward_range) = 0;
         virtual const std::vector<ChunkIndexEntry>& GetSeekTable() const = 0;
         virtual VTX::FileHeader GetHeader() = 0;
         virtual VTX::FileFooter GetFooter() = 0;
@@ -59,7 +60,8 @@ namespace VTX {
     /// Bundles a reader, its detected format, chunk state, and file metadata.
     /// Returned by OpenReplayFile(). Chunk events are pre-wired automatically.
     struct ReaderContext {
-        ReaderContext() : chunk_state(std::make_unique<ReaderChunkState>()) {}
+        ReaderContext()
+            : chunk_state(std::make_unique<ReaderChunkState>()) {}
 
         explicit operator bool() const { return reader != nullptr; }
         IVtxReaderFacade* operator->() const { return reader.get(); }
@@ -73,7 +75,8 @@ namespace VTX {
             // async chunk-load callbacks capture a raw pointer into
             // chunk_state, so chunk_state must outlive the reader.
             reader.reset();
-            if (chunk_state) chunk_state->Reset();
+            if (chunk_state)
+                chunk_state->Reset();
             error.clear();
             format = VtxFormat::Unknown;
             size_in_mb = 0.0f;
@@ -95,4 +98,4 @@ namespace VTX {
     std::unique_ptr<IVtxReaderFacade> CreateProtobuffFacade(const std::string& filepath);
     ReaderContext OpenReplayFile(const std::string& filepath);
 
-}
+} // namespace VTX
