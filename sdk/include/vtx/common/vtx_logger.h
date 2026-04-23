@@ -1,4 +1,5 @@
 #pragma once
+#include <atomic>
 #include <chrono>
 #include <format>
 #include <functional>
@@ -61,7 +62,23 @@ namespace VTX {
             sinks_.erase(sink_id);
         }
 
+        // Suppress Debug-level messages globally (Info / Warning / Error still
+        // print).  Useful for benchmarks, production deployments, or noisy
+        // workloads where per-chunk trace output would dominate timings.
+        // Thread-safe; can be toggled any time.
+        void SetDebugEnabled(bool enabled) {
+            debug_enabled_.store(enabled, std::memory_order_relaxed);
+        }
+
+        bool IsDebugEnabled() const {
+            return debug_enabled_.load(std::memory_order_relaxed);
+        }
+
         void Log(Level LogLvl, const std::string& Message) {
+            if (LogLvl == Level::Debug && !IsDebugEnabled()) {
+                return;
+            }
+
             std::vector<SinkCallback> sinks_copy;
             Entry entry;
 
@@ -118,6 +135,7 @@ namespace VTX {
         std::mutex mute_;
         std::unordered_map<SinkId, SinkCallback> sinks_;
         SinkId next_sink_id_ = 1;
+        std::atomic<bool> debug_enabled_{true};
 
         template<typename ...Args>
         void LogFormatted(Level log_level, const char* message, Args... args) {
