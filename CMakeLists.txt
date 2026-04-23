@@ -74,6 +74,8 @@ option(VTX_BUILD_DIFFER "Build vtx_differ module" ON)
 option(BUILD_VTX_TOOL "Build tool suite (tools/)" ON)
 option(BUILD_VTX_SAMPLES "Build sample programs (samples/)" ON)
 option(VTX_BUILD_TESTS "Build unit test suite (tests/)" ON)
+option(VTX_BUILD_BENCHMARKS "Build performance benchmarks (benchmarks/)" OFF)
+
 
 # ------------------------------------------------------------------------------
 # VTX_BUILD_SHARED -- static (default) vs shared SDK libraries
@@ -140,6 +142,14 @@ if(VTX_BUILD_TESTS AND VTX_BUILD_READER AND VTX_BUILD_WRITER AND VTX_BUILD_DIFFE
     add_subdirectory(tests)
 else()
     message(STATUS "VTX: Tests disabled.")
+endif()
+
+# --- Benchmarks ---
+if(VTX_BUILD_BENCHMARKS AND VTX_BUILD_READER AND VTX_BUILD_WRITER AND VTX_BUILD_DIFFER)
+    message(STATUS "VTX: Building benchmarks...")
+    add_subdirectory(benchmarks)
+else()
+    message(STATUS "VTX: Benchmarks disabled.")
 endif()
 
 # --- Install ---
