@@ -7,7 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - 2026-04-22
 
+### Changed
+- **reader/perf**: `ReplayReader::UpdateCacheWindow` now cancels stale prefetches (§1.A) and skips lateral prefetches under random-access patterns (§1.B).  Each in-flight chunk load gets its own `std::stop_source` in the new `PendingLoad` struct, replacing the single global `stop_source_`; when the window shifts, prefetches whose target chunk fell outside the new range have `request_stop()` called on them so `AsyncLoadTask` / `ProcessChunkData` short-circuit at their next stop-token checkpoint instead of running to completion and evicting immediately afterwards.  A second layer (§1.B) tracks an EWMA (α=0.3) of chunk-index distance between consecutive accesses; when the moving average exceeds `cache_backward_ + cache_forward_` the trigger loop only loads `current_idx` and skips the `[start..end]` lateral sweep, because random seeks repopulate the full window on every call and the laterals are pure waste.  Measured on the cache-sweep benchmark (10k-frame FlatBuffers replay, 50 random accesses per iter, single-iter per config, seed=42):
+
+  | cache_window | CPU baseline | CPU after | Δ CPU | items/s baseline | items/s after |
+  |---:|---:|---:|---:|---:|---:|
+  | 0 | 5.2M us | 5.4M us | +4% | 9.5 | 9.3 |
+  | **2** | **24.6M us** | **14.5M us** | **-41%** | **2.0** | **3.4** |
+  | **5** | **22.8M us** | **16.3M us** | **-29%** | **2.2** | **3.1** |
+  | 10 | 5.5M us | 5.2M us | -5% | 9.3 | 9.6 |
+  | 20 | 5.5M us | 5.5M us | 0% | 9.2 | 9.1 |
+
+  The pathological regime (small symmetric windows under random access, where every jump triggered a prefetch storm that evicted itself before use) sees the largest gain: CPU is cut by 29-41% and random-access throughput improves 40-70%.  Wall time moves less (-7% to -20%) because ZSTD decompress dominates the sync path and the cancellation only short-circuits post-decompress work; §1.B is what moves the CPU needle.  Cache windows of 0 and >=10 are essentially unchanged, as expected -- no storm to cancel in those regimes
+
 ### Added
+- **reader**: `IVtxReaderFacade::WarmAt(int32_t frame_index)` (§3.A) -- explicit prefetch hint.  If the enclosing chunk is cached or in flight, this is a no-op; otherwise it kicks off an asynchronous load and returns immediately.  Intended use is to call `WarmAt(target_frame)` at the end of a seek gesture so the ZSTD decompress overlaps with any UI teardown, eliminating the "first frame after seek is slow" stutter.  Implemented by routing through `UpdateCacheWindow`, which means WarmAt also updates the §1.B EWMA -- from the reader's perspective it is indistinguishable from a "virtual" access
+
+- **tests**: two new regression tests in `tests/reader/test_reader_api.cpp`.
+  - `ReaderApiFlatBuffers.RandomAccessSkipsLateralPrefetches` -- writes a 20-chunk replay, opens with `SetCacheWindow(2, 2)`, performs 10 far-apart jumps (distance 10 chunks each, well above window=2).  Asserts that the total distinct chunks loaded is `<= 2 * jump_count`; pre-§1.B this would be ~5x.  The bound is conservative enough to tolerate the first two EWMA bootstrap samples still triggering laterals, tight enough to catch a regression
+  - `ReaderApiFlatBuffers.WarmAtTriggersAsyncLoadWithoutReading` -- opens a 5-chunk replay with `SetCacheWindow(0, 0)`, calls `WarmAt(30)`, polls `ReaderChunkState::GetSnapshot()` with a 5s deadline, asserts chunk 3 is present.  Pins the WarmAt contract: load happens asynchronously, no GetFrame required
+
 - **legal**: `NOTICE` file (Apache 2.0 §4(d) compliance) and `THIRD_PARTY_LICENSES.md` enumerating every third-party component with its version, upstream URL, license name, and the full text of each license (MIT, BSD-2-Clause, BSD-3-Clause, Apache-2.0, zlib/libpng).  Each bundled dependency under `thirdparty/` now ships a local `LICENSE` file as well (`thirdparty/jsonlohmann/LICENSE.MIT`, `thirdparty/xxhash/LICENSE`, `thirdparty/protobuf/LICENSE`).  Fixes the missing attribution for nlohmann/json, xxHash, Protocol Buffers, FlatBuffers, zstd, GoogleTest, Dear ImGui, and GLFW
 - **docs**: `README.md` License section expanded with pointers to the new `NOTICE` and `THIRD_PARTY_LICENSES.md`
 
