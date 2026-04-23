@@ -90,6 +90,10 @@ public:
         InternalReader.SetCacheWindow(backward, forward);
     }
 
+    void WarmAt(int32_t frame_index) override {
+        InternalReader.WarmAt(frame_index);
+    }
+
     bool GetFrame(int32_t frame_index, VTX::Frame& out_frame) override {
         return InternalReader.GetFrame(frame_index, out_frame);
     }
@@ -166,6 +170,10 @@ public:
 
     void SetCacheWindow(uint32_t backward, uint32_t forward) override {
         InternalReader.SetCacheWindow(backward, forward);
+    }
+
+    void WarmAt(int32_t frame_index) override {
+        InternalReader.WarmAt(frame_index);
     }
 
     bool GetFrame(int32_t frame_index, VTX::Frame& out_frame) override {

@@ -50,6 +50,7 @@ namespace VTX {
         virtual VTX::PropertyAddressCache GetPropertyAddressCache() = 0;
         virtual void SetEvents(const ReplayReaderEvents& events) = 0;
         virtual void SetCacheWindow(uint32_t backward, uint32_t forward) = 0;
+        virtual void WarmAt(int32_t frame_index) = 0;
         virtual void InspectChunkHeader(int32_t index) const = 0;
         virtual FrameAccessor CreateAccessor() const = 0;
         virtual std::span<const std::byte> GetRawFrameBytes(int32_t frame_index) = 0;
