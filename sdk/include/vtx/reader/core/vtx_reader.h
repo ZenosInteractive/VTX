@@ -535,26 +535,52 @@ namespace VTX {
             const size_t max_concurrent_loads = 3;
 
             auto trigger = [&](int32_t i) {
-                if (!chunk_cache_.contains(i) && !pending_loads_.contains(i)) {
-                    if (pending_loads_.size() >= max_concurrent_loads) return;
+                if (chunk_cache_.contains(i)) return;
 
-                    if (evts.OnChunkLoadStarted) evts.OnChunkLoadStarted(i);
+                // A prefetch that was cancelled by a previous window shift
+                // (line ~509) leaves its entry in pending_loads_ with the
+                // stop_token already requested.  If the chunk re-enters the
+                // window before the worker thread has even started running
+                // (easy under TSan's scheduling overhead, or any burst of
+                // random seeks), the worker will observe stop_requested()
+                // on entry and bail without populating chunk_cache_.  The
+                // future resolves cleanly, but GetFramePtrSync() then reads
+                // an empty cache and returns nullptr -- a latent bug from
+                // the §1.A cancellation work (PR #4).
+                //
+                // Detect that case here and replace the stale entry with a
+                // fresh PendingLoad.  The orphaned task will exit on its
+                // own; its cache write is gated by a stop_requested() check
+                // inside cache_mutex_ (see AsyncLoadTask) so it cannot
+                // pollute the cache with empty data either.
+                const bool stale = pending_loads_.contains(i) &&
+                                   pending_loads_[i].stop.get_token().stop_requested();
 
-                    // Give each prefetch its own stop_source so we can
-                    // cancel it independently from the "window changed"
-                    // path above.  The token is captured by value into the
-                    // lambda -- it's ref-counted, cheap to copy, and stays
-                    // valid even if the map entry is later erased while the
-                    // worker thread is still running (it won't be, because
-                    // we wait on the future first, but the invariant is
-                    // useful for reasoning about shutdown paths).
-                    PendingLoad pl;
-                    auto token = pl.stop.get_token();
-                    pl.future = std::async(std::launch::async, [this, i, token]() {
-                        this->AsyncLoadTask(i, token);
-                    }).share();
-                    pending_loads_[i] = std::move(pl);
-                }
+                if (pending_loads_.contains(i) && !stale) return;
+
+                // The concurrency cap guards *new* slots.  Respawning a
+                // stale entry replaces an existing slot rather than adding
+                // one, so don't gate the resurrection path on the cap --
+                // otherwise we could refuse to revive a chunk the caller is
+                // about to synchronously wait on.
+                if (!stale && pending_loads_.size() >= max_concurrent_loads) return;
+
+                if (evts.OnChunkLoadStarted) evts.OnChunkLoadStarted(i);
+
+                // Give each prefetch its own stop_source so we can
+                // cancel it independently from the "window changed"
+                // path above.  The token is captured by value into the
+                // lambda -- it's ref-counted, cheap to copy, and stays
+                // valid even if the map entry is later erased while the
+                // worker thread is still running (it won't be, because
+                // we wait on the future first, but the invariant is
+                // useful for reasoning about shutdown paths).
+                PendingLoad pl;
+                auto token = pl.stop.get_token();
+                pl.future = std::async(std::launch::async, [this, i, token]() {
+                    this->AsyncLoadTask(i, token);
+                }).share();
+                pending_loads_[i] = std::move(pl);  // overwrites stale entry if present
             };
 
             trigger(current_idx);
