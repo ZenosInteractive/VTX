@@ -291,11 +291,9 @@ TEST(ReaderApiFlatBuffers, RandomAccessSkipsLateralPrefetches)
 // Under TSan's scheduler overhead a single iteration suffices; under
 // stock release it is a flaky single-digit-% race and 50 reps push
 // the miss probability below the CI flake floor.
-TEST(ReaderApiFlatBuffers, CancelledPrefetchReEntersWindow)
-{
-    const auto path = VtxTest::OutputPath(
-        "ReaderApiFlatBuffers_CancelledPrefetchReEntersWindow.vtx");
-    WriteReplay(VTX::VtxFormat::FlatBuffers, path, 100, 5);  // 20 chunks * 5 frames
+TEST(ReaderApiFlatBuffers, CancelledPrefetchReEntersWindow) {
+    const auto path = VtxTest::OutputPath("ReaderApiFlatBuffers_CancelledPrefetchReEntersWindow.vtx");
+    WriteReplay(VTX::VtxFormat::FlatBuffers, path, 100, 5); // 20 chunks * 5 frames
 
     constexpr int kIters = 50;
     for (int iter = 0; iter < kIters; ++iter) {
