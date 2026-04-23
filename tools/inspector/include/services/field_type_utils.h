@@ -9,8 +9,8 @@
 
 namespace VtxServices {
 
-/// Convert a VTX::FieldType enum to a human-readable string.
-/// Pure logic, no GUI dependency — first candidate for SDK migration.
-const char* FieldTypeToString(VTX::FieldType type_id);
+    /// Convert a VTX::FieldType enum to a human-readable string.
+    /// Pure logic, no GUI dependency — first candidate for SDK migration.
+    const char* FieldTypeToString(VTX::FieldType type_id);
 
 } // namespace VtxServices

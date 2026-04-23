@@ -11,12 +11,12 @@ namespace fbsvtx {
 }
 
 namespace VTX {
-        
+
     // =========================================================================================
     // PROTOBUF (cppvtx::PropertySchema)
     // =========================================================================================
     template <>
-        struct SchemaAdapter<cppvtx::ContextualSchema> {
+    struct SchemaAdapter<cppvtx::ContextualSchema> {
         static void BuildCache(const cppvtx::ContextualSchema& src, PropertyAddressCache& cache);
     };
 
@@ -24,7 +24,7 @@ namespace VTX {
     // FLATBUFFERS (fbsvtx::PropertySchemaT)
     // =========================================================================================
     template <>
-        struct SchemaAdapter<fbsvtx::ContextualSchemaT> {
+    struct SchemaAdapter<fbsvtx::ContextualSchemaT> {
         static void BuildCache(const fbsvtx::ContextualSchemaT& src, PropertyAddressCache& cache);
     };
 
@@ -42,5 +42,5 @@ namespace VTX {
         }
     };
     */
-    
-}
+
+} // namespace VTX

@@ -15,7 +15,7 @@ namespace fbsvtx {
     struct ChunkIndexEntry;
     struct ReplayTimeData;
     struct TimelineEvent;
-}
+} // namespace fbsvtx
 
 namespace VTX {
     namespace Serialization {
@@ -24,7 +24,7 @@ namespace VTX {
         void FromFlat(const fbsvtx::Quat* src, VTX::Quat& dst);
         void FromFlat(const fbsvtx::Transform* src, VTX::Transform& dst);
         void FromFlat(const fbsvtx::FloatRange* src, VTX::FloatRange& dst);
-        
+
         void FromFlat(const fbsvtx::MapContainer* src, VTX::MapContainer& dst);
         void FromFlat(const fbsvtx::PropertyContainer* src, VTX::PropertyContainer& dst);
         void FromFlat(const fbsvtx::Bucket* src, VTX::Bucket& dst);

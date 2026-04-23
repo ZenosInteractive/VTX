@@ -22,59 +22,59 @@
 
 namespace {
 
-// Writes a tiny valid FlatBuffers replay so we have a baseline file we can
-// then mutate for each corruption test.
-std::string WriteValidFlatBuffersFile(const std::string& uuid) {
-    VTX::WriterFacadeConfig cfg;
-    cfg.output_filepath  = VtxTest::OutputPath("corrupt_" + uuid + ".vtx");
-    cfg.schema_json_path = VtxTest::FixturePath("test_schema.json");
-    cfg.replay_name      = "CorruptFileTest";
-    cfg.replay_uuid      = uuid;
-    cfg.default_fps      = 60.0f;
-    cfg.chunk_max_frames = 10;
-    cfg.use_compression  = true;
+    // Writes a tiny valid FlatBuffers replay so we have a baseline file we can
+    // then mutate for each corruption test.
+    std::string WriteValidFlatBuffersFile(const std::string& uuid) {
+        VTX::WriterFacadeConfig cfg;
+        cfg.output_filepath = VtxTest::OutputPath("corrupt_" + uuid + ".vtx");
+        cfg.schema_json_path = VtxTest::FixturePath("test_schema.json");
+        cfg.replay_name = "CorruptFileTest";
+        cfg.replay_uuid = uuid;
+        cfg.default_fps = 60.0f;
+        cfg.chunk_max_frames = 10;
+        cfg.use_compression = true;
 
-    {
-        auto writer = VTX::CreateFlatBuffersWriterFacade(cfg);
-        for (int i = 0; i < 5; ++i) {
-            VTX::Frame f;
-            auto& bucket = f.CreateBucket("entity");
+        {
+            auto writer = VTX::CreateFlatBuffersWriterFacade(cfg);
+            for (int i = 0; i < 5; ++i) {
+                VTX::Frame f;
+                auto& bucket = f.CreateBucket("entity");
 
-            VTX::PropertyContainer pc;
-            pc.entity_type_id    = 0;
-            pc.string_properties = {"p", "name"};
-            pc.int32_properties  = {1, 0, 0};
-            pc.float_properties  = {100.0f, 50.0f};
-            pc.vector_properties = {VTX::Vector{}, VTX::Vector{}};
-            pc.quat_properties   = {VTX::Quat{}};
-            pc.bool_properties   = {true};
+                VTX::PropertyContainer pc;
+                pc.entity_type_id = 0;
+                pc.string_properties = {"p", "name"};
+                pc.int32_properties = {1, 0, 0};
+                pc.float_properties = {100.0f, 50.0f};
+                pc.vector_properties = {VTX::Vector {}, VTX::Vector {}};
+                pc.quat_properties = {VTX::Quat {}};
+                pc.bool_properties = {true};
 
-            bucket.unique_ids.push_back("p");
-            bucket.entities.push_back(std::move(pc));
+                bucket.unique_ids.push_back("p");
+                bucket.entities.push_back(std::move(pc));
 
-            VTX::GameTime::GameTimeRegister t;
-            t.game_time = float(i) / 60.0f;
-            writer->RecordFrame(f, t);
+                VTX::GameTime::GameTimeRegister t;
+                t.game_time = float(i) / 60.0f;
+                writer->RecordFrame(f, t);
+            }
+            writer->Flush();
+            writer->Stop();
         }
-        writer->Flush();
-        writer->Stop();
+        return cfg.output_filepath;
     }
-    return cfg.output_filepath;
-}
 
-// Writes `content` verbatim to disk and returns the path.
-std::string WriteRawBytes(const std::string& name, std::span<const uint8_t> content) {
-    const auto path = VtxTest::OutputPath(name);
-    std::ofstream ofs(path, std::ios::binary | std::ios::trunc);
-    ofs.write(reinterpret_cast<const char*>(content.data()), static_cast<std::streamsize>(content.size()));
-    ofs.close();
-    return path;
-}
+    // Writes `content` verbatim to disk and returns the path.
+    std::string WriteRawBytes(const std::string& name, std::span<const uint8_t> content) {
+        const auto path = VtxTest::OutputPath(name);
+        std::ofstream ofs(path, std::ios::binary | std::ios::trunc);
+        ofs.write(reinterpret_cast<const char*>(content.data()), static_cast<std::streamsize>(content.size()));
+        ofs.close();
+        return path;
+    }
 
-// Truncates an existing file down to `target_size` bytes.
-void TruncateFile(const std::string& path, std::uintmax_t target_size) {
-    std::filesystem::resize_file(path, target_size);
-}
+    // Truncates an existing file down to `target_size` bytes.
+    void TruncateFile(const std::string& path, std::uintmax_t target_size) {
+        std::filesystem::resize_file(path, target_size);
+    }
 
 } // namespace
 
@@ -83,7 +83,7 @@ void TruncateFile(const std::string& path, std::uintmax_t target_size) {
 // ===========================================================================
 
 TEST(CorruptFile, EmptyFileReturnsError) {
-    const auto path = WriteRawBytes("empty.vtx", std::span<const uint8_t>{});
+    const auto path = WriteRawBytes("empty.vtx", std::span<const uint8_t> {});
     auto ctx = VTX::OpenReplayFile(path);
     EXPECT_FALSE(ctx);
     EXPECT_FALSE(ctx.error.empty());
@@ -104,8 +104,7 @@ TEST(CorruptFile, ValidMagicButTruncatedHeader) {
     // Just the magic bytes "VTXF" -- nothing else.  The header reader must
     // detect truncation instead of reading past EOF.
     const uint8_t bytes[] = {'V', 'T', 'X', 'F'};
-    const auto path = WriteRawBytes("truncated_magic.vtx",
-                                    std::span<const uint8_t>(bytes, sizeof(bytes)));
+    const auto path = WriteRawBytes("truncated_magic.vtx", std::span<const uint8_t>(bytes, sizeof(bytes)));
 
     auto ctx = VTX::OpenReplayFile(path);
     EXPECT_FALSE(ctx);
@@ -125,13 +124,12 @@ TEST(CorruptFile, TruncatedBeforeFooter) {
     ASSERT_GT(file_size, 100u);
 
     const auto truncated = VtxTest::OutputPath("truncated_before_footer.mutated.vtx");
-    std::filesystem::copy_file(original, truncated,
-                               std::filesystem::copy_options::overwrite_existing);
+    std::filesystem::copy_file(original, truncated, std::filesystem::copy_options::overwrite_existing);
     TruncateFile(truncated, file_size / 2);
 
     auto ctx = VTX::OpenReplayFile(truncated);
     EXPECT_FALSE(ctx);
-    EXPECT_FALSE(ctx.error.empty());  // must surface something, not crash
+    EXPECT_FALSE(ctx.error.empty()); // must surface something, not crash
 }
 
 TEST(CorruptFile, CorruptFooterSize) {
@@ -140,8 +138,7 @@ TEST(CorruptFile, CorruptFooterSize) {
     // instead of seeking to garbage (bug A1 variant).
     const auto original = WriteValidFlatBuffersFile("corrupt_footer_size");
     const auto mutated = VtxTest::OutputPath("corrupt_footer_size.mutated.vtx");
-    std::filesystem::copy_file(original, mutated,
-                               std::filesystem::copy_options::overwrite_existing);
+    std::filesystem::copy_file(original, mutated, std::filesystem::copy_options::overwrite_existing);
 
     {
         std::fstream f(mutated, std::ios::in | std::ios::out | std::ios::binary);
@@ -168,9 +165,8 @@ TEST(CorruptFile, ChunkOffsetBeyondEof) {
     // GetFrameSync must refuse to read past EOF and return nullptr rather than
     // returning stale bytes (bug A3).
     const auto original = WriteValidFlatBuffersFile("chunk_past_eof");
-    const auto mutated  = VtxTest::OutputPath("chunk_past_eof.mutated.vtx");
-    std::filesystem::copy_file(original, mutated,
-                               std::filesystem::copy_options::overwrite_existing);
+    const auto mutated = VtxTest::OutputPath("chunk_past_eof.mutated.vtx");
+    std::filesystem::copy_file(original, mutated, std::filesystem::copy_options::overwrite_existing);
 
     const auto size = std::filesystem::file_size(mutated);
     ASSERT_GT(size, 100u);
@@ -189,7 +185,7 @@ TEST(CorruptFile, ChunkOffsetBeyondEof) {
     // is that nothing crashes.
     for (int i = 0; i < ctx.reader->GetTotalFrames(); ++i) {
         const VTX::Frame* f = ctx.reader->GetFrameSync(i);
-        (void)f;  // may be null, may not -- but must not crash
+        (void)f; // may be null, may not -- but must not crash
     }
 }
 
@@ -202,8 +198,8 @@ TEST(CorruptFile, GetFrameSyncNegativeIndex) {
     auto ctx = VTX::OpenReplayFile(path);
     ASSERT_TRUE(ctx);
 
-    EXPECT_EQ(ctx.reader->GetFrameSync(-1),    nullptr);
-    EXPECT_EQ(ctx.reader->GetFrameSync(-100),  nullptr);
+    EXPECT_EQ(ctx.reader->GetFrameSync(-1), nullptr);
+    EXPECT_EQ(ctx.reader->GetFrameSync(-100), nullptr);
 }
 
 TEST(CorruptFile, GetFrameSyncIndexTooLarge) {
@@ -212,7 +208,7 @@ TEST(CorruptFile, GetFrameSyncIndexTooLarge) {
     ASSERT_TRUE(ctx);
 
     const int total = ctx.reader->GetTotalFrames();
-    EXPECT_EQ(ctx.reader->GetFrameSync(total),          nullptr);
-    EXPECT_EQ(ctx.reader->GetFrameSync(total + 100),    nullptr);
-    EXPECT_EQ(ctx.reader->GetFrameSync(1'000'000'000),  nullptr);
+    EXPECT_EQ(ctx.reader->GetFrameSync(total), nullptr);
+    EXPECT_EQ(ctx.reader->GetFrameSync(total + 100), nullptr);
+    EXPECT_EQ(ctx.reader->GetFrameSync(1'000'000'000), nullptr);
 }

@@ -25,9 +25,9 @@ TEST(Frame, CreateBucketIsIdempotent) {
     auto& b2 = frame.CreateBucket("entity");
     b2.unique_ids.push_back("id_1");
 
-    EXPECT_EQ(frame.GetBuckets().size(), 1u);            // same bucket
+    EXPECT_EQ(frame.GetBuckets().size(), 1u); // same bucket
     EXPECT_EQ(frame.GetBuckets()[0].unique_ids.size(), 2u);
-    EXPECT_EQ(&b1, &b2);                                  // same reference
+    EXPECT_EQ(&b1, &b2); // same reference
 }
 
 TEST(Frame, MultipleBucketsKeepStableIndices) {
@@ -61,22 +61,24 @@ TEST(Bucket, GetEntitiesOfTypeReturnsCorrectSpan) {
         bucket.unique_ids.push_back("proj_" + std::to_string(i));
     }
     bucket.type_ranges = {
-        {0, 3},  // type 0: indices 0..2
-        {3, 2},  // type 1: indices 3..4
+        {0, 3}, // type 0: indices 0..2
+        {3, 2}, // type 1: indices 3..4
     };
 
     auto players = bucket.GetEntitiesOfType(0);
-    auto projs   = bucket.GetEntitiesOfType(1);
+    auto projs = bucket.GetEntitiesOfType(1);
 
     EXPECT_EQ(players.size(), 3u);
-    EXPECT_EQ(projs.size(),   2u);
-    for (const auto& p : players) EXPECT_EQ(p.entity_type_id, 0);
-    for (const auto& p : projs)   EXPECT_EQ(p.entity_type_id, 1);
+    EXPECT_EQ(projs.size(), 2u);
+    for (const auto& p : players)
+        EXPECT_EQ(p.entity_type_id, 0);
+    for (const auto& p : projs)
+        EXPECT_EQ(p.entity_type_id, 1);
 }
 
 TEST(Bucket, GetEntitiesOfTypeReturnsEmptyForUnknownId) {
     VTX::Bucket bucket;
-    bucket.type_ranges = { {0, 1} };  // only type 0 registered
+    bucket.type_ranges = {{0, 1}}; // only type 0 registered
     auto span = bucket.GetEntitiesOfType(5);
     EXPECT_TRUE(span.empty());
 }
@@ -87,7 +89,7 @@ TEST(Bucket, GetEntitiesOfTypeWithEnumOverloadCompiles) {
     enum class ArenaEntity : int32_t { Player = 0, Projectile = 1 };
     VTX::Bucket bucket;
     bucket.entities.emplace_back();
-    bucket.type_ranges = { {0, 1} };
+    bucket.type_ranges = {{0, 1}};
 
     auto players = bucket.GetEntitiesOfType(ArenaEntity::Player);
     EXPECT_EQ(players.size(), 1u);

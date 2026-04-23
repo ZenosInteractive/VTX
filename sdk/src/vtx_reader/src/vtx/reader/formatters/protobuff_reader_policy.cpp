@@ -18,7 +18,7 @@ VTX::ProtobufReaderPolicy::HeaderType VTX::ProtobufReaderPolicy::ParseHeader(con
     return header;
 }
 
- VTX::ProtobufReaderPolicy::FooterType VTX::ProtobufReaderPolicy::ParseFooter(const std::string& buffer) {
+VTX::ProtobufReaderPolicy::FooterType VTX::ProtobufReaderPolicy::ParseFooter(const std::string& buffer) {
     FooterType footer;
     if (!footer.ParseFromString(buffer)) {
         throw std::runtime_error("VTX Reader [Proto]: Failed to parse FileFooter.");
@@ -26,8 +26,10 @@ VTX::ProtobufReaderPolicy::HeaderType VTX::ProtobufReaderPolicy::ParseHeader(con
     return footer;
 }
 
-void VTX::ProtobufReaderPolicy::ProcessChunkData(int chunk_index,const std::string& compressed, std::stop_token st,std::vector<VTX::Frame>& out_native_frames,std::vector<uint8_t>& out_decompressed_blob,std::vector<std::span<const std::byte>>& out_raw_frames_spans)
- {
+void VTX::ProtobufReaderPolicy::ProcessChunkData(int chunk_index, const std::string& compressed, std::stop_token st,
+                                                 std::vector<VTX::Frame>& out_native_frames,
+                                                 std::vector<uint8_t>& out_decompressed_blob,
+                                                 std::vector<std::span<const std::byte>>& out_raw_frames_spans) {
     std::string decompressed = VTX::ReplayUnpacker::Decompress(compressed);
 
     cppvtx::FrameChunk proto;
@@ -39,7 +41,7 @@ void VTX::ProtobufReaderPolicy::ProcessChunkData(int chunk_index,const std::stri
 
     //precalculate data size
     size_t total_raw_size = 0;
-    for(int i = 0; i < num_frames; ++i) {
+    for (int i = 0; i < num_frames; ++i) {
         total_raw_size += proto.frames(i).data(0).ByteSizeLong();
     }
     out_decompressed_blob.reserve(total_raw_size);
@@ -48,8 +50,9 @@ void VTX::ProtobufReaderPolicy::ProcessChunkData(int chunk_index,const std::stri
     frame_sizes.reserve(num_frames);
 
     //serialize and concatenate frmaes in a single block
-    for(int i = 0; i < num_frames; ++i) {
-        if (st.stop_requested()) return;
+    for (int i = 0; i < num_frames; ++i) {
+        if (st.stop_requested())
+            return;
         Serialization::FromProto(proto.frames(i), out_native_frames[i]);
 
         // Eextract root for the differ
@@ -62,32 +65,30 @@ void VTX::ProtobufReaderPolicy::ProcessChunkData(int chunk_index,const std::stri
     // done here because if we do it before , if vector grows pointers are invalid
     size_t offset = 0;
     for (size_t size : frame_sizes) {
-        out_raw_frames_spans.emplace_back(
-            reinterpret_cast<const std::byte*>(out_decompressed_blob.data() + offset),
-            size
-        );
+        out_raw_frames_spans.emplace_back(reinterpret_cast<const std::byte*>(out_decompressed_blob.data() + offset),
+                                          size);
         offset += size;
     }
 }
 
-void VTX::ProtobufReaderPolicy::PopulateIndexTable(const FooterType& footer,std::vector<ChunkIndexEntry>& chunk_index_table)
-{
+void VTX::ProtobufReaderPolicy::PopulateIndexTable(const FooterType& footer,
+                                                   std::vector<ChunkIndexEntry>& chunk_index_table) {
     chunk_index_table.reserve(footer.chunk_index_size());
 
     for (const auto& protoEntry : footer.chunk_index()) {
         ChunkIndexEntry nativeEntry;
-        nativeEntry.chunk_index     = protoEntry.chunk_index();
-        nativeEntry.start_frame     = protoEntry.start_frame();
-        nativeEntry.end_frame       = protoEntry.end_frame();
-        nativeEntry.file_offset     = protoEntry.file_offset();
+        nativeEntry.chunk_index = protoEntry.chunk_index();
+        nativeEntry.start_frame = protoEntry.start_frame();
+        nativeEntry.end_frame = protoEntry.end_frame();
+        nativeEntry.file_offset = protoEntry.file_offset();
         nativeEntry.chunk_size_bytes = protoEntry.chunk_size_bytes();
 
         chunk_index_table.push_back(nativeEntry);
     }
 }
 
-void VTX::ProtobufReaderPolicy::PopulateGameTimes(const VTX::ProtobufReaderPolicy::FooterType& footer, VTX::GameTime::VTXGameTimes& game_times)
-{
+void VTX::ProtobufReaderPolicy::PopulateGameTimes(const VTX::ProtobufReaderPolicy::FooterType& footer,
+                                                  VTX::GameTime::VTXGameTimes& game_times) {
     const auto& times_proto = footer.times();
     game_times.SetGameTime({times_proto.game_time().begin(), times_proto.game_time().end()});
     game_times.SetCreatedUtc({times_proto.created_utc().begin(), times_proto.created_utc().end()});
@@ -103,8 +104,7 @@ const VTX::ProtobufReaderPolicy::SchemaType& VTX::ProtobufReaderPolicy::GetSchem
     return header.prop_schema();
 }
 
-VTX::ContextualSchema VTX::ProtobufReaderPolicy::GetVTXContextualSchema(const HeaderType& header)
-{
+VTX::ContextualSchema VTX::ProtobufReaderPolicy::GetVTXContextualSchema(const HeaderType& header) {
     VTX::ContextualSchema contextual_schema;
     contextual_schema.data_identifier = header.prop_schema().data_indentifier();
     contextual_schema.data_version = header.prop_schema().data_version();
@@ -113,8 +113,7 @@ VTX::ContextualSchema VTX::ProtobufReaderPolicy::GetVTXContextualSchema(const He
     return contextual_schema;
 }
 
-VTX::FileHeader VTX::ProtobufReaderPolicy::GetVTXHeader(const HeaderType& pb_header)
-{
+VTX::FileHeader VTX::ProtobufReaderPolicy::GetVTXHeader(const HeaderType& pb_header) {
     VTX::FileHeader out;
     out.replay_name = pb_header.replay_name();
     out.replay_uuid = pb_header.replay_uuid();
@@ -130,8 +129,7 @@ VTX::FileHeader VTX::ProtobufReaderPolicy::GetVTXHeader(const HeaderType& pb_hea
     return out;
 }
 
-VTX::FileFooter VTX::ProtobufReaderPolicy::GetVTXFooter(const FooterType& pb_footer)
-{
+VTX::FileFooter VTX::ProtobufReaderPolicy::GetVTXFooter(const FooterType& pb_footer) {
     VTX::FileFooter out;
     out.total_frames = pb_footer.total_frames();
     out.duration_seconds = pb_footer.duration_seconds();

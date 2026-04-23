@@ -18,10 +18,10 @@ using VTX::Helpers::CalculateContainerHash;
 
 TEST(PropertyContainer, HashIsDeterministicAcrossCalls) {
     PropertyContainer a;
-    a.entity_type_id    = 0;
+    a.entity_type_id = 0;
     a.string_properties = {"player_1"};
-    a.float_properties  = {100.0f};
-    a.vector_properties = {VTX::Vector{1.0, 2.0, 3.0}};
+    a.float_properties = {100.0f};
+    a.vector_properties = {VTX::Vector {1.0, 2.0, 3.0}};
 
     const uint64_t h1 = CalculateContainerHash(a);
     const uint64_t h2 = CalculateContainerHash(a);
@@ -31,7 +31,7 @@ TEST(PropertyContainer, HashIsDeterministicAcrossCalls) {
 
 TEST(PropertyContainer, HashDiffersWhenFloatValueChanges) {
     PropertyContainer a;
-    a.entity_type_id   = 0;
+    a.entity_type_id = 0;
     a.float_properties = {100.0f};
 
     PropertyContainer b = a;
@@ -87,7 +87,7 @@ TEST(PropertyContainer, HashIncludesNestedAnyStruct) {
 TEST(PropertyContainer, DefaultConstructedHasExpectedDefaults) {
     PropertyContainer pc;
     EXPECT_EQ(pc.entity_type_id, -1);
-    EXPECT_EQ(pc.content_hash,   0u);
+    EXPECT_EQ(pc.content_hash, 0u);
     EXPECT_TRUE(pc.bool_properties.empty());
     EXPECT_TRUE(pc.float_properties.empty());
     EXPECT_TRUE(pc.string_properties.empty());

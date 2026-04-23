@@ -6,7 +6,7 @@
  * @brief Generic error policies for reading operations
  * @author Zenos Interactive
  */
-namespace VTX{
+namespace VTX {
 
     /**
      * @struct StrictErrorPolicy
@@ -20,9 +20,7 @@ namespace VTX{
          * @param key The name of the missing key.
          * @throw std::runtime_error Always throws.
          */
-        static void OnMissingKey(const std::string& key) {
-            throw std::runtime_error("Missing mandatory key : " + key);
-        }
+        static void OnMissingKey(const std::string& key) { throw std::runtime_error("Missing mandatory key : " + key); }
 
         /**
          * @brief Called when the data type in JSON does not match the C++ target type.
@@ -66,11 +64,9 @@ namespace VTX{
      */
     struct SilentErrorPolicy {
         /** @brief No-op implementation. */
-        static void OnMissingKey(const std::string& key) {
-        }
+        static void OnMissingKey(const std::string& key) {}
         /** @brief No-op implementation. */
-        static void OnTypeMismatch(const std::string& key) {
-        }
+        static void OnTypeMismatch(const std::string& key) {}
     };
 
     // ==========================================================
@@ -109,4 +105,4 @@ namespace VTX{
             return key;
         }
     };
-}
+} // namespace VTX

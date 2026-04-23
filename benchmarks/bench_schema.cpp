@@ -30,18 +30,18 @@
 
 namespace {
 
-std::string ArenaSchemaPath() {
-    return (std::filesystem::path(VTX_BENCH_FIXTURES_DIR).parent_path().parent_path()
-            / "samples" / "content" / "writer" / "arena" / "arena_schema.json")
-        .string();
-}
+    std::string ArenaSchemaPath() {
+        return (std::filesystem::path(VTX_BENCH_FIXTURES_DIR).parent_path().parent_path() / "samples" / "content" /
+                "writer" / "arena" / "arena_schema.json")
+            .string();
+    }
 
-struct SilenceDebugLogsOnce {
-    SilenceDebugLogsOnce() { VTX::Logger::Instance().SetDebugEnabled(false); }
-};
-const SilenceDebugLogsOnce silence_schema_debug_logs_once{};
+    struct SilenceDebugLogsOnce {
+        SilenceDebugLogsOnce() { VTX::Logger::Instance().SetDebugEnabled(false); }
+    };
+    const SilenceDebugLogsOnce silence_schema_debug_logs_once {};
 
-}  // namespace
+} // namespace
 
 // Full load: JSON parse + SchemaStruct population + PropertyAddressCache
 // construction.  This is what OpenReplayFile triggers internally.
@@ -56,7 +56,10 @@ static void BM_Schema_LoadArena_Both(benchmark::State& state) {
     for (auto _ : state) {
         VTX::SchemaRegistry registry;
         const bool ok = registry.LoadFromJson(path, VTX::SchemaRegistry::ELoadMethod::Both);
-        if (!ok) { state.SkipWithError("LoadFromJson failed"); break; }
+        if (!ok) {
+            state.SkipWithError("LoadFromJson failed");
+            break;
+        }
         benchmark::DoNotOptimize(registry);
     }
     state.SetItemsProcessed(state.iterations());
@@ -76,7 +79,10 @@ static void BM_Schema_LoadArena_BufferOnly(benchmark::State& state) {
     for (auto _ : state) {
         VTX::SchemaRegistry registry;
         const bool ok = registry.LoadFromJson(path, VTX::SchemaRegistry::ELoadMethod::LoadToBuffer);
-        if (!ok) { state.SkipWithError("LoadFromJson failed"); break; }
+        if (!ok) {
+            state.SkipWithError("LoadFromJson failed");
+            break;
+        }
         benchmark::DoNotOptimize(registry);
     }
     state.SetItemsProcessed(state.iterations());

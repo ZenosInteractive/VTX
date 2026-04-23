@@ -18,26 +18,26 @@
 
 namespace {
 
-// Boots Inspector app, registers all windows/layers, and runs UI loop.
-int RunInspector() {
-    GuiApplication app("vtx_inspector", "VTX Inspector v1.0", 1600, 900);
-    auto session = std::make_shared<InspectorSession>();
+    // Boots Inspector app, registers all windows/layers, and runs UI loop.
+    int RunInspector() {
+        GuiApplication app("vtx_inspector", "VTX Inspector v1.0", 1600, 900);
+        auto session = std::make_shared<InspectorSession>();
 
-    app.AddLayer(std::make_shared<InspectorLayout>(session, app.GetScaleController()));
-    app.AddLayer(std::make_shared<TimelineWindow>(session));
-    app.AddLayer(std::make_shared<BucketsWindow>(session));
-    app.AddLayer(std::make_shared<ReaderInspectorWindow>(session));
-    app.AddLayer(std::make_shared<EntityDetailsWindow>(session));
-    app.AddLayer(std::make_shared<SchemaViewerWindow>(session));
-    app.AddLayer(std::make_shared<ReplayTimeDataWindow>(session));
-    app.AddLayer(std::make_shared<ChunkIndexWindow>(session));
-    app.AddLayer(std::make_shared<TimelineEventsWindow>(session));
-    app.AddLayer(std::make_shared<LogsWindow>(session));
-    app.AddLayer(std::make_shared<FileInfoWindow>(session));
+        app.AddLayer(std::make_shared<InspectorLayout>(session, app.GetScaleController()));
+        app.AddLayer(std::make_shared<TimelineWindow>(session));
+        app.AddLayer(std::make_shared<BucketsWindow>(session));
+        app.AddLayer(std::make_shared<ReaderInspectorWindow>(session));
+        app.AddLayer(std::make_shared<EntityDetailsWindow>(session));
+        app.AddLayer(std::make_shared<SchemaViewerWindow>(session));
+        app.AddLayer(std::make_shared<ReplayTimeDataWindow>(session));
+        app.AddLayer(std::make_shared<ChunkIndexWindow>(session));
+        app.AddLayer(std::make_shared<TimelineEventsWindow>(session));
+        app.AddLayer(std::make_shared<LogsWindow>(session));
+        app.AddLayer(std::make_shared<FileInfoWindow>(session));
 
-    app.Run();
-    return 0;
-}
+        app.Run();
+        return 0;
+    }
 
 } // namespace
 

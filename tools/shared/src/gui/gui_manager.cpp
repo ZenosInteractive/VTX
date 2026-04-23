@@ -8,8 +8,8 @@
 
 // Initializes ImGui runtime and backend bindings for the active GLFW window.
 GuiManager::GuiManager(GLFWwindow* window, const std::shared_ptr<GuiScaleController>& scale_controller)
-    : window_(window),
-      scale_controller_(scale_controller) {
+    : window_(window)
+    , scale_controller_(scale_controller) {
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
 
@@ -73,7 +73,7 @@ void GuiManager::EndFrame() {
         GLFWwindow* backup_current_context = glfwGetCurrentContext();
         ImGui::UpdatePlatformWindows();
         ImGui::RenderPlatformWindowsDefault();
-        
+
         glfwMakeContextCurrent(backup_current_context);
     }
 }

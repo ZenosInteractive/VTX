@@ -6,8 +6,7 @@
 
 
 namespace VTX {
-    namespace ChunkingPolicy
-    {
+    namespace ChunkingPolicy {
         struct ThresholdChunkPolicy {
             int32_t max_frames = 1000;
             size_t max_bytes = 10 * 1024 * 1024;
@@ -19,18 +18,18 @@ namespace VTX {
         struct InstantFlushPolicy {
             bool ShouldFlush(size_t, size_t, size_t) const { return true; }
         };
-    }
+    } // namespace ChunkingPolicy
 
 
     template <typename SinkPolicy, typename ChunkingPolicy = ChunkingPolicy::ThresholdChunkPolicy>
     class ReplayWriter {
     public:
         using Serializer = typename SinkPolicy::SerializerPolicy;
-        using FrameType  = typename SinkPolicy::FrameType;
+        using FrameType = typename SinkPolicy::FrameType;
         using SchemaType = typename SinkPolicy::SchemaType;
 
         struct Config {
-            typename SinkPolicy::Config sink_config; 
+            typename SinkPolicy::Config sink_config;
             float default_fps = 60.0f;
             bool is_increasing = true;
             ChunkingPolicy chunker_config;
@@ -38,19 +37,19 @@ namespace VTX {
         };
 
         ReplayWriter(Config config)
-            : sink_(config.sink_config),
-              chunker_(config.chunker_config), registry_({}), sanitizer_(nullptr)
-        {
+            : sink_(config.sink_config)
+            , chunker_(config.chunker_config)
+            , registry_({})
+            , sanitizer_(nullptr) {
             timer_.Setup(config.default_fps, config.is_increasing);
             registry_.LoadFromJson(config.schema_json_path);
             auto schema = Serializer::CreateSchema(registry_);
             sink_.OnSessionStart(schema);
         }
 
-        void RecordFrame(VTX::Frame& native_frame, const VTX::GameTime::GameTimeRegister& game_time_register) 
-        {
+        void RecordFrame(VTX::Frame& native_frame, const VTX::GameTime::GameTimeRegister& game_time_register) {
             timer_.CreateSnapshot();
-            
+
             if (!timer_.AddTimeRegistry(game_time_register)) {
                 timer_.Rollback();
                 return;
@@ -61,13 +60,12 @@ namespace VTX {
                 timer_.Rollback();
                 return;
             }
-            
+
             std::unique_ptr<FrameType> sink_frame = Serializer::FromNative(std::move(native_frame));
             size_t frameSize = Serializer::GetFrameSize(*sink_frame);
-    
-            if (!pending_frames_.empty() && 
-                chunker_.ShouldFlush(pending_frames_.size(), current_chunk_bytes_, frameSize)) 
-            {
+
+            if (!pending_frames_.empty() &&
+                chunker_.ShouldFlush(pending_frames_.size(), current_chunk_bytes_, frameSize)) {
                 Flush();
             }
 
@@ -77,13 +75,14 @@ namespace VTX {
         }
 
         void Flush() {
-            if (pending_frames_.empty()) return;
+            if (pending_frames_.empty())
+                return;
 
             int32_t start_frame = total_frames_ - static_cast<int32_t>(pending_frames_.size());
-            auto time_chunk = timer_.GetLastChunkCreatedUtc(); 
+            auto time_chunk = timer_.GetLastChunkCreatedUtc();
             sink_.SaveChunk(pending_frames_, time_chunk, start_frame, total_frames_);
-            
-            pending_frames_.clear(); 
+
+            pending_frames_.clear();
             current_chunk_bytes_ = 0;
             timer_.UpdateChunkStartIndex();
         }
@@ -93,33 +92,31 @@ namespace VTX {
             VTX::SessionFooter footer_data;
             footer_data.total_frames = total_frames_;
             footer_data.duration_seconds = timer_.GetDuration();
-            
-            const auto& v_gametime = timer_.GetGameTime();
-            const auto& v_utc      = timer_.GetCreatedUtc();
-            const auto& v_gaps     = timer_.GetTimelineGaps();
-            const auto& v_seg      = timer_.GetGameSegments();
 
-            footer_data.game_times  = &v_gametime;
+            const auto& v_gametime = timer_.GetGameTime();
+            const auto& v_utc = timer_.GetCreatedUtc();
+            const auto& v_gaps = timer_.GetTimelineGaps();
+            const auto& v_seg = timer_.GetGameSegments();
+
+            footer_data.game_times = &v_gametime;
             footer_data.created_utc = &v_utc;
-            footer_data.gaps        = &v_gaps;
-            footer_data.segments    = &v_seg;
-            
+            footer_data.gaps = &v_gaps;
+            footer_data.segments = &v_seg;
+
             sink_.Close(footer_data);
         }
 
-        VTX::SchemaRegistry& GetRegistry()
-        {
-            return registry_;
-        }
+        VTX::SchemaRegistry& GetRegistry() { return registry_; }
+
     private:
         SinkPolicy sink_;
         ChunkingPolicy chunker_;
-        
+
         VTX::SchemaRegistry registry_;
         const SchemaSanitizerRegistry* sanitizer_;
         std::vector<std::unique_ptr<FrameType>> pending_frames_;
-        VTX::GameTime::VTXGameTimes timer_; 
+        VTX::GameTime::VTXGameTimes timer_;
         size_t current_chunk_bytes_ = 0;
         int32_t total_frames_ = 0;
     };
-}
+} // namespace VTX

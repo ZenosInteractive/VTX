@@ -18,41 +18,41 @@
 
 namespace {
 
-constexpr int kFramesPerIteration = 1'000;
+    constexpr int kFramesPerIteration = 1'000;
 
-std::string TempOutputPath() {
-    return (std::filesystem::temp_directory_path() / "vtx_bench_writer_out.vtx").string();
-}
+    std::string TempOutputPath() {
+        return (std::filesystem::temp_directory_path() / "vtx_bench_writer_out.vtx").string();
+    }
 
-std::string ArenaSchemaPath() {
-    // benchmarks/ is two levels above the schema in samples/content/writer/arena/.
-    // VTX_BENCH_FIXTURES_DIR = <repo>/benchmarks/fixtures so we walk up twice.
-    return (std::filesystem::path(VTX_BENCH_FIXTURES_DIR).parent_path().parent_path()
-            / "samples" / "content" / "writer" / "arena" / "arena_schema.json")
-        .string();
-}
+    std::string ArenaSchemaPath() {
+        // benchmarks/ is two levels above the schema in samples/content/writer/arena/.
+        // VTX_BENCH_FIXTURES_DIR = <repo>/benchmarks/fixtures so we walk up twice.
+        return (std::filesystem::path(VTX_BENCH_FIXTURES_DIR).parent_path().parent_path() / "samples" / "content" /
+                "writer" / "arena" / "arena_schema.json")
+            .string();
+    }
 
-struct SilenceDebugLogsOnce {
-    SilenceDebugLogsOnce() { VTX::Logger::Instance().SetDebugEnabled(false); }
-};
-const SilenceDebugLogsOnce silence_writer_debug_logs_once{};
+    struct SilenceDebugLogsOnce {
+        SilenceDebugLogsOnce() { VTX::Logger::Instance().SetDebugEnabled(false); }
+    };
+    const SilenceDebugLogsOnce silence_writer_debug_logs_once {};
 
-}  // namespace
+} // namespace
 
 // End-to-end throughput: create writer, record N frames, finalize.
 static void BM_WriterThroughput(benchmark::State& state) {
     const std::string schema_path = ArenaSchemaPath();
-    const std::string out_path    = TempOutputPath();
+    const std::string out_path = TempOutputPath();
 
     for (auto _ : state) {
         VTX::WriterFacadeConfig config;
-        config.output_filepath  = out_path;
+        config.output_filepath = out_path;
         config.schema_json_path = schema_path;
-        config.replay_name      = "BenchmarkWriter";
-        config.replay_uuid      = "bench-0001";
-        config.default_fps      = 60.0f;
+        config.replay_name = "BenchmarkWriter";
+        config.replay_uuid = "bench-0001";
+        config.default_fps = 60.0f;
         config.chunk_max_frames = 500;
-        config.use_compression  = true;
+        config.use_compression = true;
 
         auto writer = VTX::CreateFlatBuffersWriterFacade(config);
         if (!writer) {
@@ -69,9 +69,9 @@ static void BM_WriterThroughput(benchmark::State& state) {
             entity.float_properties.push_back(static_cast<float>(i) * 1.5f);
 
             VTX::Transform t;
-            t.translation = { static_cast<double>(i), 0.0, 50.0 };
-            t.rotation    = { 0.0f, 0.0f, 0.0f, 1.0f };
-            t.scale       = { 1.0, 1.0, 1.0 };
+            t.translation = {static_cast<double>(i), 0.0, 50.0};
+            t.rotation = {0.0f, 0.0f, 0.0f, 1.0f};
+            t.scale = {1.0, 1.0, 1.0};
             entity.transform_properties.push_back(t);
 
             bucket.unique_ids.push_back("player_" + std::to_string(i % 10));

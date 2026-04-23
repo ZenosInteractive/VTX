@@ -10,8 +10,10 @@
 #include "util/test_fixtures.h"
 
 namespace {
-    std::string SchemaPath() { return VtxTest::FixturePath("test_schema.json"); }
-}
+    std::string SchemaPath() {
+        return VtxTest::FixturePath("test_schema.json");
+    }
+} // namespace
 
 // ---------------------------------------------------------------------------
 // LoadFromJson
@@ -80,7 +82,7 @@ TEST(SchemaRegistry, GetFieldResolvesKnownFields) {
     ASSERT_TRUE(schema.LoadFromJson(SchemaPath()));
 
     EXPECT_NE(schema.GetField("Player", "UniqueID"), nullptr);
-    EXPECT_NE(schema.GetField("Player", "Health"),   nullptr);
+    EXPECT_NE(schema.GetField("Player", "Health"), nullptr);
     EXPECT_NE(schema.GetField("Player", "Position"), nullptr);
 }
 
@@ -89,7 +91,7 @@ TEST(SchemaRegistry, GetFieldReturnsNullForUnknown) {
     ASSERT_TRUE(schema.LoadFromJson(SchemaPath()));
 
     EXPECT_EQ(schema.GetField("Player", "DoesNotExist"), nullptr);
-    EXPECT_EQ(schema.GetField("Ghost",  "Health"),       nullptr);
+    EXPECT_EQ(schema.GetField("Ghost", "Health"), nullptr);
 }
 
 TEST(SchemaRegistry, GetStructTypeIdReturnsStableId) {

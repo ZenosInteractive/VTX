@@ -39,50 +39,50 @@
 
 namespace {
 
-// The arena replay lives under samples/content/reader/arena/.  Benchmarks
-// run from various working dirs, so we resolve the path relative to the
-// fixtures dir that CMake exposes via VTX_BENCH_FIXTURES_DIR.
-std::string ArenaReplayPath() {
-    return (std::filesystem::path(VTX_BENCH_FIXTURES_DIR).parent_path().parent_path()
-            / "samples" / "content" / "reader" / "arena" / "arena_from_fbs_ds.vtx")
-        .string();
-}
+    // The arena replay lives under samples/content/reader/arena/.  Benchmarks
+    // run from various working dirs, so we resolve the path relative to the
+    // fixtures dir that CMake exposes via VTX_BENCH_FIXTURES_DIR.
+    std::string ArenaReplayPath() {
+        return (std::filesystem::path(VTX_BENCH_FIXTURES_DIR).parent_path().parent_path() / "samples" / "content" /
+                "reader" / "arena" / "arena_from_fbs_ds.vtx")
+            .string();
+    }
 
-struct SilenceDebugLogsOnce {
-    SilenceDebugLogsOnce() { VTX::Logger::Instance().SetDebugEnabled(false); }
-};
-const SilenceDebugLogsOnce silence_accessor_debug_logs_once{};
+    struct SilenceDebugLogsOnce {
+        SilenceDebugLogsOnce() { VTX::Logger::Instance().SetDebugEnabled(false); }
+    };
+    const SilenceDebugLogsOnce silence_accessor_debug_logs_once {};
 
-// Small bundle that holds the reader + accessor + resolved keys.  Moving
-// this construction out of the measured loop is intentional -- a real
-// integration resolves keys once at setup, not per frame.
-struct AccessorFixture {
-    VTX::ReaderContext reader_result;
-    VTX::FrameAccessor accessor;
-    VTX::PropertyKey<VTX::Vector> key_position;
-    VTX::PropertyKey<float>       key_health;
-    VTX::PropertyKey<std::string> key_unique_id;
+    // Small bundle that holds the reader + accessor + resolved keys.  Moving
+    // this construction out of the measured loop is intentional -- a real
+    // integration resolves keys once at setup, not per frame.
+    struct AccessorFixture {
+        VTX::ReaderContext reader_result;
+        VTX::FrameAccessor accessor;
+        VTX::PropertyKey<VTX::Vector> key_position;
+        VTX::PropertyKey<float> key_health;
+        VTX::PropertyKey<std::string> key_unique_id;
 
-    static AccessorFixture Load(benchmark::State& state) {
-        AccessorFixture f;
-        f.reader_result = VTX::OpenReplayFile(ArenaReplayPath());
-        if (!f.reader_result) {
-            state.SkipWithError("OpenReplayFile failed (run vtx_sample_generate + vtx_sample_advance_write first)");
+        static AccessorFixture Load(benchmark::State& state) {
+            AccessorFixture f;
+            f.reader_result = VTX::OpenReplayFile(ArenaReplayPath());
+            if (!f.reader_result) {
+                state.SkipWithError("OpenReplayFile failed (run vtx_sample_generate + vtx_sample_advance_write first)");
+                return f;
+            }
+            f.accessor = f.reader_result.reader->CreateAccessor();
+            f.key_position = f.accessor.Get<VTX::Vector>("Player", "Position");
+            f.key_health = f.accessor.Get<float>("Player", "Health");
+            f.key_unique_id = f.accessor.Get<std::string>("Player", "UniqueID");
+
+            if (!f.key_position.IsValid() || !f.key_health.IsValid() || !f.key_unique_id.IsValid()) {
+                state.SkipWithError("one or more Player keys did not resolve");
+            }
             return f;
         }
-        f.accessor      = f.reader_result.reader->CreateAccessor();
-        f.key_position  = f.accessor.Get<VTX::Vector>("Player", "Position");
-        f.key_health    = f.accessor.Get<float>("Player", "Health");
-        f.key_unique_id = f.accessor.Get<std::string>("Player", "UniqueID");
+    };
 
-        if (!f.key_position.IsValid() || !f.key_health.IsValid() || !f.key_unique_id.IsValid()) {
-            state.SkipWithError("one or more Player keys did not resolve");
-        }
-        return f;
-    }
-};
-
-}  // namespace
+} // namespace
 
 // Open the replay, create the accessor, resolve three keys, then linearly
 // enumerate every frame, iterate every entity in the "entity" bucket, and
@@ -92,24 +92,27 @@ static void BM_AccessorSequentialScan(benchmark::State& state) {
     int32_t total_frames = 0;
     for (auto _ : state) {
         auto fixture = AccessorFixture::Load(state);
-        if (!fixture.reader_result) break;
+        if (!fixture.reader_result)
+            break;
         auto& reader = fixture.reader_result.reader;
 
         total_frames = reader->GetTotalFrames();
         double pos_accum = 0.0;
-        float  hp_accum  = 0.0f;
-        size_t id_count  = 0;
+        float hp_accum = 0.0f;
+        size_t id_count = 0;
 
         for (int32_t i = 0; i < total_frames; ++i) {
             const auto* frame = reader->GetFrameSync(i);
-            if (!frame) continue;
+            if (!frame)
+                continue;
             for (const auto& bucket : frame->GetBuckets()) {
                 for (const auto& entity : bucket.entities) {
-                    if (entity.entity_type_id != 0) continue;  // 0 = Player
+                    if (entity.entity_type_id != 0)
+                        continue; // 0 = Player
                     VTX::EntityView view(entity);
                     pos_accum += view.Get(fixture.key_position).x;
-                    hp_accum  += view.Get(fixture.key_health);
-                    id_count  += view.Get(fixture.key_unique_id).size();
+                    hp_accum += view.Get(fixture.key_health);
+                    id_count += view.Get(fixture.key_unique_id).size();
                 }
             }
         }
@@ -128,12 +131,15 @@ BENCHMARK(BM_AccessorSequentialScan)->Unit(benchmark::kMillisecond);
 // the replay in memory would observe when scrubbing over the properties.
 static void BM_AccessorHotLoopPreloaded(benchmark::State& state) {
     auto result = VTX::OpenReplayFile(ArenaReplayPath());
-    if (!result) { state.SkipWithError("OpenReplayFile failed"); return; }
+    if (!result) {
+        state.SkipWithError("OpenReplayFile failed");
+        return;
+    }
     auto& reader = result.reader;
 
-    auto accessor     = reader->CreateAccessor();
+    auto accessor = reader->CreateAccessor();
     auto key_position = accessor.Get<VTX::Vector>("Player", "Position");
-    auto key_health   = accessor.Get<float>("Player", "Health");
+    auto key_health = accessor.Get<float>("Player", "Health");
     if (!key_position.IsValid() || !key_health.IsValid()) {
         state.SkipWithError("keys did not resolve");
         return;
@@ -161,7 +167,8 @@ static void BM_AccessorHotLoopPreloaded(benchmark::State& state) {
     for (const auto& frame : ram_cache) {
         for (const auto& bucket : frame.GetBuckets()) {
             for (const auto& entity : bucket.entities) {
-                if (entity.entity_type_id == 0) ++entities_per_sweep;
+                if (entity.entity_type_id == 0)
+                    ++entities_per_sweep;
             }
         }
     }
@@ -171,7 +178,8 @@ static void BM_AccessorHotLoopPreloaded(benchmark::State& state) {
         for (const auto& frame : ram_cache) {
             for (const auto& bucket : frame.GetBuckets()) {
                 for (const auto& entity : bucket.entities) {
-                    if (entity.entity_type_id != 0) continue;
+                    if (entity.entity_type_id != 0)
+                        continue;
                     VTX::EntityView view(entity);
                     sink += view.Get(key_position).x + view.Get(key_health);
                 }
@@ -189,10 +197,13 @@ BENCHMARK(BM_AccessorHotLoopPreloaded)->Unit(benchmark::kMillisecond);
 // behaviour under non-sequential access.
 static void BM_AccessorRandomWithinBucket(benchmark::State& state) {
     auto result = VTX::OpenReplayFile(ArenaReplayPath());
-    if (!result) { state.SkipWithError("OpenReplayFile failed"); return; }
+    if (!result) {
+        state.SkipWithError("OpenReplayFile failed");
+        return;
+    }
     auto& reader = result.reader;
 
-    auto accessor     = reader->CreateAccessor();
+    auto accessor = reader->CreateAccessor();
     auto key_position = accessor.Get<VTX::Vector>("Player", "Position");
     if (!key_position.IsValid()) {
         state.SkipWithError("Player::Position did not resolve");
@@ -227,16 +238,20 @@ static void BM_AccessorRandomWithinBucket(benchmark::State& state) {
             std::vector<size_t> idxs;
             idxs.reserve(bucket.entities.size());
             for (size_t i = 0; i < bucket.entities.size(); ++i) {
-                if (bucket.entities[i].entity_type_id == 0) idxs.push_back(i);
-                if (bucket.entities[i].entity_type_id == 0) idxs.push_back(i);
+                if (bucket.entities[i].entity_type_id == 0)
+                    idxs.push_back(i);
+                if (bucket.entities[i].entity_type_id == 0)
+                    idxs.push_back(i);
             }
-            if (idxs.size() < 2) continue;
+            if (idxs.size() < 2)
+                continue;
             std::shuffle(idxs.begin(), idxs.end(), rng);
             prepared.push_back({&bucket.entities, std::move(idxs)});
         }
     }
     int64_t ops_per_sweep = 0;
-    for (const auto& pb : prepared) ops_per_sweep += static_cast<int64_t>(pb.shuffled.size());
+    for (const auto& pb : prepared)
+        ops_per_sweep += static_cast<int64_t>(pb.shuffled.size());
 
     double sink = 0.0;
     for (auto _ : state) {

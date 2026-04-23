@@ -1,12 +1,12 @@
 #include "vtx/writer/core/vtx_record_pipeline.h"
 
-VTX::RecordPipeline::RecordPipeline(std::unique_ptr<IFrameDataSource> source,std::unique_ptr<IVtxWriterFacade> writer)
-: source_(std::move(source)), writer_(std::move(writer)) 
-{
-}
+VTX::RecordPipeline::RecordPipeline(std::unique_ptr<IFrameDataSource> source, std::unique_ptr<IVtxWriterFacade> writer)
+    : source_(std::move(source))
+    , writer_(std::move(writer)) {}
 
-bool VTX::RecordPipeline::Run(std::function<void(float, std::string)> on_progress ) {
-    if (!source_ || !writer_) return false;
+bool VTX::RecordPipeline::Run(std::function<void(float, std::string)> on_progress) {
+    if (!source_ || !writer_)
+        return false;
 
     if (!source_->Initialize()) {
         return false;
@@ -21,7 +21,6 @@ bool VTX::RecordPipeline::Run(std::function<void(float, std::string)> on_progres
 
 
     while (source_->GetNextFrame(native_frame, time_register)) {
-        
         writer_->RecordFrame(native_frame, time_register);
         frames_processed++;
 
@@ -43,6 +42,7 @@ bool VTX::RecordPipeline::Run(std::function<void(float, std::string)> on_progres
     }
 
     writer_->Stop();
-    if (on_progress) on_progress(1.0f,"");
+    if (on_progress)
+        on_progress(1.0f, "");
     return frames_processed > 0;
 }

@@ -19,46 +19,46 @@
 
 namespace {
 
-// Writes a tiny 5-frame FlatBuffers replay and returns the path.
-// uuid is used both as the filename tail and as the replay UUID so it's easy
-// to identify which test produced which artefact on disk.
-std::string WriteTinyFlatBuffersFile(const std::string& uuid) {
-    VTX::WriterFacadeConfig cfg;
-    cfg.output_filepath  = VtxTest::OutputPath("reader_" + uuid + ".vtx");
-    cfg.schema_json_path = VtxTest::FixturePath("test_schema.json");
-    cfg.replay_name      = "ReaderContextTest";
-    cfg.replay_uuid      = uuid;
-    cfg.default_fps      = 60.0f;
-    cfg.chunk_max_frames = 10;
-    cfg.use_compression  = true;
+    // Writes a tiny 5-frame FlatBuffers replay and returns the path.
+    // uuid is used both as the filename tail and as the replay UUID so it's easy
+    // to identify which test produced which artefact on disk.
+    std::string WriteTinyFlatBuffersFile(const std::string& uuid) {
+        VTX::WriterFacadeConfig cfg;
+        cfg.output_filepath = VtxTest::OutputPath("reader_" + uuid + ".vtx");
+        cfg.schema_json_path = VtxTest::FixturePath("test_schema.json");
+        cfg.replay_name = "ReaderContextTest";
+        cfg.replay_uuid = uuid;
+        cfg.default_fps = 60.0f;
+        cfg.chunk_max_frames = 10;
+        cfg.use_compression = true;
 
-    {
-        auto writer = VTX::CreateFlatBuffersWriterFacade(cfg);
-        for (int i = 0; i < 5; ++i) {
-            VTX::Frame f;
-            auto& bucket = f.CreateBucket("entity");
+        {
+            auto writer = VTX::CreateFlatBuffersWriterFacade(cfg);
+            for (int i = 0; i < 5; ++i) {
+                VTX::Frame f;
+                auto& bucket = f.CreateBucket("entity");
 
-            VTX::PropertyContainer pc;
-            pc.entity_type_id    = 0;
-            pc.string_properties = {"p", "name"};
-            pc.int32_properties  = {1, 0, 0};
-            pc.float_properties  = {100.0f, 50.0f};
-            pc.vector_properties = {VTX::Vector{}, VTX::Vector{}};
-            pc.quat_properties   = {VTX::Quat{}};
-            pc.bool_properties   = {true};
+                VTX::PropertyContainer pc;
+                pc.entity_type_id = 0;
+                pc.string_properties = {"p", "name"};
+                pc.int32_properties = {1, 0, 0};
+                pc.float_properties = {100.0f, 50.0f};
+                pc.vector_properties = {VTX::Vector {}, VTX::Vector {}};
+                pc.quat_properties = {VTX::Quat {}};
+                pc.bool_properties = {true};
 
-            bucket.unique_ids.push_back("p");
-            bucket.entities.push_back(std::move(pc));
+                bucket.unique_ids.push_back("p");
+                bucket.entities.push_back(std::move(pc));
 
-            VTX::GameTime::GameTimeRegister t;
-            t.game_time = float(i) / 60.0f;
-            writer->RecordFrame(f, t);
-        }
-        writer->Flush();
-        writer->Stop();
-    }  // release -- file is fully closed before returning
-    return cfg.output_filepath;
-}
+                VTX::GameTime::GameTimeRegister t;
+                t.game_time = float(i) / 60.0f;
+                writer->RecordFrame(f, t);
+            }
+            writer->Flush();
+            writer->Stop();
+        } // release -- file is fully closed before returning
+        return cfg.output_filepath;
+    }
 
 } // namespace
 
@@ -73,15 +73,14 @@ protected:
         // Name output after the current test so parallel ctest invocations
         // don't race over the same filename.
         const auto* info = ::testing::UnitTest::GetInstance()->current_test_info();
-        const std::string uuid =
-            std::string(info->test_suite_name()) + "_" + info->name();
+        const std::string uuid = std::string(info->test_suite_name()) + "_" + info->name();
 
         path_ = WriteTinyFlatBuffersFile(uuid);
-        ctx_  = VTX::OpenReplayFile(path_);
+        ctx_ = VTX::OpenReplayFile(path_);
         ASSERT_TRUE(ctx_) << ctx_.error;
     }
 
-    std::string        path_;
+    std::string path_;
     VTX::ReaderContext ctx_;
 };
 

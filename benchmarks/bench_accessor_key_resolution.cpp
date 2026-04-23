@@ -20,39 +20,45 @@
 
 namespace {
 
-std::string ArenaReplayPath() {
-    return (std::filesystem::path(VTX_BENCH_FIXTURES_DIR).parent_path().parent_path()
-            / "samples" / "content" / "reader" / "arena" / "arena_from_fbs_ds.vtx")
-        .string();
-}
+    std::string ArenaReplayPath() {
+        return (std::filesystem::path(VTX_BENCH_FIXTURES_DIR).parent_path().parent_path() / "samples" / "content" /
+                "reader" / "arena" / "arena_from_fbs_ds.vtx")
+            .string();
+    }
 
-struct SilenceDebugLogsOnce {
-    SilenceDebugLogsOnce() { VTX::Logger::Instance().SetDebugEnabled(false); }
-};
-const SilenceDebugLogsOnce silence_keyres_debug_logs_once{};
+    struct SilenceDebugLogsOnce {
+        SilenceDebugLogsOnce() { VTX::Logger::Instance().SetDebugEnabled(false); }
+    };
+    const SilenceDebugLogsOnce silence_keyres_debug_logs_once {};
 
-// A representative spread of property lookups a real integration performs.
-struct PropSpec { const char* struct_name; const char* prop_name; };
-constexpr std::array<PropSpec, 9> kProps = {{
-    {"Player",     "Position"},
-    {"Player",     "Health"},
-    {"Player",     "UniqueID"},
-    {"Player",     "Velocity"},
-    {"Player",     "Score"},
-    {"Projectile", "Position"},
-    {"Projectile", "Damage"},
-    {"MatchState", "ScoreTeam1"},
-    {"MatchState", "ScoreTeam2"},
-}};
+    // A representative spread of property lookups a real integration performs.
+    struct PropSpec {
+        const char* struct_name;
+        const char* prop_name;
+    };
+    constexpr std::array<PropSpec, 9> kProps = {{
+        {"Player", "Position"},
+        {"Player", "Health"},
+        {"Player", "UniqueID"},
+        {"Player", "Velocity"},
+        {"Player", "Score"},
+        {"Projectile", "Position"},
+        {"Projectile", "Damage"},
+        {"MatchState", "ScoreTeam1"},
+        {"MatchState", "ScoreTeam2"},
+    }};
 
-}  // namespace
+} // namespace
 
 // Resolve a full set of PropertyKey<T> via the public accessor API.  If
 // the underlying cache is O(1) then time-per-resolution should stay
 // constant regardless of how many properties the schema defines.
 static void BM_AccessorKeyResolution(benchmark::State& state) {
     auto result = VTX::OpenReplayFile(ArenaReplayPath());
-    if (!result) { state.SkipWithError("OpenReplayFile failed"); return; }
+    if (!result) {
+        state.SkipWithError("OpenReplayFile failed");
+        return;
+    }
 
     const auto accessor = result.reader->CreateAccessor();
 
