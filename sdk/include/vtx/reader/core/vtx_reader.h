@@ -406,7 +406,6 @@ namespace VTX {
         }
 
         void UpdateCacheWindow(int32_t current_idx) {
-
             std::vector<PendingLoad> orphans;
 
             std::lock_guard<std::mutex> lock(cache_mutex_);
@@ -502,7 +501,6 @@ namespace VTX {
             std::stop_token dummy;
             auto data = PerformHeavyLoading(idx, dummy);
             if (!data.native_frames.empty()) {
-
                 const auto evts = GetEventsSnapshot();
                 {
                     std::lock_guard<std::mutex> lock(cache_mutex_);
