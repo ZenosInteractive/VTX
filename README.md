@@ -1,6 +1,11 @@
 # VTX SDK
 
 [![CI](https://github.com/ZenosInteractive/VTX/actions/workflows/build.yml/badge.svg)](https://github.com/ZenosInteractive/VTX/actions/workflows/build.yml)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue?logo=apache&logoColor=white)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/ZenosInteractive/VTX?logo=github&label=Release)](https://github.com/ZenosInteractive/VTX/releases)
+[![C++20](https://img.shields.io/badge/C%2B%2B-20-00599C?logo=cplusplus&logoColor=white)](#requirements)
+[![Docs](https://img.shields.io/badge/Docs-Wiki-blue?logo=gitbook&logoColor=white)](https://github.com/ZenosInteractive/VTX/wiki)
+[![Website](https://img.shields.io/badge/Website-zenosinteractive.com-B870FB?logoColor=white)](https://www.zenosinteractive.com/)
 
 A high-performance C++20 toolkit for recording, reading, comparing, and inspecting structured replay data. VTX serializes frame-based entity state into a compact, chunked binary format with support for **Protocol Buffers** and **FlatBuffers** backends.
 
