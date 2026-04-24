@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/ZenosInteractive/VTX/actions/workflows/build.yml/badge.svg)](https://github.com/ZenosInteractive/VTX/actions/workflows/build.yml)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue?logo=apache&logoColor=white)](LICENSE)
-[![Release](https://img.shields.io/github/v/release/ZenosInteractive/VTX?logo=github&label=Release)](https://github.com/ZenosInteractive/VTX/releases)
+[![Release](https://img.shields.io/github/v/release/ZenosInteractive/VTX?include_prereleases&logo=github&label=Release)](https://github.com/ZenosInteractive/VTX/releases)
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-00599C?logo=cplusplus&logoColor=white)](#requirements)
 [![Docs](https://img.shields.io/badge/Docs-Wiki-blue?logo=gitbook&logoColor=white)](https://github.com/ZenosInteractive/VTX/wiki)
 [![Website](https://img.shields.io/badge/Website-zenosinteractive.com-B870FB?logoColor=white)](https://www.zenosinteractive.com/)
@@ -28,7 +28,7 @@ cmake --build build --config Release --parallel
 cmake --install build --config Release --prefix dist
 ```
 
-Other build paths (vcpkg, CMake presets, the `build_sdk.bat` one-shot wrapper) in [Getting Started](https://github.com/ZenosInteractive/VTX/wiki/Getting-Started).
+Other build paths (vcpkg, CMake presets, the `scripts/build_sdk.bat` one-shot wrapper) in [Getting Started](https://github.com/ZenosInteractive/VTX/wiki/Getting-Started).
 
 ### Write a replay
 

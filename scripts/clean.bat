@@ -1,4 +1,8 @@
 @echo off
+
+REM Run from repo root regardless of where the script was invoked from.
+cd /d "%~dp0.."
+
 echo [INFO] Cleaning build artifacts...
 
 if exist "build" (

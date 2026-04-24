@@ -1,7 +1,18 @@
 # Build output
 build/
+build-bench/
 dist/
 out/
+
+# Local benchmark scratch output (the canonical run is tracked under docs/benchmarks/)
+/bench_*.txt
+/bench_*.json
+
+# Release artefacts produced by scripts/release_sdk.* (shipped via GitHub Releases, not git)
+/vtx-sdk-*.zip
+/vtx-sdk-*.zip.sha256
+/vtx-sdk-*.tar.gz
+/vtx-sdk-*.tar.gz.sha256
 
 # Local tool state (Claude Code, etc.)
 .claude/

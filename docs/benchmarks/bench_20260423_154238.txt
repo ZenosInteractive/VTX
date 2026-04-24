@@ -1,0 +1,101 @@
+2026-04-23T15:42:38+02:00
+Running D:\VTX\build-bench\bin\Release\vtx_benchmarks.exe
+Run on (20 X 2995 MHz CPU s)
+CPU Caches:
+  L1 Data 48 KiB (x10)
+  L1 Instruction 32 KiB (x10)
+  L2 Unified 1280 KiB (x10)
+  L3 Unified 24576 KiB (x1)
+---------------------------------------------------------------------------------------------------------------
+Benchmark                                                    Time             CPU   Iterations items_per_second
+---------------------------------------------------------------------------------------------------------------
+BM_ReaderSequentialScan                                   28.7 ms         17.6 ms           32       568.889k/s
+BM_ReaderRandomAccess                                   173738 us        20312 us           20       4.92308k/s
+BM_WriterThroughput                                       14.2 ms         14.2 ms           56       70.2745k/s
+BM_DifferConsecutiveFrames                                4.27 us         3.64 us       407273       274.373k/s
+-----------------------------------------------------------------------------------------------------------------------------
+Benchmark                                                    Time             CPU   Iterations items_per_second keys_per_iter
+-----------------------------------------------------------------------------------------------------------------------------
+BM_PropertyAddressCacheLookup                             1.30 us         1.26 us       560000       18.3182M/s            23
+---------------------------------------------------------------------------------------------------------------
+Benchmark                                                    Time             CPU   Iterations items_per_second
+---------------------------------------------------------------------------------------------------------------
+BM_AccessorSequentialScan                                  129 ms         45.9 ms           16        78.434k/s
+BM_AccessorHotLoopPreloaded                               2.10 ms         1.88 ms          407       19.1373M/s
+BM_AccessorRandomWithinBucket                             1.16 ms         1.06 ms          896       67.6847M/s
+------------------------------------------------------------------------------------------------------------------------------
+Benchmark                                                    Time             CPU   Iterations items_per_second props_per_iter
+------------------------------------------------------------------------------------------------------------------------------
+BM_AccessorKeyResolution                                 0.808 us        0.732 us       746667        12.288M/s              9
+----------------------------------------------------------------------------------------------------------------------------
+Benchmark                                                    Time             CPU   Iterations items_per_second ns_per_frame
+----------------------------------------------------------------------------------------------------------------------------
+BM_CS_ReaderSequentialScan_FBS/repeats:5_mean             3767 ms         1694 ms            5       6.66843k/s    158.948us
+BM_CS_ReaderSequentialScan_FBS/repeats:5_median           3094 ms         1516 ms            5       7.03076k/s    142.232us
+BM_CS_ReaderSequentialScan_FBS/repeats:5_stddev           1417 ms          528 ms            5       1.52348k/s    49.5582us
+BM_CS_ReaderSequentialScan_FBS/repeats:5_cv              37.61 %         31.18 %             5           22.85%       31.18%
+BM_CS_ReaderSequentialScan_Proto/repeats:5_mean           2933 ms          931 ms            5       11.4765k/s    87.3921us
+BM_CS_ReaderSequentialScan_Proto/repeats:5_median         2868 ms          906 ms            5       11.7583k/s     85.046us
+BM_CS_ReaderSequentialScan_Proto/repeats:5_stddev          135 ms         57.0 ms            5        690.597/s    5.34751us
+BM_CS_ReaderSequentialScan_Proto/repeats:5_cv             4.59 %          6.12 %             5            6.02%        6.12%
+BM_CS_AccessorSequentialScan_FBS/repeats:5_mean           3170 ms         1562 ms            5       6.88478k/s    146.631us
+BM_CS_AccessorSequentialScan_FBS/repeats:5_median         3047 ms         1500 ms            5         7.104k/s    140.766us
+BM_CS_AccessorSequentialScan_FBS/repeats:5_stddev          196 ms          175 ms            5        728.187/s    16.3938us
+BM_CS_AccessorSequentialScan_FBS/repeats:5_cv             6.19 %         11.18 %             5           10.58%       11.18%
+---------------------------------------------------------------------------------------------------------------
+Benchmark                                                    Time             CPU   Iterations items_per_second
+---------------------------------------------------------------------------------------------------------------
+BM_CS_AccessorRandomAccess_FBS                        25029466 us      6671875 us            1        7.49415/s
+BM_CS_DifferConsecutiveFrames_FBS                          413 us          236 us         3446       4.24123k/s
+----------------------------------------------------------------------------------------------------------------------------
+Benchmark                                                    Time             CPU   Iterations items_per_second ns_per_frame
+----------------------------------------------------------------------------------------------------------------------------
+BM_RL_ReaderSequentialScan_FBS/repeats:5_mean              803 ms          347 ms            5        25.998k/s    38.5417us
+BM_RL_ReaderSequentialScan_FBS/repeats:5_median            812 ms          352 ms            5          25.6k/s    39.0625us
+BM_RL_ReaderSequentialScan_FBS/repeats:5_stddev           19.9 ms         17.1 ms            5       1.32013k/s    1.90181us
+BM_RL_ReaderSequentialScan_FBS/repeats:5_cv               2.48 %          4.93 %             5            5.08%        4.93%
+BM_RL_ReaderSequentialScan_Proto/repeats:5_mean           2926 ms         1150 ms            5       17.8477k/s    56.4722us
+BM_RL_ReaderSequentialScan_Proto/repeats:5_median         2933 ms         1125 ms            5       18.1013k/s    55.2445us
+BM_RL_ReaderSequentialScan_Proto/repeats:5_stddev         97.9 ms          116 ms            5       1.74255k/s    5.67999us
+BM_RL_ReaderSequentialScan_Proto/repeats:5_cv             3.35 %         10.06 %             5            9.76%       10.06%
+BM_RL_AccessorSequentialScan_FBS/repeats:5_mean            787 ms          367 ms            5       24.5685k/s    40.7986us
+BM_RL_AccessorSequentialScan_FBS/repeats:5_median          787 ms          367 ms            5       24.5106k/s    40.7986us
+BM_RL_AccessorSequentialScan_FBS/repeats:5_stddev         14.3 ms         19.9 ms            5       1.33477k/s    2.21312us
+BM_RL_AccessorSequentialScan_FBS/repeats:5_cv             1.81 %          5.42 %             5            5.43%        5.42%
+---------------------------------------------------------------------------------------------------------------
+Benchmark                                                    Time             CPU   Iterations items_per_second
+---------------------------------------------------------------------------------------------------------------
+BM_RL_AccessorRandomAccess_FBS                         6371031 us      1515625 us            1        32.9897/s
+BM_RL_DifferConsecutiveFrames_FBS                          161 us          134 us         6400       7.44727k/s
+----------------------------------------------------------------------------------------------------------------------------
+Benchmark                                                    Time             CPU   Iterations items_per_second ns_per_frame
+----------------------------------------------------------------------------------------------------------------------------
+BM_CS_PreviewFirst1000Frames_FBS/repeats:5_mean           1056 ms          452 ms            5       2.22059k/s    451.562us
+BM_CS_PreviewFirst1000Frames_FBS/repeats:5_median         1042 ms          445 ms            5       2.24561k/s    445.312us
+BM_CS_PreviewFirst1000Frames_FBS/repeats:5_stddev         36.7 ms         26.7 ms            5        128.038/s    26.7229us
+BM_CS_PreviewFirst1000Frames_FBS/repeats:5_cv             3.48 %          5.92 %             5            5.77%        5.92%
+BM_CS_SeekMiddlePlay300Frames_FBS/repeats:5_mean           940 ms          303 ms            5       1.01195k/s    1.01042ms
+BM_CS_SeekMiddlePlay300Frames_FBS/repeats:5_median         939 ms          273 ms            5       1.09714k/s    911.458us
+BM_CS_SeekMiddlePlay300Frames_FBS/repeats:5_stddev        20.8 ms         51.6 ms            5        163.432/s    172.151us
+BM_CS_SeekMiddlePlay300Frames_FBS/repeats:5_cv            2.21 %         17.04 %             5           16.15%       17.04%
+BM_CS_StridedScan_Every100th_FBS/repeats:5_mean           3039 ms         1491 ms            5         71.854/s   0.0139311s
+BM_CS_StridedScan_Every100th_FBS/repeats:5_median         3048 ms         1500 ms            5        71.3333/s   0.0140187s
+BM_CS_StridedScan_Every100th_FBS/repeats:5_stddev         51.8 ms         52.5 ms            5        2.55409/s     490.88us
+BM_CS_StridedScan_Every100th_FBS/repeats:5_cv             1.70 %          3.52 %             5            3.55%        3.52%
+----------------------------------------------------------------------------------------------------------------------------
+Benchmark                                                    Time             CPU   Iterations cache_window items_per_second
+----------------------------------------------------------------------------------------------------------------------------
+BM_CS_AccessorRandomAccess_CacheSweep_FBS/0           15750976 us      2187500 us            1            0        22.8571/s
+BM_CS_AccessorRandomAccess_CacheSweep_FBS/2           24702361 us      6312500 us            1            2        7.92079/s
+BM_CS_AccessorRandomAccess_CacheSweep_FBS/5           19364039 us      7781250 us            1            5         6.4257/s
+BM_CS_AccessorRandomAccess_CacheSweep_FBS/10           3367046 us      2796875 us            1           10        17.8771/s
+BM_CS_AccessorRandomAccess_CacheSweep_FBS/20           3346944 us      2765625 us            1           20        18.0791/s
+---------------------------------------------------------------------------------------------------------------
+Benchmark                                                    Time             CPU   Iterations items_per_second
+---------------------------------------------------------------------------------------------------------------
+BM_Arena_DifferIdenticalFrames_FBS                        6552 ns         6452 ns        89600       154.984k/s
+BM_Arena_DifferFirstVsLast_FBS                            61.4 us         57.4 us        10619       17.4261k/s
+BM_CS_DifferIdenticalFrames_FBS                           71.8 us         71.5 us         8960       13.9863k/s
+BM_CS_DifferFirstVsLast_FBS                                140 us          140 us         4461        7.1376k/s
+BM_Schema_LoadArena_Both                                   247 us          249 us         2635       4.01524k/s
+BM_Schema_LoadArena_BufferOnly                             240 us          241 us         2987       4.15583k/s

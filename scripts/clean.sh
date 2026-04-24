@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# Run from repo root regardless of where the script was invoked from.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR/.."
+
 echo "[INFO] Cleaning build artifacts..."
 
 if [ -d "build" ]; then

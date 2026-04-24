@@ -1,7 +1,7 @@
 # Performance
 
 > Numbers in this page come from the benchmark run on **2026-04-23** against `main` at commit `78b20f3`.
-> Raw data for that run (re-usable for graphing or regression tracking): [`reports/benchmarks/bench_20260423_162008.json`](../reports/benchmarks/bench_20260423_162008.json).
+> Raw data for that run (re-usable for graphing or regression tracking): [`docs/benchmarks/bench_20260423_162008.json`](benchmarks/bench_20260423_162008.json).
 
 ## At a glance
 
@@ -110,7 +110,7 @@ cmake --build build-bench --target vtx_benchmarks --config Release --parallel
 
 # Run the full suite (JSON + console output)
 build-bench/bin/Release/vtx_benchmarks.exe \
-    --benchmark_out=reports/benchmarks/bench_$(date +%Y%m%d_%H%M%S).json \
+    --benchmark_out=docs/benchmarks/bench_$(date +%Y%m%d_%H%M%S).json \
     --benchmark_out_format=json \
     --benchmark_counters_tabular=true
 
@@ -129,7 +129,7 @@ Fixtures required: CS, RL, and arena replays under `samples/content/reader/{cs,r
 
 | Path | What it is |
 |---|---|
-| [`reports/benchmarks/bench_20260423_162008.json`](../reports/benchmarks/bench_20260423_162008.json) | Raw google/benchmark JSON — reusable for graphing or regression tracking. |
-| [`reports/benchmarks/bench_20260423_162008.txt`](../reports/benchmarks/bench_20260423_162008.txt) | Console output as produced. |
+| [`docs/benchmarks/bench_20260423_162008.json`](benchmarks/bench_20260423_162008.json) | Raw google/benchmark JSON — reusable for graphing or regression tracking. |
+| [`docs/benchmarks/bench_20260423_162008.txt`](benchmarks/bench_20260423_162008.txt) | Console output as produced. |
 
 This page is the canonical narrative version of that data. If the benchmarks are re-run, update the numbers here (and commit the new raw outputs alongside) rather than maintaining a parallel per-run markdown report.
