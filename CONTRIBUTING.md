@@ -18,7 +18,7 @@ cmake --build build --config Release --parallel
 Or use the provided script:
 
 ```bat
-build_sdk.bat
+scripts\build_sdk.bat
 ```
 
 ## Code Style

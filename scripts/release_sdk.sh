@@ -1,17 +1,14 @@
 #!/usr/bin/env bash
 # ==============================================================================
-#   VTX SDK: Build (Linux / macOS)
+#   VTX SDK: Release Build (Linux / macOS)
 # ==============================================================================
 #
-# Mirrors build_sdk.bat for non-Windows hosts.  Requires:
+# Mirrors scripts/release_sdk.bat for non-Windows hosts.  Builds the SDK libraries
+# plus the CLI tool in Release mode and installs them into ./dist.
 #
-#   cmake >= 3.15
-#   C++20 compiler (gcc >= 11, clang >= 13)
-#   protobuf-compiler + libprotobuf-dev  (Debian/Ubuntu)
-#
-# FlatBuffers and zstd are NOT system dependencies -- both are fetched and
-# built from pinned source via CMake FetchContent.  See
-# cmake/VtxDependencies.cmake.
+# The GUI tools (inspector, schema_creator) carry Windows-only glue and
+# default OFF on non-Windows, so the release package on Linux/macOS ships
+# the libraries + vtx_cli + samples + headers.
 #
 # Ubuntu/Debian:
 #   sudo apt install cmake g++ protobuf-compiler libprotobuf-dev
@@ -21,16 +18,17 @@
 #
 # macOS (Homebrew):
 #   brew install cmake protobuf
-#
-# The GUI tools (inspector, schema_creator) still carry Windows-only glue
-# and default OFF on non-Windows.  The SDK libs, the CLI tool, the samples,
-# and the test suite build and run on Linux.
 # ==============================================================================
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$REPO_ROOT"
+
+echo "=========================================="
+echo "     VTX SDK: Release Build"
+echo "=========================================="
 
 # --- 0. Sanity checks -------------------------------------------------------
 
@@ -55,42 +53,34 @@ fi
 # --- 1. Clean previous artefacts -------------------------------------------
 
 BUILD_DIR="${BUILD_DIR:-build}"
-INSTALL_PREFIX="${INSTALL_PREFIX:-$SCRIPT_DIR/dist}"
-BUILD_TYPE="${BUILD_TYPE:-Release}"
+INSTALL_PREFIX="${INSTALL_PREFIX:-$REPO_ROOT/dist}"
 JOBS="${JOBS:-$(nproc 2>/dev/null || sysctl -n hw.logicalcpu 2>/dev/null || echo 4)}"
 
-if [[ "${CLEAN:-0}" == "1" ]]; then
-    echo "[INFO] Cleaning previous build + dist..."
-    rm -rf "$BUILD_DIR" "$INSTALL_PREFIX"
-fi
+echo "[INFO] Cleaning previous build + dist..."
+rm -rf "$BUILD_DIR" "$INSTALL_PREFIX"
 
 # --- 2. Configure -----------------------------------------------------------
 
-echo "[INFO] Configuring (${BUILD_TYPE})..."
+echo "[INFO] Configuring release build..."
 cmake -S . -B "$BUILD_DIR" \
-    -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
+    -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX" \
     -DBUILD_VTX_TOOL=ON
 
-# --- 3. Build ---------------------------------------------------------------
+# --- 3. Build release targets ----------------------------------------------
 
-echo "[INFO] Compiling SDK (${JOBS} jobs)..."
-cmake --build "$BUILD_DIR" --config "$BUILD_TYPE" --parallel "$JOBS"
+echo "[INFO] Compiling release targets (${JOBS} jobs)..."
+# vtx_cli is the only tool that builds cross-platform.
+# The SDK libraries (vtx_reader, vtx_differ, vtx_common) come along for free.
+cmake --build "$BUILD_DIR" --config Release --target vtx_cli --parallel "$JOBS"
 
-# --- 4. Run the test suite --------------------------------------------------
+# --- 4. Install -------------------------------------------------------------
 
-if [[ "${SKIP_TESTS:-0}" != "1" ]]; then
-    echo "[INFO] Running tests..."
-    ctest --test-dir "$BUILD_DIR" -C "$BUILD_TYPE" --output-on-failure --parallel "$JOBS"
-fi
-
-# --- 5. Install -------------------------------------------------------------
-
-echo "[INFO] Installing into ${INSTALL_PREFIX}..."
-cmake --install "$BUILD_DIR" --config "$BUILD_TYPE"
+echo "[INFO] Installing release output into ${INSTALL_PREFIX}..."
+cmake --install "$BUILD_DIR" --config Release
 
 echo
-echo "[SUCCESS] Build completed."
+echo "[SUCCESS] Release dist is ready."
 echo "   Libraries: ${INSTALL_PREFIX}/lib/"
 echo "   Binaries:  ${INSTALL_PREFIX}/bin/"
 echo "   Headers:   ${INSTALL_PREFIX}/include/"

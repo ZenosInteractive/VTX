@@ -1,6 +1,9 @@
 @echo off
 setlocal
 
+REM Run from repo root regardless of where the script was invoked from.
+cd /d "%~dp0.."
+
 echo ==========================================
 echo      VTX SDK: Release Build
 echo ==========================================

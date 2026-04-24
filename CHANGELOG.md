@@ -5,6 +5,17 @@ All notable changes to the VTX SDK will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **scripts**: `scripts/release_sdk.sh` -- Linux/macOS counterpart to `scripts/release_sdk.bat`.  Builds the SDK libs + `vtx_cli` in Release mode and installs into `./dist`.  Removes the build/release script asymmetry between Windows and Linux
+
+### Changed
+
+- **repo layout**: all five build/clean/release wrappers moved from the repo root into `scripts/` (`build_sdk.bat`, `build_sdk.sh`, `clean.bat`, `clean.sh`, `release_sdk.bat`).  Each script now `cd`s to the repo root internally so invocations like `./scripts/build_sdk.sh` or `scripts\build_sdk.bat` work from any working directory.  Documentation references (README, CONTRIBUTING, docs/BUILD.md) updated accordingly
+- **repo layout**: `reports/benchmarks/` renamed to `docs/benchmarks/` to signal that the committed baseline outputs are reference documentation (co-located with `docs/PERFORMANCE.md` which narrates them) rather than stray CI artefacts.  `reports/` directory removed.  References in `docs/PERFORMANCE.md`, `docs/BUILD.md`, and the benchmark write-ups updated
+
 ## [0.1.0] - 2026-04-24
 
 ### Added
