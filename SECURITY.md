@@ -19,7 +19,7 @@ VTX is pre-1.0. Security fixes land on `main` and are tagged in the next release
 Use one of:
 
 1. **GitHub Security Advisory** (preferred): [open a private report](https://github.com/ZenosInteractive/VTX/security/advisories/new). Keeps the discussion, CVE assignment, and patch coordination in one place.
-2. **Email**: `security@zenosinteractive.com`. PGP not required; if you want encryption, ask in your first message and we'll send a key out-of-band.
+2. **Email**: `vtx@zenosinteractive.com`. PGP not required; if you want encryption, ask in your first message and we'll send a key out-of-band.
 
 Please include, to the extent you're able:
 
@@ -32,7 +32,7 @@ If you'd like attribution in the fix announcement, say so and give us the name /
 
 ## Response timeline
 
-These are commitments, not aspirations. If we miss one, escalate via email to `security@zenosinteractive.com` with a subject prefix of `[ESCALATION]`.
+These are commitments, not aspirations. If we miss one, escalate via email to `vtx@zenosinteractive.com` with a subject prefix of `[ESCALATION]`.
 
 | Phase | Target |
 |---|---|

@@ -16,7 +16,7 @@ namespace {
 
     // Boots Schema Creator app, registers editor/validation/evolution layers, and runs UI loop.
     int RunSchemaCreator() {
-        GuiApplication app("vtx_schema_creator", "Schema Creator v1.0", 1600, 950);
+        GuiApplication app("vtx_schema_creator", "Schema Creator v0.1.0", 1600, 950);
         auto session = std::make_shared<SchemaCreatorSession>();
         session->SetMappingsWindowVisible(true);
         session->SetGeneralInfoWindowVisible(true);
