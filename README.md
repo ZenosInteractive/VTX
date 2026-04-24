@@ -167,8 +167,16 @@ config.use_compression  = true;
 
 auto writer = VTX::CreateWriterFacade(config, VTX::SerializationFormat::Flatbuffers);
 
-// Record frames in a loop
-writer->RecordFrame(frame, game_time);
+// Record one frame per tick of your game loop.  RecordFrame is the only
+// call inside the loop -- Flush and Stop run once after the loop ends.
+while (simulation_is_running) {
+    VTX::Frame frame = BuildFrameFromGameState();
+    int64_t  game_time = GetCurrentGameTimeTicks();
+    writer->RecordFrame(frame, game_time);
+}
+
+// Flush any buffered frames to disk, then finalise the file (writes
+// the footer with the seek table + schema).  Both run exactly once.
 writer->Flush();
 writer->Stop();
 ```
@@ -197,18 +205,41 @@ Supports: `open`, `close`, `frame`, `entities`, `entity`, `property`, `buckets`,
 
 ### Schema Creator
 
-Interactive tool for defining VTX schemas from game data structures.
+GUI tool for building and maintaining the `schema.json` file that the
+writer consumes (via `WriterFacadeConfig::schema_json_path`).  A schema
+declares the entity structs, their properties, property types, and the
+bucket layout the recorder will group entities into.
 
 ```
 dist/bin/vtx_schema_creator.exe
 ```
+
+Typical flow:
+
+1. **New Schema** -- creates an empty document with a default bucket list.
+2. **Add a struct** (e.g. `Player`), then add properties to it -- for each
+   property pick a `typeId` (`Int32`, `Float`, `Vector3`, `String`, ...),
+   a display name, and a category.
+3. **Map structs to buckets** in the Buckets window so the writer knows
+   where each entity type is stored in a frame.
+4. **Validate** -- the tool flags missing types, duplicate names,
+   mismatched bucket mappings, etc.
+5. **Save** -- produces a JSON file you point the writer at.
+6. **Evolve** -- loading an existing schema captures it as the baseline.
+   Changes are diffed against the baseline; saving "as next generation"
+   bumps the version and refuses to proceed if the diff contains breaking
+   changes (removed fields, incompatible type changes).
+
+A concrete schema ready to drop into the writer is
+[`samples/content/writer/arena/arena_schema.json`](samples/content/writer/arena/arena_schema.json) --
+open it in Schema Creator to see the output format.
 
 ## Project Structure
 
 ```
 sdk/
   include/vtx/         Public API headers (vtx/common/, vtx/reader/, vtx/writer/, vtx/differ/)
-  src/                 Implementation
+  src/
     schemas/           Protobuf and FlatBuffers schema definitions
     vtx_common/        Core library implementation
     vtx_reader/        Reader implementation
@@ -218,12 +249,21 @@ tools/
   cli/                 Headless CLI inspector (JSON protocol)
   inspector/           GUI inspector (ImGui + GLFW)
   schema_creator/      Schema definition tool
-  shared/              Shared UI library
+  shared/              Shared UI library used by inspector + schema_creator
+tests/                 GoogleTest suite -- reader/writer/differ/common + fixtures
+benchmarks/            google/benchmark suite (gated by -DVTX_BUILD_BENCHMARKS=ON)
+samples/               Example programs + sample replay/schema content
+docs/                  ARCHITECTURE, BUILD, PERFORMANCE, FILE_FORMAT, SAMPLES, SDK_API
+scripts/               Code generation (vtx_codegen.py) and build-side helpers
+cmake/                 CMake package config (VtxDependencies, install rules)
 thirdparty/            Header-only deps + legacy Windows binary fallback
 vcpkg.json             Optional manifest for reproducible Windows package-manager builds
-scripts/               Code generation (vtx_codegen.py)
-cmake/                 CMake package config for downstream projects
-samples/               Example code and sample replay data
+build_sdk.bat/.sh      One-shot configure + build + install wrappers (Windows / Linux)
+CHANGELOG.md           Release notes, grouped by version
+SECURITY.md            Vulnerability reporting policy and supported versions
+CONTRIBUTING.md        Contribution guide
+LICENSE / NOTICE       Apache-2.0 licence + third-party attribution
+THIRD_PARTY_LICENSES.md  Full text of bundled third-party licences
 ```
 
 ## License
