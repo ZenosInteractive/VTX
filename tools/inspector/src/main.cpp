@@ -20,7 +20,7 @@ namespace {
 
     // Boots Inspector app, registers all windows/layers, and runs UI loop.
     int RunInspector() {
-        GuiApplication app("vtx_inspector", "VTX Inspector v1.0", 1600, 900);
+        GuiApplication app("vtx_inspector", "VTX Inspector v0.1.0", 1600, 900);
         auto session = std::make_shared<InspectorSession>();
 
         app.AddLayer(std::make_shared<InspectorLayout>(session, app.GetScaleController()));
