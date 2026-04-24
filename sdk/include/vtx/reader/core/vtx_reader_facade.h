@@ -57,8 +57,7 @@ namespace VTX {
         virtual std::span<const std::byte> GetRawFrameBytes(int32_t frame_index) = 0;
     };
 
-    /// Bundles a reader, its detected format, chunk state, and file metadata.
-    /// Returned by OpenReplayFile(). Chunk events are pre-wired automatically.
+
     struct ReaderContext {
         ReaderContext()
             : chunk_state(std::make_unique<ReaderChunkState>()) {}
@@ -71,9 +70,6 @@ namespace VTX {
         void SetError(const std::string& err) { error = err; }
 
         void Reset() {
-            // Destroy the reader BEFORE the chunk state: the reader's
-            // async chunk-load callbacks capture a raw pointer into
-            // chunk_state, so chunk_state must outlive the reader.
             reader.reset();
             if (chunk_state)
                 chunk_state->Reset();
@@ -82,11 +78,6 @@ namespace VTX {
             size_in_mb = 0.0f;
         }
 
-        // IMPORTANT: declaration order matters for destruction.  Members are
-        // destroyed in reverse declaration order, so `reader` (declared after
-        // `chunk_state`) is destroyed first.  That lets the reader cancel its
-        // async chunk-load tasks and fire any final OnChunkEvicted callbacks
-        // while `chunk_state` is still alive.
         std::unique_ptr<ReaderChunkState> chunk_state;
         std::unique_ptr<IVtxReaderFacade> reader;
         VtxFormat format = VtxFormat::Unknown;

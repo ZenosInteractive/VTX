@@ -64,12 +64,6 @@ namespace VTX {
         }
 
         ~ReplayReader() {
-            // Cancel every in-flight prefetch, then wait for each task to
-            // observe the stop_token and exit.  Per-chunk `stop_source`s
-            // replace the previous single global `stop_source_`; the wait
-            // step is unchanged because `shared_future` destruction does
-            // not block and we still need to synchronise with the worker
-            // threads before releasing `*this`.
             std::vector<std::shared_future<void>> tasks;
             {
                 std::lock_guard<std::mutex> lock(cache_mutex_);
@@ -85,11 +79,6 @@ namespace VTX {
             }
         }
 
-        // Fix A4: protect events_ with a mutex.  std::function is not
-        // thread-safe -- reading it while another thread writes is UB.
-        // We snapshot events_ at every callback site so the actual callback
-        // invocation happens outside the lock (avoiding deadlock if the
-        // user's callback re-enters the reader).
         void SetEvents(const ReplayReaderEvents& events) {
             std::lock_guard<std::mutex> lock(events_mutex_);
             events_ = events;
@@ -113,27 +102,6 @@ namespace VTX {
             current_range_start_ = -1;
         }
 
-        // §3.A -- explicit prefetch hint.
-        //
-        // Tell the reader the caller is about to access `frame_index`.
-        // Returns immediately: if the enclosing chunk is already cached
-        // or in flight, this is a no-op; otherwise it kicks off an
-        // asynchronous load.  The subsequent GetFrame(frame_index) will
-        // either hit the cache (if the prefetch finished) or wait on
-        // the in-flight future -- either way, no synchronous decompress
-        // on the hot path.
-        //
-        // Intended use: commit a seek gesture with WarmAt(target_frame),
-        // let the UI finish its animation, then call GetFrame.  Moves
-        // the ZSTD decompress off the first-frame-after-seek critical
-        // path and overlaps it with any teardown the caller is doing.
-        //
-        // Implementation note: reuses UpdateCacheWindow verbatim, which
-        // means WarmAt also updates the §1.B access-pattern EWMA.  This
-        // is correct -- from the reader's point of view, WarmAt is
-        // indistinguishable from a "virtual" access, and the distance
-        // it contributes to the EWMA reflects the real jump the caller
-        // just committed to.
         void WarmAt(int32_t frame_index) {
             auto it = std::lower_bound(chunk_index_table_.begin(), chunk_index_table_.end(), frame_index,
                                        [](const ChunkIndexEntry& e, int32_t val) { return e.end_frame < val; });
@@ -438,52 +406,11 @@ namespace VTX {
         }
 
         void UpdateCacheWindow(int32_t current_idx) {
-            // Orphaned PendingLoads moved out of pending_loads_ by trigger()
-            // when it respawns a stale-cancelled entry.  Declared BEFORE the
-            // lock_guard so the vector -- and therefore each orphan's
-            // std::shared_future destructor -- runs AFTER cache_mutex_ has
-            // been released on function exit.
-            //
-            // libstdc++'s std::shared_future dtor blocks until the async
-            // task completes when it holds the last reference to a state
-            // created by std::async(std::launch::async, ...).  The task
-            // itself acquires cache_mutex_ in AsyncLoadTask to check
-            // stop_requested() and (optionally) write chunk_cache_, so
-            // destroying a to-be-cancelled shared_future WHILE holding
-            // cache_mutex_ would deadlock: we would wait on a task that
-            // cannot make progress without the mutex we hold.
-            //
-            // By moving the stale entry into orphans[] before overwriting
-            // it in pending_loads_, we defer the shared_future dtor until
-            // the lock_guard below has released the mutex.  The task can
-            // then observe its already-requested stop, bail at the entry
-            // check in PerformHeavyLoading, skip the cache write, and
-            // resolve its future -- unblocking the orphans[] destructor.
+
             std::vector<PendingLoad> orphans;
 
             std::lock_guard<std::mutex> lock(cache_mutex_);
 
-            // §1.B -- access-pattern detection.
-            //
-            // Maintain an EWMA of |current - last_requested| chunk
-            // distance.  Small values mean the caller is reading
-            // sequentially (playback, or a short scrub); large values
-            // mean random access (editor seeks, scripted frame picking).
-            //
-            // We only benefit from lateral prefetches when the next
-            // access is likely to land inside the current window -- i.e.
-            // when the expected distance is <= window radius.  Under
-            // random access the [start..end] prefetch loop below would
-            // spawn N loads that get cancelled on the very next seek,
-            // pure waste that also steals CPU and cache_mutex_ from the
-            // synchronous load the caller is actually waiting on.
-            //
-            // α = 0.3 gives ~3-sample reaction time to a regime change
-            // (spike of 50 chunk distance becomes EWMA=15 after one
-            // sample, 25.5 after two, 30.9 after three; well above a
-            // typical cache_window of 2-10).  The decision threshold is
-            // just the window size: if the typical jump exceeds what the
-            // window can cover, the window can't help at all.
             bool do_lateral_prefetch = true;
             const int32_t window_size = static_cast<int32_t>(cache_backward_ + cache_forward_);
             if (last_requested_chunk_ >= 0) {
@@ -514,31 +441,13 @@ namespace VTX {
             current_range_start_ = start;
             current_range_end_ = end;
 
-            // Cancel in-flight prefetches whose target chunk fell outside
-            // the new window.  AsyncLoadTask checks `stop_requested()` at
-            // several points (entry, pre-decompression, and inside the
-            // per-frame deserialisation loop in ProcessChunkData); any
-            // unavoidable work already done is sunk cost, but the remaining
-            // work -- frame deserialisation and the final
-            // cache_mutex_-guarded write to chunk_cache_ -- is skipped.
-            //
-            // Kept in pending_loads_ until the worker thread observes the
-            // stop and the future transitions to ready; the next
-            // UpdateCacheWindow() call reaps it at the top of this method.
-            // This is the fix for the cache-sweep pathology where small
-            // symmetric windows were ~4-8x slower than either (0,0) or
-            // (>=chunk_count) because every random jump triggered a storm
-            // of prefetches that then thrashed eviction.
             for (auto& kv : pending_loads_) {
                 if (kv.first < start || kv.first > end) {
                     kv.second.stop.request_stop();
                 }
             }
 
-            // Fix A4: snapshot events_ under its mutex, then use the local
-            // copy for the rest of this function.  Prevents std::function UB
-            // from a concurrent SetEvents() and avoids holding events_mutex_
-            // while firing user callbacks.
+
             const auto evts = GetEventsSnapshot();
 
             for (auto it = chunk_cache_.begin(); it != chunk_cache_.end();) {
@@ -557,54 +466,22 @@ namespace VTX {
                 if (chunk_cache_.contains(i))
                     return;
 
-                // A prefetch that was cancelled by a previous window shift
-                // (line ~509) leaves its entry in pending_loads_ with the
-                // stop_token already requested.  If the chunk re-enters the
-                // window before the worker thread has even started running
-                // (easy under TSan's scheduling overhead, or any burst of
-                // random seeks), the worker will observe stop_requested()
-                // on entry and bail without populating chunk_cache_.  The
-                // future resolves cleanly, but GetFramePtrSync() then reads
-                // an empty cache and returns nullptr -- a latent bug from
-                // the §1.A cancellation work (PR #4).
-                //
-                // Detect that case here and replace the stale entry with a
-                // fresh PendingLoad.  The orphaned task will exit on its
-                // own; its cache write is gated by a stop_requested() check
-                // inside cache_mutex_ (see AsyncLoadTask) so it cannot
-                // pollute the cache with empty data either.
                 const bool stale = pending_loads_.contains(i) && pending_loads_[i].stop.get_token().stop_requested();
 
                 if (pending_loads_.contains(i) && !stale)
                     return;
 
-                // The concurrency cap guards *new* slots.  Respawning a
-                // stale entry replaces an existing slot rather than adding
-                // one, so don't gate the resurrection path on the cap --
-                // otherwise we could refuse to revive a chunk the caller is
-                // about to synchronously wait on.
+
                 if (!stale && pending_loads_.size() >= max_concurrent_loads)
                     return;
 
                 if (evts.OnChunkLoadStarted)
                     evts.OnChunkLoadStarted(i);
 
-                // Relocate the stale entry to orphans[] before overwriting.
-                // See the long comment at the top of UpdateCacheWindow for
-                // why destroying its shared_future inside cache_mutex_
-                // would deadlock under TSan.
                 if (stale) {
                     orphans.push_back(std::move(pending_loads_[i]));
                 }
 
-                // Give each prefetch its own stop_source so we can
-                // cancel it independently from the "window changed"
-                // path above.  The token is captured by value into the
-                // lambda -- it's ref-counted, cheap to copy, and stays
-                // valid even if the map entry is later erased while the
-                // worker thread is still running (it won't be, because
-                // we wait on the future first, but the invariant is
-                // useful for reasoning about shutdown paths).
                 PendingLoad pl;
                 auto token = pl.stop.get_token();
                 pl.future =
@@ -625,9 +502,7 @@ namespace VTX {
             std::stop_token dummy;
             auto data = PerformHeavyLoading(idx, dummy);
             if (!data.native_frames.empty()) {
-                // Snapshot events_ before taking cache_mutex_ so we don't
-                // hold two locks at once, and so a concurrent SetEvents()
-                // can't race with our callback read (A4).
+
                 const auto evts = GetEventsSnapshot();
                 {
                     std::lock_guard<std::mutex> lock(cache_mutex_);
@@ -679,10 +554,6 @@ namespace VTX {
                 if (!local_stream.is_open())
                     return {};
 
-                // Fix A3: validate that the chunk is fully contained in the
-                // file before seeking.  A corrupt seek table can list offsets
-                // past EOF; without this guard the subsequent read would
-                // produce garbage that then crashes the deserialiser.
                 const int64_t file_size = GetStreamSize(local_stream);
                 const int64_t chunk_end =
                     static_cast<int64_t>(entry.file_offset) + static_cast<int64_t>(entry.chunk_size_bytes);
@@ -699,10 +570,6 @@ namespace VTX {
                 raw_buffer.resize(entry.chunk_size_bytes);
                 local_stream.read(raw_buffer.data(), entry.chunk_size_bytes);
 
-                // Fix A2: detect partial reads via gcount().  A truncated
-                // file between validation and read, or a filesystem error,
-                // would otherwise leave `raw_buffer` half-filled with zeros
-                // and feed that to the deserialiser.
                 if (local_stream.gcount() != static_cast<std::streamsize>(entry.chunk_size_bytes)) {
                     VTX_ERROR("[READER] Chunk {} short read: expected {} bytes, got {}", idx, entry.chunk_size_bytes,
                               static_cast<int64_t>(local_stream.gcount()));
@@ -740,14 +607,6 @@ namespace VTX {
         std::vector<ChunkIndexEntry> chunk_index_table_;
         VTX::GameTime::VTXGameTimes game_times_;
 
-        // A pending chunk load.  Each load gets its own `stop_source` so
-        // `UpdateCacheWindow` can cancel prefetches whose target chunk has
-        // fallen outside the current cache window without affecting
-        // unrelated in-flight loads.  Pre-fix this was a single global
-        // `stop_source_` that was only fired at reader destruction, which
-        // meant every stale prefetch ran to completion and competed for
-        // `cache_mutex_` + CPU with the synchronous load the user was
-        // actually waiting on.
         struct PendingLoad {
             std::stop_source stop;
             std::shared_future<void> future;
@@ -766,13 +625,6 @@ namespace VTX {
         int32_t current_range_start_ = -1;
         int32_t current_range_end_ = -1;
 
-        // §1.B access-pattern detection state.  EWMA of chunk-index
-        // distance between consecutive GetFrame/GetRawFrameBytes calls.
-        // `last_requested_chunk_ == -1` bootstraps on the second call.
-        // Not reset by SetCacheWindow(): the EWMA reflects the access
-        // pattern (property of the caller) while the threshold reflects
-        // the window (property of the config), so the decision adapts
-        // naturally when the user reconfigures prefetch aggressiveness.
         int32_t last_requested_chunk_ = -1;
         float ewma_chunk_distance_ = 0.0f;
 
