@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-04-28
+
 ### Added
 
 - **scripts**: `scripts/release_sdk.sh` -- Linux/macOS counterpart to `scripts/release_sdk.bat`.  Builds the SDK libs + `vtx_cli` in Release mode and installs into `./dist`.  Removes the build/release script asymmetry between Windows and Linux
