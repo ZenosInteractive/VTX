@@ -28,6 +28,7 @@ on:
 
 permissions:
   contents: write
+  actions: read   # gate-on-ci queries build.yml status via gh run list
 
 jobs:
   # ===========================================================================
@@ -98,11 +99,62 @@ jobs:
           echo "Releasing $TAG (version=$VERSION, CMakeLists.txt=$CM_VERSION, CHANGELOG section confirmed)"
 
   # ===========================================================================
+  # Gate the release on build.yml passing for the tagged commit.  Refuses
+  # to publish if CI failed; if CI is still running, waits for it.  Times
+  # out the whole job if CI never appears (e.g. tag pushed from a commit
+  # that never landed on main).
+  # ===========================================================================
+  gate-on-ci:
+    name: Wait for build.yml on tagged commit
+    needs: derive-version
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.derive-version.outputs.tag }}
+
+      - name: Wait for build.yml to finish on this SHA
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          SHA=$(git rev-parse HEAD)
+          echo "Tag ${{ needs.derive-version.outputs.tag }} -> $SHA"
+
+          # Poll up to ~10 min for a build.yml run to appear on this SHA.
+          # build.yml is push-triggered on main and runs within seconds of
+          # the merge; the only path that delays it is a tag pushed before
+          # the commit's CI got scheduled.
+          RUN_ID=""
+          for attempt in $(seq 1 20); do
+            RUN_ID=$(gh run list \
+              --commit "$SHA" \
+              --workflow=build.yml \
+              --limit 1 \
+              --json databaseId \
+              --jq '.[0].databaseId // empty')
+            if [ -n "$RUN_ID" ]; then
+              break
+            fi
+            echo "[$attempt/20] no build.yml run on $SHA yet, sleeping 30s..."
+            sleep 30
+          done
+
+          if [ -z "$RUN_ID" ]; then
+            echo "::error::No build.yml run found for $SHA after 10 minutes."
+            echo "::error::Was the tag pushed from a commit that's on main?"
+            exit 1
+          fi
+
+          echo "Watching build.yml run $RUN_ID..."
+          gh run watch "$RUN_ID" --exit-status --repo "$GITHUB_REPOSITORY"
+
+  # ===========================================================================
   # Linux SDK package: libs + vtx_cli + headers, gzipped tarball + sha256.
   # ===========================================================================
   build-linux:
     name: Build Linux package
-    needs: derive-version
+    needs: [derive-version, gate-on-ci]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -171,7 +223,7 @@ jobs:
   # ===========================================================================
   build-windows:
     name: Build Windows package
-    needs: derive-version
+    needs: [derive-version, gate-on-ci]
     runs-on: windows-latest
     timeout-minutes: 45
     steps:
@@ -235,7 +287,7 @@ jobs:
   # ===========================================================================
   package-samples:
     name: Package samples
-    needs: derive-version
+    needs: [derive-version, gate-on-ci]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -327,19 +379,38 @@ jobs:
           GH_TOKEN: ${{ secrets.RELEASE_PAT }}
         run: |
           TAG="${{ needs.derive-version.outputs.tag }}"
+
+          # Anything after the X.Y.Z core (e.g. v0.1.1-rc1, v0.2.0-beta)
+          # is treated as a prerelease and gets the GitHub "Pre-release"
+          # badge.  Plain v0.1.1 stays a normal release.
+          PRERELEASE_FLAGS=()
+          if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+- ]]; then
+            PRERELEASE_FLAGS+=("--prerelease")
+          fi
+
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "Release $TAG already exists -- refreshing notes and uploading assets with --clobber"
+            # gh release edit takes --prerelease=true|false explicitly so
+            # we always set it -- guarantees the badge stays in sync with
+            # the tag shape even if the release was created manually first.
+            if [ ${#PRERELEASE_FLAGS[@]} -gt 0 ]; then
+              PRERELEASE_EDIT="--prerelease=true"
+            else
+              PRERELEASE_EDIT="--prerelease=false"
+            fi
             gh release edit "$TAG" \
               --notes-file RELEASE_NOTES.md \
+              "$PRERELEASE_EDIT" \
               --repo "$GITHUB_REPOSITORY"
             gh release upload "$TAG" artifacts/* \
               --clobber \
               --repo "$GITHUB_REPOSITORY"
           else
-            echo "Creating release $TAG"
+            echo "Creating release $TAG (prerelease=${#PRERELEASE_FLAGS[@]})"
             gh release create "$TAG" artifacts/* \
               --title "VTX SDK $TAG" \
               --notes-file RELEASE_NOTES.md \
+              "${PRERELEASE_FLAGS[@]}" \
               --repo "$GITHUB_REPOSITORY"
           fi
 
@@ -390,8 +461,12 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add CHANGELOG.md
-          # [skip ci] suppresses the build matrix on this docs-only commit.
-          git commit -m "chore: rotate CHANGELOG for ${BASE_VERSION} release [skip ci]"
+          # build.yml has paths-ignore: ['CHANGELOG.md'] so this docs-only
+          # commit will skip the build matrix without needing a [skip ci]
+          # tag in the message.  Avoiding the literal string also keeps it
+          # from being preserved by future `git revert` and accidentally
+          # suppressing release.yml on retags.
+          git commit -m "chore: rotate CHANGELOG for ${BASE_VERSION} release"
 
           # Retry-on-conflict in case main moved while we were working.
           for attempt in 1 2 3; do
