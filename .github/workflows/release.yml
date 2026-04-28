@@ -1,0 +1,411 @@
+name: Release
+
+# Triggered by:
+#   - pushing a semantic-version tag (e.g. v0.1.1, v1.0.0)
+#   - manual dispatch from the Actions tab against an existing tag
+#
+# Produces 6 release assets attached to the GitHub release for the tag:
+#   vtx-sdk-<version>-linux-x64.tar.gz       + .sha256
+#   vtx-sdk-<version>-windows-x64.zip        + .sha256
+#   vtx-samples-<version>.zip                + .sha256
+#
+# The Linux SDK package contains: libs + vtx_cli + headers (matches
+# scripts/release_sdk.sh).  The Windows SDK package additionally includes
+# vtx_inspector and vtx_schema_creator (matches scripts/release_sdk.bat).
+# The samples package is source-only -- the consumer extracts it and
+# builds it against an installed VTX SDK.
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to release (e.g. v0.1.1)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  # ===========================================================================
+  # Resolve the version once.  All other jobs read tag + version from here so
+  # the tag-vs-CMakeLists check happens in exactly one place.
+  # ===========================================================================
+  derive-version:
+    name: Derive version
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.set.outputs.tag }}
+      version: ${{ steps.set.outputs.version }}
+      base_version: ${{ steps.set.outputs.base_version }}
+    steps:
+      - name: Resolve tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+      - name: Checkout the tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.tag.outputs.tag }}
+
+      - name: Validate tag, CMakeLists, CHANGELOG
+        id: set
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          VERSION="${TAG#v}"
+          CM_VERSION=$(grep -E '^project\(VTX_SDK VERSION ' CMakeLists.txt | sed -E 's/.*VERSION ([0-9.]+).*/\1/')
+          if [ -z "$CM_VERSION" ]; then
+            echo "::error::Could not parse VERSION from CMakeLists.txt"
+            exit 1
+          fi
+          # Tag may carry a prerelease suffix (e.g. v0.1.1-rc1); compare
+          # only the leading X.Y.Z component.
+          BASE_VERSION=$(echo "$VERSION" | sed -E 's/^([0-9]+\.[0-9]+\.[0-9]+).*/\1/')
+          if [ "$CM_VERSION" != "$BASE_VERSION" ]; then
+            echo "::error::Tag version ($BASE_VERSION) does not match CMakeLists.txt VERSION ($CM_VERSION).  Bump CMakeLists.txt and retag."
+            exit 1
+          fi
+          # CHANGELOG.md must have a non-empty '## [Unreleased]' section --
+          # the publish job pastes it (with the heading rewritten to the
+          # version + release date) as the release body.  Catch missing /
+          # empty Unreleased here so we don't burn ~30 min of CI before
+          # noticing.
+          if ! grep -qE '^## \[Unreleased\]' CHANGELOG.md; then
+            echo "::error::CHANGELOG.md is missing a '## [Unreleased]' section."
+            exit 1
+          fi
+          UNRELEASED_BODY=$(awk '
+            /^## \[Unreleased\]/ { in_section = 1; next }
+            in_section && /^## \[/ { exit }
+            in_section { print }
+          ' CHANGELOG.md | grep -E '\S' || true)
+          if [ -z "$UNRELEASED_BODY" ]; then
+            echo "::error::'## [Unreleased]' section is empty.  Add the new entries before tagging."
+            exit 1
+          fi
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "base_version=$BASE_VERSION" >> $GITHUB_OUTPUT
+          echo "Releasing $TAG (version=$VERSION, CMakeLists.txt=$CM_VERSION, CHANGELOG section confirmed)"
+
+  # ===========================================================================
+  # Linux SDK package: libs + vtx_cli + headers, gzipped tarball + sha256.
+  # ===========================================================================
+  build-linux:
+    name: Build Linux package
+    needs: derive-version
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.derive-version.outputs.tag }}
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake \
+            g++ \
+            ninja-build \
+            protobuf-compiler \
+            libprotobuf-dev
+
+      - name: Cache FetchContent
+        uses: actions/cache@v4
+        with:
+          path: build/_deps
+          key: release-linux-deps-${{ hashFiles('CMakeLists.txt', 'cmake/*.cmake', 'sdk/src/**/CMakeLists.txt', 'tools/CMakeLists.txt') }}
+          restore-keys: |
+            release-linux-deps-
+
+      - name: Configure
+        run: >
+          cmake -S . -B build
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_INSTALL_PREFIX=dist
+          -DBUILD_VTX_INSPECTOR=OFF
+          -DBUILD_VTX_SCHEMA_CREATOR=OFF
+          -DVTX_BUILD_TESTS=OFF
+          -DBUILD_VTX_SAMPLES=OFF
+          -DVTX_BUILD_BENCHMARKS=OFF
+
+      - name: Build (SDK libs + vtx_cli)
+        run: cmake --build build --config Release --parallel
+
+      - name: Install
+        run: cmake --install build --config Release
+
+      - name: Package
+        run: |
+          VERSION="${{ needs.derive-version.outputs.version }}"
+          STAGE="vtx-sdk-${VERSION}-linux-x64"
+          mkdir -p "$STAGE"
+          cp -r dist/. "$STAGE/"
+          tar -czf "${STAGE}.tar.gz" "$STAGE"
+          sha256sum "${STAGE}.tar.gz" > "${STAGE}.tar.gz.sha256"
+          ls -la "${STAGE}.tar.gz"*
+          echo "--- sha256 ---"
+          cat "${STAGE}.tar.gz.sha256"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-package
+          path: |
+            vtx-sdk-*-linux-x64.tar.gz
+            vtx-sdk-*-linux-x64.tar.gz.sha256
+          if-no-files-found: error
+
+  # ===========================================================================
+  # Windows SDK package: libs + vtx_cli + vtx_inspector + vtx_schema_creator
+  # + headers, zipped + sha256.
+  # ===========================================================================
+  build-windows:
+    name: Build Windows package
+    needs: derive-version
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.derive-version.outputs.tag }}
+
+      - name: Cache FetchContent
+        uses: actions/cache@v4
+        with:
+          path: build/_deps
+          key: release-windows-deps-${{ hashFiles('CMakeLists.txt', 'cmake/*.cmake', 'sdk/src/**/CMakeLists.txt', 'tools/CMakeLists.txt') }}
+          restore-keys: |
+            release-windows-deps-
+
+      - name: Configure
+        shell: bash
+        run: >
+          cmake -S . -B build -A x64
+          -DCMAKE_INSTALL_PREFIX=dist
+          -DBUILD_VTX_INSPECTOR=ON
+          -DBUILD_VTX_SCHEMA_CREATOR=ON
+          -DVTX_BUILD_TESTS=OFF
+          -DBUILD_VTX_SAMPLES=OFF
+          -DVTX_BUILD_BENCHMARKS=OFF
+
+      - name: Build (SDK libs + vtx_cli + vtx_inspector + vtx_schema_creator)
+        shell: bash
+        run: cmake --build build --config Release --parallel
+
+      - name: Install
+        shell: bash
+        run: cmake --install build --config Release
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $version = "${{ needs.derive-version.outputs.version }}"
+          $stage = "vtx-sdk-$version-windows-x64"
+          New-Item -ItemType Directory -Path $stage | Out-Null
+          Copy-Item -Path dist\* -Destination $stage -Recurse
+          Compress-Archive -Path $stage -DestinationPath "$stage.zip" -CompressionLevel Optimal
+          $hash = (Get-FileHash -Algorithm SHA256 "$stage.zip").Hash.ToLower()
+          # Match Linux's `sha256sum` output format: "<hash>  <name>"
+          "$hash  $stage.zip" | Out-File -Encoding ascii -NoNewline "$stage.zip.sha256"
+          Get-ChildItem "$stage.zip*"
+          Write-Host "--- sha256 ---"
+          Get-Content "$stage.zip.sha256"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-package
+          path: |
+            vtx-sdk-*-windows-x64.zip
+            vtx-sdk-*-windows-x64.zip.sha256
+          if-no-files-found: error
+
+  # ===========================================================================
+  # Samples package: source-only zip of the samples/ directory.  No build
+  # required.  Consumer extracts and builds against an installed SDK.
+  # ===========================================================================
+  package-samples:
+    name: Package samples
+    needs: derive-version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.derive-version.outputs.tag }}
+
+      - name: Package samples
+        run: |
+          VERSION="${{ needs.derive-version.outputs.version }}"
+          STAGE="vtx-samples-${VERSION}"
+          mkdir -p "$STAGE"
+          cp -r samples/. "$STAGE/"
+          # Strip any local build artefacts that might be in samples/
+          # (defensive -- samples/ should not have any committed).
+          find "$STAGE" -type d \( -name 'build' -o -name 'build-*' -o -name 'CMakeFiles' \) -prune -exec rm -rf {} +
+          zip -r "${STAGE}.zip" "$STAGE"
+          sha256sum "${STAGE}.zip" > "${STAGE}.zip.sha256"
+          ls -la "${STAGE}.zip"*
+          echo "--- sha256 ---"
+          cat "${STAGE}.zip.sha256"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: samples-package
+          path: |
+            vtx-samples-*.zip
+            vtx-samples-*.zip.sha256
+          if-no-files-found: error
+
+  # ===========================================================================
+  # Publish: collect the three packages + their sha256 files and attach them
+  # to the GitHub release for the tag.  Creates the release if missing,
+  # otherwise replaces matching assets.
+  # ===========================================================================
+  publish:
+    name: Publish release
+    needs: [derive-version, build-linux, build-windows, package-samples]
+    runs-on: ubuntu-latest
+    steps:
+      # Checkout uses RELEASE_PAT instead of the default GITHUB_TOKEN so the
+      # auth credentials it bakes into git config carry write access -- the
+      # CHANGELOG rotation step at the end of this job needs to push to
+      # main, and the default token can be downgraded to read-only by the
+      # repo's "Workflow permissions" setting.  RELEASE_PAT is a fine-
+      # grained PAT with Contents: Read and write, configured as a repo
+      # secret, and is also passed to gh CLI for the release create/edit
+      # calls below.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.derive-version.outputs.tag }}
+          token: ${{ secrets.RELEASE_PAT }}
+          # Full history so the CHANGELOG rotation step can fetch + rebase
+          # main cleanly if it moved during the workflow run.
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Inspect artifacts
+        run: ls -la artifacts/
+
+      # Build the release body from the '## [Unreleased]' section, with the
+      # heading rewritten to '## [<version>] - <YYYY-MM-DD>' so the published
+      # release follows the same format as v0.1.0 ([0.1.0] - 2026-04-24).
+      - name: Extract Unreleased section as release notes
+        run: |
+          BASE_VERSION="${{ needs.derive-version.outputs.base_version }}"
+          RELEASE_DATE=$(date -u +%Y-%m-%d)
+          NEW_HEADING="## [${BASE_VERSION}] - ${RELEASE_DATE}"
+          awk -v new_heading="$NEW_HEADING" '
+            /^## \[Unreleased\]/    { print new_heading; in_section = 1; next }
+            in_section && /^## \[/  { exit }
+            in_section              { print }
+          ' CHANGELOG.md > RELEASE_NOTES.md
+          # Trim trailing blank lines so the body looks tidy on GitHub.
+          sed -i -e :a -e '/^$/{$d;N;ba' -e '}' RELEASE_NOTES.md
+          if [ ! -s RELEASE_NOTES.md ]; then
+            echo "::error::Extracted release notes are empty.  Was '## [Unreleased]' present in CHANGELOG.md?"
+            exit 1
+          fi
+          echo "--- RELEASE_NOTES.md ---"
+          cat RELEASE_NOTES.md
+          echo "--- end ---"
+
+      - name: Create or update release
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PAT }}
+        run: |
+          TAG="${{ needs.derive-version.outputs.tag }}"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $TAG already exists -- refreshing notes and uploading assets with --clobber"
+            gh release edit "$TAG" \
+              --notes-file RELEASE_NOTES.md \
+              --repo "$GITHUB_REPOSITORY"
+            gh release upload "$TAG" artifacts/* \
+              --clobber \
+              --repo "$GITHUB_REPOSITORY"
+          else
+            echo "Creating release $TAG"
+            gh release create "$TAG" artifacts/* \
+              --title "VTX SDK $TAG" \
+              --notes-file RELEASE_NOTES.md \
+              --repo "$GITHUB_REPOSITORY"
+          fi
+
+      # Rotate CHANGELOG.md on main: the just-released entries move from
+      # '## [Unreleased]' into '## [<version>] - <date>', and a fresh
+      # empty '## [Unreleased]' is inserted on top so the next dev cycle
+      # starts with a clean slate.  Best-effort: if the push fails (e.g.
+      # main moved or branch protection blocks the bot), we log a warning
+      # but do not fail the workflow -- the release itself is already
+      # published and the maintainer can rotate manually.
+      - name: Rotate CHANGELOG.md on main
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PAT }}
+        run: |
+          BASE_VERSION="${{ needs.derive-version.outputs.base_version }}"
+          RELEASE_DATE=$(date -u +%Y-%m-%d)
+          NEW_HEADING="## [${BASE_VERSION}] - ${RELEASE_DATE}"
+
+          git fetch origin main
+          git checkout -B main origin/main
+
+          if ! grep -qE '^## \[Unreleased\]' CHANGELOG.md; then
+            echo "main's CHANGELOG.md has no '## [Unreleased]' heading; nothing to rotate."
+            exit 0
+          fi
+
+          # Replace the first '## [Unreleased]' line with three lines:
+          # a new empty Unreleased, a blank, and the versioned heading.
+          # The body that followed the old Unreleased now sits under the
+          # new versioned heading.
+          awk -v new_heading="$NEW_HEADING" '
+            /^## \[Unreleased\]/ && !done {
+              print "## [Unreleased]"
+              print ""
+              print new_heading
+              done = 1
+              next
+            }
+            { print }
+          ' CHANGELOG.md > CHANGELOG.md.new
+          mv CHANGELOG.md.new CHANGELOG.md
+
+          if git diff --quiet CHANGELOG.md; then
+            echo "No CHANGELOG.md diff after rotation; nothing to commit."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add CHANGELOG.md
+          # [skip ci] suppresses the build matrix on this docs-only commit.
+          git commit -m "chore: rotate CHANGELOG for ${BASE_VERSION} release [skip ci]"
+
+          # Retry-on-conflict in case main moved while we were working.
+          for attempt in 1 2 3; do
+            if git push origin main; then
+              echo "Pushed CHANGELOG rotation on attempt $attempt."
+              exit 0
+            fi
+            echo "Push failed (attempt $attempt); rebasing on origin/main and retrying..."
+            git fetch origin main
+            git rebase origin/main || {
+              echo "::warning::Could not rebase CHANGELOG rotation; rotate manually."
+              exit 0
+            }
+          done
+
+          echo "::warning::Could not push CHANGELOG rotation after 3 attempts; rotate manually."
+          exit 0
