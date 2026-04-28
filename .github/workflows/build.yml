@@ -22,6 +22,15 @@ name: CI
 on:
   push:
     branches: [main, master]
+    # Skip the build matrix on docs-only commits.  Specifically lets the
+    # release workflow's CHANGELOG rotation commit on main land without
+    # spinning up a 30-min build that would test no code change.  We
+    # used to do this with [skip ci] in the bot's commit message, but
+    # that string survived `git revert` and accidentally suppressed the
+    # release.yml trigger on retags -- paths-ignore keys off the actual
+    # changed files instead, immune to message preservation.
+    paths-ignore:
+      - 'CHANGELOG.md'
   pull_request:
     branches: [main, master]
 
