@@ -198,6 +198,20 @@ install(FILES
     DESTINATION lib/cmake/VTX
 )
 
+# Legal + top-level docs ship at the root of the install tree so they
+# end up at the top of the release archive (matches the layout of
+# vtx-sdk-0.1.0-windows-x64.zip).  NOTICE is required by Apache 2.0
+# §4(d) for binary distributions.
+install(FILES
+    "${CMAKE_SOURCE_DIR}/LICENSE"
+    "${CMAKE_SOURCE_DIR}/NOTICE"
+    "${CMAKE_SOURCE_DIR}/README.md"
+    "${CMAKE_SOURCE_DIR}/CHANGELOG.md"
+    "${CMAKE_SOURCE_DIR}/SECURITY.md"
+    "${CMAKE_SOURCE_DIR}/THIRD_PARTY_LICENSES.md"
+    DESTINATION .
+)
+
 # IDE helpers
 file(GLOB_RECURSE IDE_SCRIPT_FILES "${CMAKE_SOURCE_DIR}/scripts/*")
 set(ROOT_CONFIG_FILES "${CMAKE_CURRENT_LIST_FILE}")
