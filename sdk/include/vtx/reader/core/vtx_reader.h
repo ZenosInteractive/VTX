@@ -8,7 +8,9 @@
 #include <mutex>
 #include <functional>
 #include <algorithm>
-#include <iostream>
+#include <atomic>
+#include <chrono>
+#include <condition_variable>
 #include <ranges>
 #include <stop_token>
 #include <stdexcept>
@@ -38,6 +40,8 @@ namespace VTX {
         std::function<void(int32_t)> OnChunkLoadStarted;
         std::function<void(int32_t)> OnChunkLoadFinished;
         std::function<void(int32_t)> OnChunkEvicted;
+        std::function<void()> OnReady;
+        std::function<void(const std::string&)> OnReadyFailed;
     };
 
     template <IVtxReaderPolicy SerializerPolicy>
@@ -64,6 +68,15 @@ namespace VTX {
         }
 
         ~ReplayReader() {
+            {
+                std::lock_guard<std::mutex> lk(ready_mutex_);
+                if (!ready_.load() && !ready_failed_.load()) {
+                    ready_failed_.store(true);
+                    ready_error_ = "Reader destroyed before first chunk was ready";
+                }
+            }
+            ready_cv_.notify_all();
+
             std::vector<std::shared_future<void>> tasks;
             {
                 std::lock_guard<std::mutex> lock(cache_mutex_);
@@ -91,6 +104,32 @@ namespace VTX {
         }
 
     public:
+        bool IsReady() const { return ready_.load(std::memory_order_acquire); }
+        bool IsReadyFailed() const { return ready_failed_.load(std::memory_order_acquire); }
+
+        std::string GetReadyError() const {
+            std::lock_guard<std::mutex> lk(ready_mutex_);
+            return ready_error_;
+        }
+
+        bool WaitUntilReady() {
+            std::unique_lock<std::mutex> lk(ready_mutex_);
+            ready_cv_.wait(lk, [this] {
+                return ready_.load(std::memory_order_acquire) || ready_failed_.load(std::memory_order_acquire);
+            });
+            return ready_.load(std::memory_order_acquire);
+        }
+
+        bool WaitUntilReady(std::chrono::milliseconds timeout) {
+            std::unique_lock<std::mutex> lk(ready_mutex_);
+            ready_cv_.wait_for(lk, timeout, [this] {
+                return ready_.load(std::memory_order_acquire) || ready_failed_.load(std::memory_order_acquire);
+            });
+            return ready_.load(std::memory_order_acquire);
+        }
+
+        void MarkReadyVacuous() { SignalFirstChunkReady(true, {}); }
+
         int32_t GetTotalFrames() const { return SerializerPolicy::GetTotalFrames(footer_); }
         const std::vector<ChunkIndexEntry>& GetSeekTable() const { return chunk_index_table_; }
         const SchemaType& GetPropertySchema() const { return SerializerPolicy::GetSchema(header_); }
@@ -500,7 +539,8 @@ namespace VTX {
         void LoadChunkToCacheSync(int32_t idx) {
             std::stop_token dummy;
             auto data = PerformHeavyLoading(idx, dummy);
-            if (!data.native_frames.empty()) {
+            const bool success = !data.native_frames.empty();
+            if (success) {
                 const auto evts = GetEventsSnapshot();
                 {
                     std::lock_guard<std::mutex> lock(cache_mutex_);
@@ -509,6 +549,9 @@ namespace VTX {
                 }
                 if (evts.OnChunkLoadFinished)
                     evts.OnChunkLoadFinished(idx);
+            }
+            if (idx == 0) {
+                SignalFirstChunkReady(success, success ? std::string {} : std::string {"Failed to load first chunk"});
             }
         }
 
@@ -523,6 +566,8 @@ namespace VTX {
                 VTX_ERROR("[READER] Chunk {} thread crashed", idx);
             }
 
+            const bool load_succeeded = thread_survived && !data.native_frames.empty();
+
             {
                 std::lock_guard<std::mutex> lock(cache_mutex_);
                 if (!stop_token.stop_requested()) {
@@ -531,10 +576,39 @@ namespace VTX {
             }
 
             if (thread_survived) {
-                // A4: snapshot before invoking.
                 const auto evts = GetEventsSnapshot();
                 if (evts.OnChunkLoadFinished)
                     evts.OnChunkLoadFinished(idx);
+            }
+
+            if (idx == 0 && !stop_token.stop_requested()) {
+                SignalFirstChunkReady(load_succeeded,
+                                      load_succeeded ? std::string {} : std::string {"Failed to load first chunk"});
+            }
+        }
+
+        void SignalFirstChunkReady(bool success, const std::string& error) {
+            {
+                std::lock_guard<std::mutex> lk(ready_mutex_);
+                if (ready_.load(std::memory_order_acquire) || ready_failed_.load(std::memory_order_acquire)) {
+                    return; // already signalled
+                }
+                if (success) {
+                    ready_.store(true, std::memory_order_release);
+                } else {
+                    ready_failed_.store(true, std::memory_order_release);
+                    ready_error_ = error;
+                }
+            }
+            ready_cv_.notify_all();
+
+            const auto evts = GetEventsSnapshot();
+            if (success) {
+                if (evts.OnReady)
+                    evts.OnReady();
+            } else {
+                if (evts.OnReadyFailed)
+                    evts.OnReadyFailed(error);
             }
         }
 
@@ -616,6 +690,12 @@ namespace VTX {
         mutable std::mutex cache_mutex_;
         ReplayReaderEvents events_;
         mutable std::mutex events_mutex_; // protects events_ (A4)
+
+        std::atomic<bool> ready_ {false};
+        std::atomic<bool> ready_failed_ {false};
+        std::string ready_error_;
+        mutable std::mutex ready_mutex_;
+        mutable std::condition_variable ready_cv_;
 
         uint32_t cache_backward_ = 2;
         uint32_t cache_forward_ = 2;

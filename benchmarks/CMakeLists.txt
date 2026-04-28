@@ -54,6 +54,7 @@ endif()
 # Initialize + RunSpecifiedBenchmarks + Shutdown.
 add_executable(vtx_benchmarks
     bench_reader.cpp
+    bench_reader_ready.cpp
     bench_writer.cpp
     bench_differ.cpp
     bench_property_cache.cpp

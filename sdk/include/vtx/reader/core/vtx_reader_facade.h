@@ -1,4 +1,5 @@
 #pragma once
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -55,6 +56,14 @@ namespace VTX {
         virtual void InspectChunkHeader(int32_t index) const = 0;
         virtual FrameAccessor CreateAccessor() const = 0;
         virtual std::span<const std::byte> GetRawFrameBytes(int32_t frame_index) = 0;
+
+        virtual bool IsReady() const = 0;
+        virtual bool IsReadyFailed() const = 0;
+        virtual std::string GetReadyError() const = 0;
+        virtual bool WaitUntilReady() = 0;
+        virtual bool WaitUntilReady(std::chrono::milliseconds timeout) = 0;
+
+        virtual void MarkReadyVacuous() = 0;
     };
 
 
@@ -68,6 +77,14 @@ namespace VTX {
         const VtxFormat& GetFormat() const { return format; }
         const std::string& GetError() const { return error; }
         void SetError(const std::string& err) { error = err; }
+
+        bool IsReady() const { return reader && reader->IsReady(); }
+        bool IsReadyFailed() const { return reader && reader->IsReadyFailed(); }
+        std::string GetReadyError() const { return reader ? reader->GetReadyError() : std::string {}; }
+        bool WaitUntilReady() { return reader ? reader->WaitUntilReady() : false; }
+        bool WaitUntilReady(std::chrono::milliseconds timeout) {
+            return reader ? reader->WaitUntilReady(timeout) : false;
+        }
 
         void Reset() {
             reader.reset();
