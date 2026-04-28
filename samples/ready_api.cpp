@@ -49,8 +49,8 @@ namespace {
 
         const auto t0 = std::chrono::steady_clock::now();
         const bool ready = ctx.WaitUntilReady(std::chrono::seconds(5));
-        const auto elapsed_ms
-            = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count();
+        const auto elapsed_ms =
+            std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count();
 
         if (!ready) {
             if (ctx.IsReadyFailed()) {

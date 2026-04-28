@@ -36,7 +36,9 @@
 
 namespace {
 
-    std::string FixturePath(const char* name) { return std::string(VTX_BENCH_FIXTURES_DIR) + "/" + name; }
+    std::string FixturePath(const char* name) {
+        return std::string(VTX_BENCH_FIXTURES_DIR) + "/" + name;
+    }
 
     struct SilenceDebugLogsAtInit {
         SilenceDebugLogsAtInit() { VTX::Logger::Instance().SetDebugEnabled(false); }

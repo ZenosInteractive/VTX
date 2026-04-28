@@ -115,8 +115,7 @@ namespace VTX {
         bool WaitUntilReady() {
             std::unique_lock<std::mutex> lk(ready_mutex_);
             ready_cv_.wait(lk, [this] {
-                return ready_.load(std::memory_order_acquire) ||
-                       ready_failed_.load(std::memory_order_acquire);
+                return ready_.load(std::memory_order_acquire) || ready_failed_.load(std::memory_order_acquire);
             });
             return ready_.load(std::memory_order_acquire);
         }
@@ -124,8 +123,7 @@ namespace VTX {
         bool WaitUntilReady(std::chrono::milliseconds timeout) {
             std::unique_lock<std::mutex> lk(ready_mutex_);
             ready_cv_.wait_for(lk, timeout, [this] {
-                return ready_.load(std::memory_order_acquire) ||
-                       ready_failed_.load(std::memory_order_acquire);
+                return ready_.load(std::memory_order_acquire) || ready_failed_.load(std::memory_order_acquire);
             });
             return ready_.load(std::memory_order_acquire);
         }
@@ -553,9 +551,7 @@ namespace VTX {
                     evts.OnChunkLoadFinished(idx);
             }
             if (idx == 0) {
-                SignalFirstChunkReady(success,
-                                      success ? std::string {}
-                                              : std::string {"Failed to load first chunk"});
+                SignalFirstChunkReady(success, success ? std::string {} : std::string {"Failed to load first chunk"});
             }
         }
 
@@ -587,16 +583,14 @@ namespace VTX {
 
             if (idx == 0 && !stop_token.stop_requested()) {
                 SignalFirstChunkReady(load_succeeded,
-                                      load_succeeded ? std::string {}
-                                                     : std::string {"Failed to load first chunk"});
+                                      load_succeeded ? std::string {} : std::string {"Failed to load first chunk"});
             }
         }
 
         void SignalFirstChunkReady(bool success, const std::string& error) {
             {
                 std::lock_guard<std::mutex> lk(ready_mutex_);
-                if (ready_.load(std::memory_order_acquire) ||
-                    ready_failed_.load(std::memory_order_acquire)) {
+                if (ready_.load(std::memory_order_acquire) || ready_failed_.load(std::memory_order_acquire)) {
                     return; // already signalled
                 }
                 if (success) {
