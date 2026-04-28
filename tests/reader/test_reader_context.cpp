@@ -208,8 +208,12 @@ TEST(ReaderContextReady, OnReadyFiresOnDirectFacadeWithPreWiredEvents) {
     std::atomic<int> failed_count {0};
 
     VTX::ReplayReaderEvents evts;
-    evts.OnReady = [&]() { ready_count.fetch_add(1); };
-    evts.OnReadyFailed = [&](const std::string&) { failed_count.fetch_add(1); };
+    evts.OnReady = [&]() {
+        ready_count.fetch_add(1);
+    };
+    evts.OnReadyFailed = [&](const std::string&) {
+        failed_count.fetch_add(1);
+    };
     facade->SetEvents(evts);
 
     // Kick the async load ourselves.  The reader's OnReady will fire
@@ -279,7 +283,7 @@ TEST(ReaderContextReady, ReadyFailsOnCorruptChunkZero) {
     cfg.replay_name = "CorruptChunk0";
     cfg.replay_uuid = "corrupt_chunk0";
     cfg.default_fps = 60.0f;
-    cfg.chunk_max_frames = 100;   // keep it all in one chunk
+    cfg.chunk_max_frames = 100; // keep it all in one chunk
     cfg.use_compression = true;
 
     {
@@ -345,8 +349,7 @@ TEST_F(ReaderContextHappy, WaitUntilReadyIsIdempotent) {
     EXPECT_TRUE(ctx_.WaitUntilReady(std::chrono::seconds(5)));
     EXPECT_TRUE(ctx_.WaitUntilReady(std::chrono::seconds(5)));
     const auto elapsed = std::chrono::steady_clock::now() - t0;
-    EXPECT_LT(elapsed, std::chrono::milliseconds(500))
-        << "Second and third WaitUntilReady should be near-instant";
+    EXPECT_LT(elapsed, std::chrono::milliseconds(500)) << "Second and third WaitUntilReady should be near-instant";
 }
 
 TEST_F(ReaderContextHappy, GetFrameSyncAfterReadyHitsWarmCache) {
@@ -366,8 +369,7 @@ TEST_F(ReaderContextHappy, GetFrameSyncAfterReadyHitsWarmCache) {
     // 100ms is extremely loose -- the real hot-cache measurement is
     // sub-millisecond.  The wide bound keeps debug and sanitiser runs
     // on slow CI boxes green without masking a real regression.
-    EXPECT_LT(elapsed, std::chrono::milliseconds(100))
-        << "Chunk 0 should already be cached after WaitUntilReady";
+    EXPECT_LT(elapsed, std::chrono::milliseconds(100)) << "Chunk 0 should already be cached after WaitUntilReady";
 }
 
 TEST_F(ReaderContextHappy, WarmAtAfterReadyDoesNotRegressFlag) {
@@ -452,7 +454,9 @@ TEST(ReaderContextReady, OnReadyFailedFiresOnDirectFacadeForCorruptChunkZero) {
     std::string last_error;
 
     VTX::ReplayReaderEvents evts;
-    evts.OnReady = [&]() { ready_count.fetch_add(1); };
+    evts.OnReady = [&]() {
+        ready_count.fetch_add(1);
+    };
     evts.OnReadyFailed = [&](const std::string& err) {
         {
             std::lock_guard<std::mutex> lk(err_mu);
@@ -465,8 +469,7 @@ TEST(ReaderContextReady, OnReadyFailedFiresOnDirectFacadeForCorruptChunkZero) {
     facade->WarmAt(0);
 
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
-    while (ready_count.load() + failed_count.load() == 0
-           && std::chrono::steady_clock::now() < deadline) {
+    while (ready_count.load() + failed_count.load() == 0 && std::chrono::steady_clock::now() < deadline) {
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
     }
 
@@ -483,8 +486,7 @@ TEST(ReaderContextReady, OnReadyFailedFiresOnDirectFacadeForCorruptChunkZero) {
     EXPECT_TRUE(facade->IsReadyFailed());
 
     std::lock_guard<std::mutex> lk(err_mu);
-    EXPECT_FALSE(last_error.empty())
-        << "OnReadyFailed callback must receive a non-empty error message";
+    EXPECT_FALSE(last_error.empty()) << "OnReadyFailed callback must receive a non-empty error message";
 }
 
 // NOTE: we intentionally do NOT test "Reset() while another thread is
