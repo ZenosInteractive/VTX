@@ -275,11 +275,20 @@ jobs:
     needs: [derive-version, build-linux, build-windows, package-samples]
     runs-on: ubuntu-latest
     steps:
+      # Checkout uses RELEASE_PAT instead of the default GITHUB_TOKEN so the
+      # auth credentials it bakes into git config carry write access -- the
+      # CHANGELOG rotation step at the end of this job needs to push to
+      # main, and the default token can be downgraded to read-only by the
+      # repo's "Workflow permissions" setting.  RELEASE_PAT is a fine-
+      # grained PAT with Contents: Read and write, configured as a repo
+      # secret, and is also passed to gh CLI for the release create/edit
+      # calls below.
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.derive-version.outputs.tag }}
-          # Need history so --generate-notes can resolve the previous tag
-          # range when computing release notes.
+          token: ${{ secrets.RELEASE_PAT }}
+          # Full history so the CHANGELOG rotation step can fetch + rebase
+          # main cleanly if it moved during the workflow run.
           fetch-depth: 0
 
       - uses: actions/download-artifact@v4
@@ -315,7 +324,7 @@ jobs:
 
       - name: Create or update release
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.RELEASE_PAT }}
         run: |
           TAG="${{ needs.derive-version.outputs.tag }}"
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
@@ -343,7 +352,7 @@ jobs:
       # published and the maintainer can rotate manually.
       - name: Rotate CHANGELOG.md on main
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.RELEASE_PAT }}
         run: |
           BASE_VERSION="${{ needs.derive-version.outputs.base_version }}"
           RELEASE_DATE=$(date -u +%Y-%m-%d)
