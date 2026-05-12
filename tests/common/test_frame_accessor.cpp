@@ -5,7 +5,7 @@
 #include <algorithm>
 #include <string>
 
-#include "vtx/reader/core/vtx_frame_accessor.h"
+#include "vtx/common/vtx_frame_accessor.h"
 
 namespace {
 

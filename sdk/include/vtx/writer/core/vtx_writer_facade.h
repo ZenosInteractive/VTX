@@ -6,6 +6,7 @@
 #include "schema_sanitizer.h"
 #include "vtx/common/vtx_types.h"
 #include "vtx/common/readers/schema_reader/schema_registry.h"
+#include "vtx/writer/core/vtx_frame_post_processor.h"
 
 
 namespace VTX {
@@ -20,6 +21,15 @@ namespace VTX {
         virtual void Flush() = 0;
         virtual void Stop() = 0;
         virtual VTX::SchemaRegistry& GetSchema() = 0;
+
+        // The processor's Process() runs on every RecordFrame() call,
+        // after timer validation and BEFORE serialisation to disk: its
+        // mutations are what end up in the .vtx file.  Call before
+        // RecordFrame to take effect; safe to swap mid-recording (new
+        // processor takes over on the next RecordFrame).
+        virtual void SetPostProcessor(std::shared_ptr<IFramePostProcessor> processor) = 0;
+        virtual std::shared_ptr<IFramePostProcessor> GetPostProcessor() const = 0;
+        virtual void ClearPostProcessor() = 0;
     };
 
     struct WriterFacadeConfig {

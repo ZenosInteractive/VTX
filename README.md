@@ -53,6 +53,32 @@ writer->Flush();
 writer->Stop();
 ```
 
+#### Optional: post-process every frame before it lands on disk
+
+`writer->SetPostProcessor(...)` installs a hook that runs after timer validation and before serialization. Whatever it mutates is what gets persisted. Use it to sanitize values, derive consistency state, filter or inject entities, accumulate cross-frame stats, or branch by schema version.
+
+```cpp
+#include "vtx/writer/core/vtx_frame_post_processor.h"
+
+class HealthClamp : public VTX::IFramePostProcessor {
+public:
+    void Init(const VTX::FramePostProcessorInitContext& ctx) override {
+        health_key_ = ctx.frame_accessor->Get<float>("Player", "Health");
+    }
+    void Process(VTX::FrameMutationView& view, const VTX::FramePostProcessContext&) override {
+        for (auto entity : view.GetBucket("entity")) {
+            if (entity.Get(health_key_) < 0.0f) entity.Set(health_key_, 0.0f);
+        }
+    }
+private:
+    VTX::PropertyKey<float> health_key_ {-1};
+};
+
+writer->SetPostProcessor(std::make_shared<HealthClamp>());
+```
+
+For string-free, schema-driven processors with type-safety in compile time, use `scripts/vtx_codegen.py` to generate per-struct mutators and iteration helpers (`PlayerMutator`, `ForEachPlayer`, etc.) -- full reference in [`docs/POST_PROCESSING.md`](docs/POST_PROCESSING.md), runnable end-to-end demo in [`samples/post_process_write.cpp`](samples/post_process_write.cpp).
+
 ### Read a replay
 
 ```cpp
@@ -134,7 +160,7 @@ Dependencies are pulled via `vcpkg.json` on Windows or system packages on Linux.
 - **[Performance](https://github.com/ZenosInteractive/VTX/wiki/Performance)** — full numbers, methodology, and sizing guidance.
 - **[Use Cases](https://github.com/ZenosInteractive/VTX/wiki/Use-Cases)** — what people build on top of VTX.
 
-In-tree reference: [`docs/`](docs/) includes `ARCHITECTURE.md`, `BUILD.md`, `FILE_FORMAT.md`, `PERFORMANCE.md`, `SAMPLES.md`, `SDK_API.md`.
+In-tree reference: [`docs/`](docs/) includes `ARCHITECTURE.md`, `BUILD.md`, `FILE_FORMAT.md`, `PERFORMANCE.md`, `POST_PROCESSING.md`, `SAMPLES.md`, `SDK_API.md`.
 
 ## License
 

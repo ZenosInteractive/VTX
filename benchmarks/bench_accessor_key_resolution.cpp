@@ -9,7 +9,7 @@
 // directly.  This file probes the public-facing API instead.
 
 #include "vtx/reader/core/vtx_reader_facade.h"
-#include "vtx/reader/core/vtx_frame_accessor.h"
+#include "vtx/common/vtx_frame_accessor.h"
 #include "vtx/common/vtx_logger.h"
 
 #include <benchmark/benchmark.h>

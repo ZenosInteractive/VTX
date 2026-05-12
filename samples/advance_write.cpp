@@ -38,6 +38,8 @@
 
 #include "vtx/writer/core/vtx_writer_facade.h"
 #include "vtx/writer/core/vtx_data_source.h"
+#include "vtx/writer/core/vtx_frame_post_processor.h"
+#include "vtx/writer/core/vtx_frame_mutation_view.h"
 #include "vtx/common/adapters/json/json_adapter.h"
 #include "vtx/common/vtx_types_helpers.h"
 #include "vtx/common/readers/frame_reader/flatbuffer_loader.h"
@@ -51,8 +53,10 @@
 #include "arena_data.pb.h"
 #include "arena_data_generated.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <fstream>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -439,6 +443,60 @@ private:
     size_t cursor_ = 0;
 };
 
+class ArenaConsistencyProcessor : public VTX::IFramePostProcessor {
+public:
+    void Process(VTX::FrameMutationView& view, const VTX::FramePostProcessContext& /*ctx*/) override {
+        if (!view.HasBucket("entity"))
+            return;
+
+        auto bucket = view.GetBucket("entity");
+        VTX::ArenaSchema::ForEachPlayer(bucket, *view.accessor(), [&](auto& p) {
+            const float hp = p.GetHealth();
+            const float clamped_hp = std::clamp(hp, 0.0f, 100.0f);
+            if (clamped_hp != hp) {
+                p.SetHealth(clamped_hp);
+                ++health_mutations_;
+            }
+
+            const float armor = p.GetArmor();
+            const float clamped_armor = std::clamp(armor, 0.0f, 100.0f);
+            if (clamped_armor != armor) {
+                p.SetArmor(clamped_armor);
+                ++armor_mutations_;
+            }
+
+            if (clamped_hp <= 0.0f && p.GetIsAlive()) {
+                p.SetIsAlive(false);
+                ++is_alive_mutations_;
+            }
+            ++players_inspected_;
+        });
+        ++frames_seen_;
+    }
+
+    void PrintInfo() const override {
+        VTX_INFO(
+            "  [post-process] frames={} players_inspected={} health_clamps={} armor_clamps={} is_alive_corrections={}",
+            frames_seen_, players_inspected_, health_mutations_, armor_mutations_, is_alive_mutations_);
+    }
+
+    void Clear() override {
+        frames_seen_ = 0;
+        players_inspected_ = 0;
+        health_mutations_ = 0;
+        armor_mutations_ = 0;
+        is_alive_mutations_ = 0;
+    }
+
+private:
+    int frames_seen_ = 0;
+    int players_inspected_ = 0;
+    int health_mutations_ = 0;
+    int armor_mutations_ = 0;
+    int is_alive_mutations_ = 0;
+};
+
+
 // ===================================================================
 //  Pipeline driver -- initialise source, stream frames into the writer
 // ===================================================================
@@ -467,6 +525,9 @@ static bool RunPipeline(VTX::IFrameDataSource& source, const std::string& output
         return false;
     }
 
+    auto processor = std::make_shared<ArenaConsistencyProcessor>();
+    writer->SetPostProcessor(processor);
+
     VTX::Frame frame;
     VTX::GameTime::GameTimeRegister time;
     int count = 0;
@@ -476,6 +537,8 @@ static bool RunPipeline(VTX::IFrameDataSource& source, const std::string& output
     }
     writer->Flush();
     writer->Stop();
+
+    processor->PrintInfo();
 
     VTX_INFO("  -> wrote {} frames to {}", count, output_path);
     return true;
@@ -494,6 +557,8 @@ int main() {
 
     VTX_INFO("=== advance_write - IFrameDataSource pattern ===");
     VTX_INFO("Demonstrates JSON, Protobuf and FlatBuffers sources using integration-style bindings.");
+    VTX_INFO("Each writer also runs ArenaConsistencyProcessor (frame post-processor)");
+    VTX_INFO("on every recorded frame; the persisted .vtx contains the post-processed values.");
 
     VTX_INFO("--- 1. JSON data source ---");
     ArenaJsonDataSource json_ds(writer_dir + "/arena_replay_data.json");

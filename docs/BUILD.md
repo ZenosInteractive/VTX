@@ -10,6 +10,39 @@ Every push to `main` / `master` and every pull request triggers the CI workflow 
 
 A dedicated `clang-format` job checks every C++ file **added or modified** by the PR / push against `.clang-format`. Pre-existing files are not checked -- about 90% of the codebase predates the style file, so a strict full-repo check would be permanently red. The gate catches *new* formatting regressions without forcing a one-time blame-destroying style sweep.
 
+#### Validate locally before pushing
+
+The same diff-gate logic is shipped as a local helper so you can catch violations before the CI does:
+
+```bash
+# Check (read-only) -- exits 1 if there are violations on changed lines
+python scripts/check_clang_format.py
+
+# Auto-fix the offending lines in place
+python scripts/check_clang_format.py --fix
+
+# Different base ref (default is origin/main)
+python scripts/check_clang_format.py --base HEAD~1
+```
+
+Cross-platform wrappers:
+- `scripts/check_clang_format.sh` -- Linux / macOS / WSL / Git Bash
+- `scripts/check_clang_format.bat` -- Windows `cmd`
+
+Exit codes: `0` clean, `1` violations, `2` tooling missing. The script auto-detects `clang-format-diff.py` under `Program Files\LLVM\share\clang\` on Windows when it's not on `PATH`.
+
+#### Pre-push hook (opt-in, versioned in the repo)
+
+A versioned pre-push hook lives at `scripts/git-hooks/pre-push` and runs the same check before every `git push`. Activate it in your clone once:
+
+```bash
+git config core.hooksPath scripts/git-hooks
+```
+
+No external dependency (Husky, pre-commit, etc.) -- `core.hooksPath` is built into git ≥ 2.9. To bypass for a one-off push: `git push --no-verify`. To deactivate: `git config --unset core.hooksPath`.
+
+#### Sweeping the whole tree
+
 If you want to apply the style to the whole tree in one commit (consider recording that SHA in `.git-blame-ignore-revs` afterwards):
 
 ```bash

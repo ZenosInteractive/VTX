@@ -187,6 +187,119 @@ writer->Stop();   // Write footer and close file
 
 ---
 
+## Frame Post-Processor
+
+A writer-side hook that runs on every `RecordFrame()` call, **after** timer validation and **before** the serializer touches the native `Frame`. Whatever the processor mutates lands on disk -- callers who re-read the `.vtx` see the post-processed values.
+
+See [`POST_PROCESSING.md`](POST_PROCESSING.md) for the full reference (lifecycle, threading, structural mutation, error handling, performance, codegen integration). This section is the API cheat-sheet.
+
+### Implementing a processor
+
+```cpp
+#include "vtx/writer/core/vtx_frame_post_processor.h"
+#include "vtx/writer/core/vtx_frame_mutation_view.h"
+
+class HealthClampProcessor : public VTX::IFramePostProcessor {
+public:
+    // Called once, synchronously, inside SetPostProcessor.  Resolve every
+    // PropertyKey<T> here -- the schema is constant for the recording session.
+    void Init(const VTX::FramePostProcessorInitContext& ctx) override {
+        health_key_ = ctx.frame_accessor->Get<float>("Player", "Health");
+    }
+
+    // Called once per RecordFrame, on the writer's calling thread.
+    void Process(VTX::FrameMutationView& view,
+                 const VTX::FramePostProcessContext& ctx) override {
+        if (!view.HasBucket("entity") || !health_key_.IsValid()) return;
+        auto bucket = view.GetBucket("entity");
+        for (auto entity : bucket) {
+            if (entity.raw()->entity_type_id != /*Player*/ 0) continue;
+            if (entity.Get(health_key_) < 0.0f) entity.Set(health_key_, 0.0f);
+        }
+    }
+
+    // Optional: reset cross-frame accumulators.  Called by writer destructor
+    // or explicit ClearPostProcessor().
+    void Clear() override {}
+
+    // Optional: telemetry dump.  Called when the caller invokes it.
+    void PrintInfo() const override {}
+
+private:
+    VTX::PropertyKey<float> health_key_ {-1};
+};
+```
+
+### Registering on the writer
+
+```cpp
+auto writer    = VTX::CreateFlatBuffersWriterFacade(config);
+auto processor = std::make_shared<HealthClampProcessor>();
+writer->SetPostProcessor(processor);   // Init() runs here
+
+for (...) { writer->RecordFrame(frame, time); }   // Process() runs per frame
+writer->Stop();
+// Writer's destructor calls processor->Clear()
+// OR call writer->ClearPostProcessor() explicitly first.
+```
+
+### Composing multiple processors
+
+```cpp
+auto chain = std::make_shared<VTX::FramePostProcessorChain>();
+chain->Add(std::make_shared<HealthClampProcessor>());
+chain->Add(std::make_shared<DeathConsistencyProcessor>());
+chain->Add(std::make_shared<KillStreakProcessor>());
+writer->SetPostProcessor(chain);
+```
+
+`Init`, `Process`, and `PrintInfo` run in registration order. `Clear` runs in reverse (destructor-like teardown). If two processors `Set` the same property, the last one wins.
+
+### Strongly-typed accessors via codegen
+
+`scripts/vtx_codegen.py` produces per-struct `XMutator` classes and `ForEachX` helpers for any schema. The processor becomes string-free:
+
+```cpp
+#include "arena_generated.h"   // produced by vtx_codegen.py
+
+class HealthClampProcessor : public VTX::IFramePostProcessor {
+public:
+    void Process(VTX::FrameMutationView& view, const VTX::FramePostProcessContext&) override {
+        if (!view.HasBucket("entity")) return;
+        auto bucket = view.GetBucket("entity");
+        VTX::ArenaSchema::ForEachPlayer(bucket, *view.accessor(), [](auto& p) {
+            if (p.GetHealth() < 0) p.SetHealth(0);
+        });
+    }
+};
+```
+
+No `Init`, no `PropertyKey<T>` members, no `entity_type_id` gating, no schema strings. See [`POST_PROCESSING.md`](POST_PROCESSING.md#strongly-typed-via-codegen-recommended) and [`SAMPLES.md`](SAMPLES.md#6-post_process_write----post-processor-end-to-end).
+
+### Mutation view API
+
+```cpp
+// Per-entity reads / writes (writer-side mirror of EntityView)
+template <VtxScalarType T> T    Get(PropertyKey<T> key) const;
+template <VtxScalarType T> void Set(PropertyKey<T> key, T value);
+
+// Nested struct mutation (Champion.Spells[i].Cooldown style)
+EntityMutator GetMutableView(PropertyKey<EntityView> key);
+
+// Array mutation
+template <VtxArrayType T> std::span<T> GetMutableArray(PropertyKey<T> key);
+
+// Bucket-level (BucketMutator)
+EntityMutator AddEntity();                          // inject synthetic entity
+void          RemoveEntity(uint32_t entity_index);
+template <class P> size_t RemoveIf(P predicate);    // bulk filter; P : bool(EntityView)
+void          Clear();
+```
+
+Out-of-range / invalid-key writes are **silent no-ops**, matching the read-side tolerance. The serializer drops entities whose `entity_type_id < 0`, so newly-added entities must have their type id set explicitly before the chunk is flushed (see [`POST_PROCESSING.md` gotchas](POST_PROCESSING.md#structural-mutation)).
+
+---
+
 ## Diffing Frames
 
 ### Creating a Differ

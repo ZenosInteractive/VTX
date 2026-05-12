@@ -16,9 +16,7 @@ namespace VTX {
         WriterFacadeImpl(typename ReplayWriter<SinkPolicyType>::Config internal_config)
             : writer_(internal_config) {}
 
-        // RecordFrame / Flush / Stop are no-ops after the first Stop().  The
-        // on-disk file was finalised (header + chunks + footer) there, and
-        // letting further writes through would rewrite/corrupt the footer.
+
         void RecordFrame(VTX::Frame& native_frame, const VTX::GameTime::GameTimeRegister& game_time_register) override {
             if (stopped_)
                 return;
@@ -33,12 +31,18 @@ namespace VTX {
 
         void Stop() override {
             if (stopped_)
-                return; // idempotent: second Stop() is a no-op
+                return; // second Stop() is a no-op
             writer_.Stop();
             stopped_ = true;
         }
 
         VTX::SchemaRegistry& GetSchema() override { return writer_.GetRegistry(); }
+
+        void SetPostProcessor(std::shared_ptr<IFramePostProcessor> processor) override {
+            writer_.SetPostProcessor(std::move(processor));
+        }
+        std::shared_ptr<IFramePostProcessor> GetPostProcessor() const override { return writer_.GetPostProcessor(); }
+        void ClearPostProcessor() override { writer_.ClearPostProcessor(); }
 
     private:
         ReplayWriter<SinkPolicyType> writer_;
