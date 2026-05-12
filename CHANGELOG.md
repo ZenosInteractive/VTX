@@ -7,8 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.2.0] - 2026-05-12
-
 ### Added
 
 - **writer/api**: writer-side frame post-processor pipeline.  A new hook fires inside `ReplayWriter::RecordFrame` after timer validation and **before** `Serializer::FromNative` consumes the native `Frame`, so whatever the processor mutates is what gets serialised to the on-disk `.vtx`.  Three new public headers and three new facade methods materialise the feature:
