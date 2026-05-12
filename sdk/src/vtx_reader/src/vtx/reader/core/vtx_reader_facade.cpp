@@ -110,12 +110,17 @@ namespace VTX {
         }
 
         bool IsReady() const override { return InternalReader.IsReady(); }
+
         bool IsReadyFailed() const override { return InternalReader.IsReadyFailed(); }
+
         std::string GetReadyError() const override { return InternalReader.GetReadyError(); }
+
         bool WaitUntilReady() override { return InternalReader.WaitUntilReady(); }
+
         bool WaitUntilReady(std::chrono::milliseconds timeout) override {
             return InternalReader.WaitUntilReady(timeout);
         }
+
         void MarkReadyVacuous() override { InternalReader.MarkReadyVacuous(); }
 
     private:
@@ -180,12 +185,17 @@ namespace VTX {
         }
 
         bool IsReady() const override { return InternalReader.IsReady(); }
+
         bool IsReadyFailed() const override { return InternalReader.IsReadyFailed(); }
+
         std::string GetReadyError() const override { return InternalReader.GetReadyError(); }
+
         bool WaitUntilReady() override { return InternalReader.WaitUntilReady(); }
+
         bool WaitUntilReady(std::chrono::milliseconds timeout) override {
             return InternalReader.WaitUntilReady(timeout);
         }
+
         void MarkReadyVacuous() override { InternalReader.MarkReadyVacuous(); }
 
     private:
@@ -254,22 +264,6 @@ namespace VTX {
             };
             result.reader->SetEvents(events);
 
-            // Eagerly warm chunk 0 so callers can poll IsReady(), block
-            // via WaitUntilReady(), or register OnReady / OnReadyFailed
-            // on a subsequent SetEvents.  WarmAt() dispatches the load
-            // asynchronously, so OpenReplayFile's own return latency
-            // is unchanged.  Empty replays (0 frames) get a vacuous
-            // "ready" flip so waiters / pollers don't hang forever.
-            //
-            // We narrow the cache window to (0, 0) around the eager
-            // warm so ONLY chunk 0 is loaded -- not the default-window
-            // forward neighbours.  Loading extra chunks on every open
-            // would quietly break callers that set a narrow cache
-            // window immediately after OpenReplayFile() (e.g. memory-
-            // constrained tools, tests that isolate a single chunk).
-            // The window is restored to the reader's default right
-            // after, and nothing external holds a handle to the reader
-            // yet, so the temporary narrow is unobservable.
             if (result.reader->GetTotalFrames() > 0) {
                 result.reader->SetCacheWindow(0, 0);
                 result.reader->WarmAt(0);

@@ -33,6 +33,32 @@ scripts\build_sdk.bat
 
 A `.clang-format` file is provided for automatic formatting of new code. Do not mass-reformat existing files.
 
+### Validate formatting before pushing
+
+CI runs a clang-format diff-gate on every PR: only the **lines** you've modified vs the base branch get checked (pre-existing files predate the style file and are exempt). To catch violations locally before pushing, use the helper script:
+
+```bash
+# Check (read-only) -- same logic as CI
+python scripts/check_clang_format.py
+
+# Auto-fix in place
+python scripts/check_clang_format.py --fix
+```
+
+There are `.sh` and `.bat` wrappers if you prefer them (`scripts/check_clang_format.sh` / `.bat`). The script auto-detects `clang-format-diff.py` on Windows under `Program Files\LLVM\share\clang\` if it's not on `PATH`.
+
+### Pre-push hook (optional, opt-in)
+
+To run the format check automatically before every `git push`, activate the versioned hook directory once in your clone:
+
+```bash
+git config core.hooksPath scripts/git-hooks
+```
+
+That activates `scripts/git-hooks/pre-push`, which calls the format check and aborts the push if it fails. Bypass for a one-off push with `git push --no-verify`. Deactivate with `git config --unset core.hooksPath`.
+
+No external dependencies -- `core.hooksPath` is built into git ≥ 2.9.
+
 ### Naming Conventions
 
 | Element | Convention | Example |
@@ -88,9 +114,10 @@ These use C++20 `std::format` syntax (`{}`), **not** printf-style (`%s`, `%d`).
 
 1. Create a feature branch from `main`
 2. Make focused, incremental changes
-3. Ensure the project builds without warnings
-4. Test with sample replay files when possible
-5. Write clear commit messages describing _why_, not just _what_
+3. Run `python scripts/check_clang_format.py` before pushing (or set up the pre-push hook -- see [Validate formatting before pushing](#validate-formatting-before-pushing))
+4. Ensure the project builds without warnings
+5. Test with sample replay files when possible
+6. Write clear commit messages describing _why_, not just _what_
 
 ## Project Structure
 

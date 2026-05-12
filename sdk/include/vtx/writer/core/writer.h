@@ -3,6 +3,9 @@
 #include <vector>
 #include <optional>
 #include "vtx/common/vtx_types.h"
+#include "vtx/common/vtx_frame_accessor.h"
+#include "vtx/writer/core/vtx_frame_mutation_view.h"
+#include "vtx/writer/core/vtx_frame_post_processor.h"
 
 
 namespace VTX {
@@ -45,6 +48,15 @@ namespace VTX {
             registry_.LoadFromJson(config.schema_json_path);
             auto schema = Serializer::CreateSchema(registry_);
             sink_.OnSessionStart(schema);
+            frame_accessor_.InitializeFromCache(registry_.GetPropertyCache());
+        }
+
+        ~ReplayWriter() {
+            if (post_processor_) {
+                try {
+                    post_processor_->Clear();
+                } catch (...) {}
+            }
         }
 
         void RecordFrame(VTX::Frame& native_frame, const VTX::GameTime::GameTimeRegister& game_time_register) {
@@ -59,6 +71,22 @@ namespace VTX {
             if (!timer_.ResolveGameTimes(prospectiveIndex)) {
                 timer_.Rollback();
                 return;
+            }
+
+            if (post_processor_) {
+                FrameMutationView view(native_frame, frame_accessor_);
+                FramePostProcessContext ctx;
+                ctx.global_frame_index = total_frames_;
+                ctx.chunk_local_frame_index = static_cast<int32_t>(pending_frames_.size());
+                ctx.chunk_index = chunks_flushed_;
+                ctx.schema_version = 0;
+                ctx.frame_accessor = &frame_accessor_;
+                ctx.previous_frame = nullptr;
+                try {
+                    post_processor_->Process(view, ctx);
+                } catch (const std::exception& e) {
+                    (void)e;
+                } catch (...) {}
             }
 
             std::unique_ptr<FrameType> sink_frame = Serializer::FromNative(std::move(native_frame));
@@ -84,6 +112,7 @@ namespace VTX {
 
             pending_frames_.clear();
             current_chunk_bytes_ = 0;
+            ++chunks_flushed_;
             timer_.UpdateChunkStartIndex();
         }
 
@@ -108,6 +137,35 @@ namespace VTX {
 
         VTX::SchemaRegistry& GetRegistry() { return registry_; }
 
+        void SetPostProcessor(std::shared_ptr<IFramePostProcessor> processor) {
+            if (processor) {
+                FramePostProcessorInitContext init_ctx;
+                init_ctx.frame_accessor = &frame_accessor_;
+                init_ctx.total_frames = 0;
+                init_ctx.schema_version = 0;
+                init_ctx.format_major = 0;
+                init_ctx.format_minor = 0;
+                try {
+                    processor->Init(init_ctx);
+                } catch (...) {
+                    throw;
+                }
+            }
+            post_processor_ = std::move(processor);
+        }
+
+        std::shared_ptr<IFramePostProcessor> GetPostProcessor() const { return post_processor_; }
+
+        void ClearPostProcessor() {
+            auto outgoing = std::move(post_processor_);
+            post_processor_.reset();
+            if (outgoing) {
+                try {
+                    outgoing->Clear();
+                } catch (...) {}
+            }
+        }
+
     private:
         SinkPolicy sink_;
         ChunkingPolicy chunker_;
@@ -118,5 +176,9 @@ namespace VTX {
         VTX::GameTime::VTXGameTimes timer_;
         size_t current_chunk_bytes_ = 0;
         int32_t total_frames_ = 0;
+        int32_t chunks_flushed_ = 0;
+
+        FrameAccessor frame_accessor_ = {};
+        std::shared_ptr<IFramePostProcessor> post_processor_;
     };
 } // namespace VTX

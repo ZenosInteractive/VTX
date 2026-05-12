@@ -23,7 +23,7 @@
 //                                  resident
 
 #include "vtx/reader/core/vtx_reader_facade.h"
-#include "vtx/reader/core/vtx_frame_accessor.h"
+#include "vtx/common/vtx_frame_accessor.h"
 #include "vtx/common/vtx_logger.h"
 #include "vtx/common/vtx_types.h"
 

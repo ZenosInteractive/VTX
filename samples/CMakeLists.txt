@@ -61,6 +61,14 @@ add_executable(vtx_sample_ready_api ready_api.cpp)
 target_link_libraries(vtx_sample_ready_api PRIVATE vtx_reader)
 vtx_configure_sample(vtx_sample_ready_api)
 
+# --- post_process_write (frame post-processor: writer-side hook) ---
+add_executable(vtx_sample_post_process_write post_process_write.cpp)
+target_link_libraries(vtx_sample_post_process_write PRIVATE vtx_writer vtx_reader)
+target_include_directories(vtx_sample_post_process_write PRIVATE
+    "${VTX_COMMON_GENERATED_DIR}"
+)
+vtx_configure_sample(vtx_sample_post_process_write)
+
 # ==============================================================================
 # Arena-specific codegen (arena_data.proto + arena_data.fbs)
 #

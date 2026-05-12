@@ -6,7 +6,8 @@
 #include <cstdint>
 #include <span>
 #include "vtx/common/vtx_property_cache.h"
-#include "vtx/reader/core/vtx_frame_accessor.h"
+#include "vtx/common/vtx_frame_accessor.h"
+#include "vtx/writer/core/vtx_frame_mutation_view.h"
 
 namespace VTX::ArenaSchema {
 
@@ -102,6 +103,130 @@ namespace VTX::ArenaSchema {
 
     };
 
+    class PlayerMutator {
+    private:
+        VTX::EntityMutator data_mut;
+        const VTX::FrameAccessor& accessor;
+
+    public:
+        PlayerMutator(VTX::EntityMutator m, const VTX::FrameAccessor& acc) 
+            : data_mut(m), accessor(acc) {}
+
+        PlayerMutator(VTX::PropertyContainer& container, const VTX::FrameAccessor& acc) 
+            : data_mut(container), accessor(acc) {}
+
+        inline const std::string& GetUniqueID() const {
+            static VTX::PropertyKey<std::string> cached_key = accessor.Get<std::string>(EntityType::Player, Player::UniqueID);
+            return data_mut.Get<std::string>(cached_key);
+        }
+
+        inline void SetUniqueID(const std::string& value) {
+            static VTX::PropertyKey<std::string> cached_key = accessor.Get<std::string>(EntityType::Player, Player::UniqueID);
+            data_mut.Set<std::string>(cached_key, value);
+        }
+
+        inline const std::string& GetName() const {
+            static VTX::PropertyKey<std::string> cached_key = accessor.Get<std::string>(EntityType::Player, Player::Name);
+            return data_mut.Get<std::string>(cached_key);
+        }
+
+        inline void SetName(const std::string& value) {
+            static VTX::PropertyKey<std::string> cached_key = accessor.Get<std::string>(EntityType::Player, Player::Name);
+            data_mut.Set<std::string>(cached_key, value);
+        }
+
+        inline int32_t GetTeam() const {
+            static VTX::PropertyKey<int32_t> cached_key = accessor.Get<int32_t>(EntityType::Player, Player::Team);
+            return data_mut.Get<int32_t>(cached_key);
+        }
+
+        inline void SetTeam(int32_t value) {
+            static VTX::PropertyKey<int32_t> cached_key = accessor.Get<int32_t>(EntityType::Player, Player::Team);
+            data_mut.Set<int32_t>(cached_key, value);
+        }
+
+        inline float GetHealth() const {
+            static VTX::PropertyKey<float> cached_key = accessor.Get<float>(EntityType::Player, Player::Health);
+            return data_mut.Get<float>(cached_key);
+        }
+
+        inline void SetHealth(float value) {
+            static VTX::PropertyKey<float> cached_key = accessor.Get<float>(EntityType::Player, Player::Health);
+            data_mut.Set<float>(cached_key, value);
+        }
+
+        inline float GetArmor() const {
+            static VTX::PropertyKey<float> cached_key = accessor.Get<float>(EntityType::Player, Player::Armor);
+            return data_mut.Get<float>(cached_key);
+        }
+
+        inline void SetArmor(float value) {
+            static VTX::PropertyKey<float> cached_key = accessor.Get<float>(EntityType::Player, Player::Armor);
+            data_mut.Set<float>(cached_key, value);
+        }
+
+        inline const VTX::Vector& GetPosition() const {
+            static VTX::PropertyKey<VTX::Vector> cached_key = accessor.Get<VTX::Vector>(EntityType::Player, Player::Position);
+            return data_mut.Get<VTX::Vector>(cached_key);
+        }
+
+        inline void SetPosition(const VTX::Vector& value) {
+            static VTX::PropertyKey<VTX::Vector> cached_key = accessor.Get<VTX::Vector>(EntityType::Player, Player::Position);
+            data_mut.Set<VTX::Vector>(cached_key, value);
+        }
+
+        inline const VTX::Quat& GetRotation() const {
+            static VTX::PropertyKey<VTX::Quat> cached_key = accessor.Get<VTX::Quat>(EntityType::Player, Player::Rotation);
+            return data_mut.Get<VTX::Quat>(cached_key);
+        }
+
+        inline void SetRotation(const VTX::Quat& value) {
+            static VTX::PropertyKey<VTX::Quat> cached_key = accessor.Get<VTX::Quat>(EntityType::Player, Player::Rotation);
+            data_mut.Set<VTX::Quat>(cached_key, value);
+        }
+
+        inline const VTX::Vector& GetVelocity() const {
+            static VTX::PropertyKey<VTX::Vector> cached_key = accessor.Get<VTX::Vector>(EntityType::Player, Player::Velocity);
+            return data_mut.Get<VTX::Vector>(cached_key);
+        }
+
+        inline void SetVelocity(const VTX::Vector& value) {
+            static VTX::PropertyKey<VTX::Vector> cached_key = accessor.Get<VTX::Vector>(EntityType::Player, Player::Velocity);
+            data_mut.Set<VTX::Vector>(cached_key, value);
+        }
+
+        inline bool GetIsAlive() const {
+            static VTX::PropertyKey<bool> cached_key = accessor.Get<bool>(EntityType::Player, Player::IsAlive);
+            return data_mut.Get<bool>(cached_key);
+        }
+
+        inline void SetIsAlive(bool value) {
+            static VTX::PropertyKey<bool> cached_key = accessor.Get<bool>(EntityType::Player, Player::IsAlive);
+            data_mut.Set<bool>(cached_key, value);
+        }
+
+        inline int32_t GetScore() const {
+            static VTX::PropertyKey<int32_t> cached_key = accessor.Get<int32_t>(EntityType::Player, Player::Score);
+            return data_mut.Get<int32_t>(cached_key);
+        }
+
+        inline void SetScore(int32_t value) {
+            static VTX::PropertyKey<int32_t> cached_key = accessor.Get<int32_t>(EntityType::Player, Player::Score);
+            data_mut.Set<int32_t>(cached_key, value);
+        }
+
+        inline int32_t GetDeaths() const {
+            static VTX::PropertyKey<int32_t> cached_key = accessor.Get<int32_t>(EntityType::Player, Player::Deaths);
+            return data_mut.Get<int32_t>(cached_key);
+        }
+
+        inline void SetDeaths(int32_t value) {
+            static VTX::PropertyKey<int32_t> cached_key = accessor.Get<int32_t>(EntityType::Player, Player::Deaths);
+            data_mut.Set<int32_t>(cached_key, value);
+        }
+
+    };
+
     namespace Projectile {
         constexpr const char* StructName = "Projectile";
         constexpr const char* UniqueID = "UniqueID";
@@ -152,6 +277,80 @@ namespace VTX::ArenaSchema {
         inline const std::string& GetType() const {
             static VTX::PropertyKey<std::string> cached_key = accessor.Get<std::string>(EntityType::Projectile, Projectile::Type);
             return data_view.Get<std::string>(cached_key);
+        }
+
+    };
+
+    class ProjectileMutator {
+    private:
+        VTX::EntityMutator data_mut;
+        const VTX::FrameAccessor& accessor;
+
+    public:
+        ProjectileMutator(VTX::EntityMutator m, const VTX::FrameAccessor& acc) 
+            : data_mut(m), accessor(acc) {}
+
+        ProjectileMutator(VTX::PropertyContainer& container, const VTX::FrameAccessor& acc) 
+            : data_mut(container), accessor(acc) {}
+
+        inline const std::string& GetUniqueID() const {
+            static VTX::PropertyKey<std::string> cached_key = accessor.Get<std::string>(EntityType::Projectile, Projectile::UniqueID);
+            return data_mut.Get<std::string>(cached_key);
+        }
+
+        inline void SetUniqueID(const std::string& value) {
+            static VTX::PropertyKey<std::string> cached_key = accessor.Get<std::string>(EntityType::Projectile, Projectile::UniqueID);
+            data_mut.Set<std::string>(cached_key, value);
+        }
+
+        inline const std::string& GetOwnerID() const {
+            static VTX::PropertyKey<std::string> cached_key = accessor.Get<std::string>(EntityType::Projectile, Projectile::OwnerID);
+            return data_mut.Get<std::string>(cached_key);
+        }
+
+        inline void SetOwnerID(const std::string& value) {
+            static VTX::PropertyKey<std::string> cached_key = accessor.Get<std::string>(EntityType::Projectile, Projectile::OwnerID);
+            data_mut.Set<std::string>(cached_key, value);
+        }
+
+        inline const VTX::Vector& GetPosition() const {
+            static VTX::PropertyKey<VTX::Vector> cached_key = accessor.Get<VTX::Vector>(EntityType::Projectile, Projectile::Position);
+            return data_mut.Get<VTX::Vector>(cached_key);
+        }
+
+        inline void SetPosition(const VTX::Vector& value) {
+            static VTX::PropertyKey<VTX::Vector> cached_key = accessor.Get<VTX::Vector>(EntityType::Projectile, Projectile::Position);
+            data_mut.Set<VTX::Vector>(cached_key, value);
+        }
+
+        inline const VTX::Vector& GetVelocity() const {
+            static VTX::PropertyKey<VTX::Vector> cached_key = accessor.Get<VTX::Vector>(EntityType::Projectile, Projectile::Velocity);
+            return data_mut.Get<VTX::Vector>(cached_key);
+        }
+
+        inline void SetVelocity(const VTX::Vector& value) {
+            static VTX::PropertyKey<VTX::Vector> cached_key = accessor.Get<VTX::Vector>(EntityType::Projectile, Projectile::Velocity);
+            data_mut.Set<VTX::Vector>(cached_key, value);
+        }
+
+        inline float GetDamage() const {
+            static VTX::PropertyKey<float> cached_key = accessor.Get<float>(EntityType::Projectile, Projectile::Damage);
+            return data_mut.Get<float>(cached_key);
+        }
+
+        inline void SetDamage(float value) {
+            static VTX::PropertyKey<float> cached_key = accessor.Get<float>(EntityType::Projectile, Projectile::Damage);
+            data_mut.Set<float>(cached_key, value);
+        }
+
+        inline const std::string& GetType() const {
+            static VTX::PropertyKey<std::string> cached_key = accessor.Get<std::string>(EntityType::Projectile, Projectile::Type);
+            return data_mut.Get<std::string>(cached_key);
+        }
+
+        inline void SetType(const std::string& value) {
+            static VTX::PropertyKey<std::string> cached_key = accessor.Get<std::string>(EntityType::Projectile, Projectile::Type);
+            data_mut.Set<std::string>(cached_key, value);
         }
 
     };
@@ -209,5 +408,156 @@ namespace VTX::ArenaSchema {
         }
 
     };
+
+    class MatchStateMutator {
+    private:
+        VTX::EntityMutator data_mut;
+        const VTX::FrameAccessor& accessor;
+
+    public:
+        MatchStateMutator(VTX::EntityMutator m, const VTX::FrameAccessor& acc) 
+            : data_mut(m), accessor(acc) {}
+
+        MatchStateMutator(VTX::PropertyContainer& container, const VTX::FrameAccessor& acc) 
+            : data_mut(container), accessor(acc) {}
+
+        inline const std::string& GetUniqueID() const {
+            static VTX::PropertyKey<std::string> cached_key = accessor.Get<std::string>(EntityType::MatchState, MatchState::UniqueID);
+            return data_mut.Get<std::string>(cached_key);
+        }
+
+        inline void SetUniqueID(const std::string& value) {
+            static VTX::PropertyKey<std::string> cached_key = accessor.Get<std::string>(EntityType::MatchState, MatchState::UniqueID);
+            data_mut.Set<std::string>(cached_key, value);
+        }
+
+        inline int32_t GetScoreTeam1() const {
+            static VTX::PropertyKey<int32_t> cached_key = accessor.Get<int32_t>(EntityType::MatchState, MatchState::ScoreTeam1);
+            return data_mut.Get<int32_t>(cached_key);
+        }
+
+        inline void SetScoreTeam1(int32_t value) {
+            static VTX::PropertyKey<int32_t> cached_key = accessor.Get<int32_t>(EntityType::MatchState, MatchState::ScoreTeam1);
+            data_mut.Set<int32_t>(cached_key, value);
+        }
+
+        inline int32_t GetScoreTeam2() const {
+            static VTX::PropertyKey<int32_t> cached_key = accessor.Get<int32_t>(EntityType::MatchState, MatchState::ScoreTeam2);
+            return data_mut.Get<int32_t>(cached_key);
+        }
+
+        inline void SetScoreTeam2(int32_t value) {
+            static VTX::PropertyKey<int32_t> cached_key = accessor.Get<int32_t>(EntityType::MatchState, MatchState::ScoreTeam2);
+            data_mut.Set<int32_t>(cached_key, value);
+        }
+
+        inline int32_t GetRound() const {
+            static VTX::PropertyKey<int32_t> cached_key = accessor.Get<int32_t>(EntityType::MatchState, MatchState::Round);
+            return data_mut.Get<int32_t>(cached_key);
+        }
+
+        inline void SetRound(int32_t value) {
+            static VTX::PropertyKey<int32_t> cached_key = accessor.Get<int32_t>(EntityType::MatchState, MatchState::Round);
+            data_mut.Set<int32_t>(cached_key, value);
+        }
+
+        inline const std::string& GetPhase() const {
+            static VTX::PropertyKey<std::string> cached_key = accessor.Get<std::string>(EntityType::MatchState, MatchState::Phase);
+            return data_mut.Get<std::string>(cached_key);
+        }
+
+        inline void SetPhase(const std::string& value) {
+            static VTX::PropertyKey<std::string> cached_key = accessor.Get<std::string>(EntityType::MatchState, MatchState::Phase);
+            data_mut.Set<std::string>(cached_key, value);
+        }
+
+        inline float GetTimeRemaining() const {
+            static VTX::PropertyKey<float> cached_key = accessor.Get<float>(EntityType::MatchState, MatchState::TimeRemaining);
+            return data_mut.Get<float>(cached_key);
+        }
+
+        inline void SetTimeRemaining(float value) {
+            static VTX::PropertyKey<float> cached_key = accessor.Get<float>(EntityType::MatchState, MatchState::TimeRemaining);
+            data_mut.Set<float>(cached_key, value);
+        }
+
+    };
+
+    // ----------------------------------------------------------------
+    //  Strongly-typed iteration helpers
+    // ----------------------------------------------------------------
+    //  ForEachX(bucket, accessor, fn) walks a BucketMutator and calls
+    //  fn(XMutator&) only for entities whose entity_type_id matches the
+    //  struct.  Read-only counterparts (XView) are available via
+    //  ForEachXView.
+
+    template <class Fn>
+    void ForEachPlayer(VTX::BucketMutator& bucket, const VTX::FrameAccessor& accessor, Fn fn) {
+        constexpr int32_t kTypeId = static_cast<int32_t>(EntityType::Player);
+        for (auto entity : bucket) {
+            const auto* raw = entity.raw();
+            if (raw && raw->entity_type_id == kTypeId) {
+                PlayerMutator obj(entity, accessor);
+                fn(obj);
+            }
+        }
+    }
+
+    template <class Fn>
+    void ForEachPlayerView(const VTX::Bucket& bucket, const VTX::FrameAccessor& accessor, Fn fn) {
+        constexpr int32_t kTypeId = static_cast<int32_t>(EntityType::Player);
+        for (const auto& container : bucket.entities) {
+            if (container.entity_type_id == kTypeId) {
+                PlayerView obj(container, accessor);
+                fn(obj);
+            }
+        }
+    }
+
+    template <class Fn>
+    void ForEachProjectile(VTX::BucketMutator& bucket, const VTX::FrameAccessor& accessor, Fn fn) {
+        constexpr int32_t kTypeId = static_cast<int32_t>(EntityType::Projectile);
+        for (auto entity : bucket) {
+            const auto* raw = entity.raw();
+            if (raw && raw->entity_type_id == kTypeId) {
+                ProjectileMutator obj(entity, accessor);
+                fn(obj);
+            }
+        }
+    }
+
+    template <class Fn>
+    void ForEachProjectileView(const VTX::Bucket& bucket, const VTX::FrameAccessor& accessor, Fn fn) {
+        constexpr int32_t kTypeId = static_cast<int32_t>(EntityType::Projectile);
+        for (const auto& container : bucket.entities) {
+            if (container.entity_type_id == kTypeId) {
+                ProjectileView obj(container, accessor);
+                fn(obj);
+            }
+        }
+    }
+
+    template <class Fn>
+    void ForEachMatchState(VTX::BucketMutator& bucket, const VTX::FrameAccessor& accessor, Fn fn) {
+        constexpr int32_t kTypeId = static_cast<int32_t>(EntityType::MatchState);
+        for (auto entity : bucket) {
+            const auto* raw = entity.raw();
+            if (raw && raw->entity_type_id == kTypeId) {
+                MatchStateMutator obj(entity, accessor);
+                fn(obj);
+            }
+        }
+    }
+
+    template <class Fn>
+    void ForEachMatchStateView(const VTX::Bucket& bucket, const VTX::FrameAccessor& accessor, Fn fn) {
+        constexpr int32_t kTypeId = static_cast<int32_t>(EntityType::MatchState);
+        for (const auto& container : bucket.entities) {
+            if (container.entity_type_id == kTypeId) {
+                MatchStateView obj(container, accessor);
+                fn(obj);
+            }
+        }
+    }
 
 } // namespace VTX::ArenaSchema

@@ -20,7 +20,7 @@
 #include "vtx/common/vtx_types.h"
 #include "vtx/common/vtx_concepts.h"
 #include "vtx/reader/core/vtx_schema_adapter.h"
-#include "vtx_frame_accessor.h"
+#include "vtx/common/vtx_frame_accessor.h"
 #include "vtx/reader/serialization/flatbuffers_to_vtx.h"
 
 namespace VTX {
@@ -406,10 +406,6 @@ namespace VTX {
         }
 
         void ReadFooter(std::ifstream& stream) {
-            // Fix A1: the original code declared `uint32_t footer_size;` and
-            // used it after `stream.read()` without checking `gcount()`.  If
-            // the file is too short to contain the trailing 8-byte footer
-            // size, we would seek to a garbage offset and crash.
             const int64_t file_size = GetStreamSize(stream);
             if (file_size < 8) {
                 throw std::runtime_error("VTX file too small to contain footer");
@@ -422,9 +418,6 @@ namespace VTX {
                 throw std::runtime_error("VTX file truncated while reading footer size");
             }
 
-            // Fix A3: guard against an implausible footer_size (either
-            // malicious UINT32_MAX or garbage from a corrupt trailer) that
-            // would seek before the beginning of the file.
             if (footer_size == 0 || static_cast<int64_t>(footer_size) + 8 > file_size) {
                 throw std::runtime_error("VTX file has implausible footer size");
             }
@@ -567,7 +560,6 @@ namespace VTX {
             }
 
             const bool load_succeeded = thread_survived && !data.native_frames.empty();
-
             {
                 std::lock_guard<std::mutex> lock(cache_mutex_);
                 if (!stop_token.stop_requested()) {

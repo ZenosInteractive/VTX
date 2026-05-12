@@ -23,7 +23,7 @@
 #include "bench_utils.h"
 
 #include "vtx/reader/core/vtx_reader_facade.h"
-#include "vtx/reader/core/vtx_frame_accessor.h"
+#include "vtx/common/vtx_frame_accessor.h"
 #include "vtx/differ/core/vtx_differ_facade.h"
 #include "vtx/common/vtx_logger.h"
 #include "vtx/common/vtx_types.h"
