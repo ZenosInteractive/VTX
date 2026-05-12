@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Pre-push hook -- validates clang-format on changed lines before push.
+#
+# Active when core.hooksPath points to scripts/git-hooks.  Activate
+# in this clone with:
+#     git config core.hooksPath scripts/git-hooks
+#
+# Bypass for a single push (rare -- usually means CI will reject it):
+#     git push --no-verify
+
+python scripts/check_clang_format.py || {
+    echo ""
+    echo "Push aborted: clang-format violations on changed lines."
+    echo "  Fix locally:   python scripts/check_clang_format.py --fix"
+    echo "  Bypass (rare): git push --no-verify"
+    exit 1
+}
