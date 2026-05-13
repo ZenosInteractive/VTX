@@ -168,8 +168,8 @@ namespace VTX {
                                    [](const ::arena_pb::Projectile& projectile) { return projectile.unique_id(); });
 
             if (src.has_match_state()) {
-                loader.AppendSingleActor(entity_bucket, ArenaSchema::MatchState::StructName, src.match_state(),
-                                         [](const ::arena_pb::MatchState&) { return std::string("match_001"); });
+                loader.AppendSingleEntity(entity_bucket, ArenaSchema::MatchState::StructName, src.match_state(),
+                                          [](const ::arena_pb::MatchState&) { return std::string("match_001"); });
             }
         }
     };
