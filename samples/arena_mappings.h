@@ -1,45 +1,37 @@
 #pragma once
-// arena_mappings.h -- Arena game data model + JSON mapping for the samples.
+// arena_mappings.h -- Arena game data model + mappings (JSON ingest + VTX slot output).
 //
-// Two concerns live here:
+// Two layers of compile-time reflection live here:
 //
-//   1. ArenaVec3 / ArenaQuat / ArenaPlayer / ArenaProjectile / ArenaMatchState /
-//      ArenaFrame / ArenaReplayJson
-//          C++ types that mirror the arena replay JSON structure.
+//   1. VTX::JsonMapping<T>
+//        Drives UniversalDeserializer<>::Load<ArenaReplayJson>(JsonAdapter)
+//        in advance_write.cpp. Walks JSON -> C++ struct.
 //
-//   2. VTX::JsonMapping<T> specializations for each of those types.
-//          Same compile-time reflection pattern used by real integrations
-//          (see tools/integrations/sf/sf_mappings.h).  Consumed by
-//          VTX::UniversalDeserializer<>::Load<ArenaReplayJson>(JsonAdapter)
-//          in advance_write.cpp.
+//   2. VTX::StructMapping<T> + VTX::StructFrameBinding<ArenaFrame>
+//        Drives GenericNativeLoader::Load / LoadFrame in advance_write.cpp.
+//        Walks C++ struct -> VTX::PropertyContainer / VTX::Frame.
 //
-//   3. ArenaToVtx::MapFrame()
-//          Hand-written bridge from the arena data model to a VTX::Frame
-//          (PropertyContainer layout matches content/writer/arena/arena_schema.json).
-//          This is the "manual" counterpart to the schema-driven ProtoBinding
-//          and FlatBufferBinding specializations declared in advance_write.cpp.
-//
-// Property-vector indices assigned here MUST match the field order in
-// arena_schema.json -- see the comments above each MapXxx() function.
+// The C++ data model uses VTX::Vector / VTX::Quat directly so no per-field
+// conversion is needed between the JSON ingest layer and the VTX output layer.
+// (This is the equivalent of the manual ArenaToVtx::Map* helpers we deleted --
+//  the schema-driven StructMapping<> now does that work automatically.)
 
 #include <cstdint>
 #include <string>
+#include <tuple>
 #include <vector>
 
 #include "vtx/common/adapters/json/json_policy.h"
+#include "vtx/common/adapters/native/struct_mapping.h"
+#include "vtx/common/readers/frame_reader/native_loader.h"
 #include "vtx/common/readers/frame_reader/type_traits.h"
 #include "vtx/common/vtx_types.h"
+
+#include "arena_generated.h"
 
 // ===================================================================
 //  Arena game data model (matches the JSON data source structure)
 // ===================================================================
-
-struct ArenaVec3 {
-    double x = 0, y = 0, z = 0;
-};
-struct ArenaQuat {
-    float x = 0, y = 0, z = 0, w = 1;
-};
 
 struct ArenaPlayer {
     std::string unique_id;
@@ -47,9 +39,9 @@ struct ArenaPlayer {
     int team = 0;
     float health = 100.0f;
     float armor = 50.0f;
-    ArenaVec3 position;
-    ArenaQuat rotation;
-    ArenaVec3 velocity;
+    VTX::Vector position;
+    VTX::Quat rotation;
+    VTX::Vector velocity;
     bool is_alive = true;
     int score = 0;
     int deaths = 0;
@@ -58,13 +50,16 @@ struct ArenaPlayer {
 struct ArenaProjectile {
     std::string unique_id;
     std::string owner_id;
-    ArenaVec3 position;
-    ArenaVec3 velocity;
+    VTX::Vector position;
+    VTX::Vector velocity;
     float damage = 25.0f;
     std::string type = "bullet";
 };
 
 struct ArenaMatchState {
+    // Default to the canonical id. The match-state JSON doesn't carry one;
+    // the FB/Proto bindings inject the same literal -- this keeps parity.
+    std::string unique_id = "match_001";
     int score_team1 = 0;
     int score_team2 = 0;
     int round = 1;
@@ -90,25 +85,24 @@ struct ArenaReplayJson {
 };
 
 // ===================================================================
-//  JsonMapping<T> specializations  (JSON key → C++ member)
-//
-//  Same pattern as sf_mappings.h.  Consumed by UniversalDeserializer
-//  or any code that inspects the mapping tuple at compile time.
+//  JsonMapping<T> specializations  (JSON key -> C++ member)
 // ===================================================================
+//  Two new mappings for the VTX math types so the JSON ingest layer can fill
+//  them directly. Same shape as the JSON file: {"x":..., "y":..., "z":...}.
 
 template <>
-struct VTX::JsonMapping<ArenaVec3> {
+struct VTX::JsonMapping<VTX::Vector> {
     static constexpr auto GetFields() {
-        return std::make_tuple(MakeField("x", &ArenaVec3::x), MakeField("y", &ArenaVec3::y),
-                               MakeField("z", &ArenaVec3::z));
+        return std::make_tuple(MakeField("x", &VTX::Vector::x), MakeField("y", &VTX::Vector::y),
+                               MakeField("z", &VTX::Vector::z));
     }
 };
 
 template <>
-struct VTX::JsonMapping<ArenaQuat> {
+struct VTX::JsonMapping<VTX::Quat> {
     static constexpr auto GetFields() {
-        return std::make_tuple(MakeField("x", &ArenaQuat::x), MakeField("y", &ArenaQuat::y),
-                               MakeField("z", &ArenaQuat::z), MakeField("w", &ArenaQuat::w));
+        return std::make_tuple(MakeField("x", &VTX::Quat::x), MakeField("y", &VTX::Quat::y),
+                               MakeField("z", &VTX::Quat::z), MakeField("w", &VTX::Quat::w));
     }
 };
 
@@ -137,6 +131,9 @@ struct VTX::JsonMapping<ArenaProjectile> {
 
 template <>
 struct VTX::JsonMapping<ArenaMatchState> {
+    // unique_id is intentionally NOT in this mapping -- it isn't in the JSON file.
+    // The C++ default ("match_001") survives because UniversalDeserializer
+    // skips missing keys.
     static constexpr auto GetFields() {
         return std::make_tuple(MakeField("score_team1", &ArenaMatchState::score_team1),
                                MakeField("score_team2", &ArenaMatchState::score_team2),
@@ -167,80 +164,78 @@ struct VTX::JsonMapping<ArenaReplayJson> {
 };
 
 // ===================================================================
-//  ArenaToVtx — arena game types → VTX PropertyContainer
-//
-//  Property indices must match the field order in arena_schema.json.
+//  StructMapping<T> specializations  (C++ member -> VTX slot name)
 // ===================================================================
+//  Replaces the hand-written ArenaToVtx::MapPlayer / MapProjectile /
+//  MapMatchState helpers from the previous version. GenericNativeLoader
+//  walks these tuples automatically.
 
-namespace ArenaToVtx {
-
-    inline VTX::Vector ToVtxVector(const ArenaVec3& v) {
-        return {v.x, v.y, v.z};
+template <>
+struct VTX::StructMapping<ArenaPlayer> {
+    static constexpr auto GetFields() {
+        return std::make_tuple(MakeStructField(ArenaSchema::Player::UniqueID, &ArenaPlayer::unique_id),
+                               MakeStructField(ArenaSchema::Player::Name, &ArenaPlayer::name),
+                               MakeStructField(ArenaSchema::Player::Team, &ArenaPlayer::team),
+                               MakeStructField(ArenaSchema::Player::Health, &ArenaPlayer::health),
+                               MakeStructField(ArenaSchema::Player::Armor, &ArenaPlayer::armor),
+                               MakeStructField(ArenaSchema::Player::Position, &ArenaPlayer::position),
+                               MakeStructField(ArenaSchema::Player::Rotation, &ArenaPlayer::rotation),
+                               MakeStructField(ArenaSchema::Player::Velocity, &ArenaPlayer::velocity),
+                               MakeStructField(ArenaSchema::Player::IsAlive, &ArenaPlayer::is_alive),
+                               MakeStructField(ArenaSchema::Player::Score, &ArenaPlayer::score),
+                               MakeStructField(ArenaSchema::Player::Deaths, &ArenaPlayer::deaths));
     }
-    inline VTX::Quat ToVtxQuat(const ArenaQuat& q) {
-        return {q.x, q.y, q.z, q.w};
-    }
+};
 
-    /// Player → entity_type_id 0
-    ///   string[0]=UniqueID  string[1]=Name
-    ///   int32[0]=Team       int32[1]=Score   int32[2]=Deaths
-    ///   float[0]=Health     float[1]=Armor
-    ///   vector[0]=Position  vector[1]=Velocity
-    ///   quat[0]=Rotation
-    ///   bool[0]=IsAlive
-    inline VTX::PropertyContainer MapPlayer(const ArenaPlayer& p) {
-        VTX::PropertyContainer pc;
-        pc.entity_type_id = 0;
-        pc.string_properties = {p.unique_id, p.name};
-        pc.int32_properties = {p.team, p.score, p.deaths};
-        pc.float_properties = {p.health, p.armor};
-        pc.vector_properties = {ToVtxVector(p.position), ToVtxVector(p.velocity)};
-        pc.quat_properties = {ToVtxQuat(p.rotation)};
-        pc.bool_properties = {p.is_alive};
-        return pc;
+template <>
+struct VTX::StructMapping<ArenaProjectile> {
+    static constexpr auto GetFields() {
+        return std::make_tuple(MakeStructField(ArenaSchema::Projectile::UniqueID, &ArenaProjectile::unique_id),
+                               MakeStructField(ArenaSchema::Projectile::OwnerID, &ArenaProjectile::owner_id),
+                               MakeStructField(ArenaSchema::Projectile::Position, &ArenaProjectile::position),
+                               MakeStructField(ArenaSchema::Projectile::Velocity, &ArenaProjectile::velocity),
+                               MakeStructField(ArenaSchema::Projectile::Damage, &ArenaProjectile::damage),
+                               MakeStructField(ArenaSchema::Projectile::Type, &ArenaProjectile::type));
     }
+};
 
-    /// Projectile → entity_type_id 1
-    ///   string[0]=UniqueID  string[1]=OwnerID  string[2]=Type
-    ///   vector[0]=Position  vector[1]=Velocity
-    ///   float[0]=Damage
-    inline VTX::PropertyContainer MapProjectile(const ArenaProjectile& pr) {
-        VTX::PropertyContainer pc;
-        pc.entity_type_id = 1;
-        pc.string_properties = {pr.unique_id, pr.owner_id, pr.type};
-        pc.vector_properties = {ToVtxVector(pr.position), ToVtxVector(pr.velocity)};
-        pc.float_properties = {pr.damage};
-        return pc;
+template <>
+struct VTX::StructMapping<ArenaMatchState> {
+    static constexpr auto GetFields() {
+        return std::make_tuple(
+            MakeStructField(ArenaSchema::MatchState::UniqueID, &ArenaMatchState::unique_id),
+            MakeStructField(ArenaSchema::MatchState::ScoreTeam1, &ArenaMatchState::score_team1),
+            MakeStructField(ArenaSchema::MatchState::ScoreTeam2, &ArenaMatchState::score_team2),
+            MakeStructField(ArenaSchema::MatchState::Round, &ArenaMatchState::round),
+            MakeStructField(ArenaSchema::MatchState::Phase, &ArenaMatchState::phase),
+            MakeStructField(ArenaSchema::MatchState::TimeRemaining, &ArenaMatchState::time_remaining));
     }
+};
 
-    /// MatchState → entity_type_id 2
-    ///   string[0]=UniqueID  string[1]=Phase
-    ///   int32[0]=ScoreTeam1  int32[1]=ScoreTeam2  int32[2]=Round
-    ///   float[0]=TimeRemaining
-    inline VTX::PropertyContainer MapMatchState(const ArenaMatchState& m) {
-        VTX::PropertyContainer pc;
-        pc.entity_type_id = 2;
-        pc.string_properties = {"match_001", m.phase};
-        pc.int32_properties = {m.score_team1, m.score_team2, m.round};
-        pc.float_properties = {m.time_remaining};
-        return pc;
+// ===================================================================
+//  StructFrameBinding<ArenaFrame>  (ArenaFrame -> VTX::Frame buckets)
+// ===================================================================
+//  Same pattern as FlatBufferBinding<arena_fb::FrameData>::TransferToFrame
+//  and ProtoBinding<arena_pb::FrameData>::TransferToFrame in advance_write.cpp.
+//  The bucket/entity layout is game-specific; what gets pushed into each
+//  PropertyContainer is driven automatically by StructMapping<> above.
+
+template <>
+struct VTX::StructFrameBinding<ArenaFrame> {
+    static void TransferToFrame(const ArenaFrame& src, VTX::Frame& dest, VTX::GenericNativeLoader& loader,
+                                const std::string& /*schema_name*/) {
+        dest = VTX::Frame {};
+        VTX::Bucket& bucket = dest.GetBucket("entity");
+        bucket.entities.clear();
+        bucket.unique_ids.clear();
+
+        loader.AppendActorList(bucket, VTX::ArenaSchema::Player::StructName, src.players,
+                               [](const ArenaPlayer& p) { return p.unique_id; });
+
+        loader.AppendActorList(bucket, VTX::ArenaSchema::Projectile::StructName, src.projectiles,
+                               [](const ArenaProjectile& p) { return p.unique_id; });
+
+        loader.AppendSingleEntity(bucket, VTX::ArenaSchema::MatchState::StructName, src.match_state,
+                                  [](const ArenaMatchState& m) { return m.unique_id; });
     }
-
-    /// Full frame → single "entity" bucket.
-    inline VTX::Frame MapFrame(const ArenaFrame& af) {
-        VTX::Frame frame;
-        VTX::Bucket& bucket = frame.CreateBucket("entity");
-        for (const auto& p : af.players) {
-            bucket.unique_ids.push_back(p.unique_id);
-            bucket.entities.push_back(MapPlayer(p));
-        }
-        for (const auto& pr : af.projectiles) {
-            bucket.unique_ids.push_back(pr.unique_id);
-            bucket.entities.push_back(MapProjectile(pr));
-        }
-        bucket.unique_ids.push_back("match_001");
-        bucket.entities.push_back(MapMatchState(af.match_state));
-        return frame;
-    }
-
-} // namespace ArenaToVtx
+};

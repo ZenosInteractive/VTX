@@ -18,8 +18,11 @@
 // Mapping strategies demonstrated, one per format:
 //
 //   JSON  -> VTX::JsonMapping<T> specializations in arena_mappings.h are
-//            walked by VTX::UniversalDeserializer to build ArenaReplayJson,
-//            then ArenaToVtx::MapFrame() produces each VTX::Frame.
+//            walked by VTX::UniversalDeserializer to build ArenaReplayJson.
+//            Then VTX::StructMapping<T> + VTX::StructFrameBinding<ArenaFrame>
+//            drive VTX::GenericNativeLoader::LoadFrame() to produce each
+//            VTX::Frame. Field addresses come from PropertyAddressCache,
+//            same as the FBS path below.
 //
 //   Proto -> VTX::ProtoBinding<T> specializations (below) are dispatched by
 //            VTX::GenericProtobufLoader::LoadFrame().  Field-name lookups go
@@ -43,6 +46,7 @@
 #include "vtx/common/adapters/json/json_adapter.h"
 #include "vtx/common/vtx_types_helpers.h"
 #include "vtx/common/readers/frame_reader/flatbuffer_loader.h"
+#include "vtx/common/readers/frame_reader/native_loader.h"
 #include "vtx/common/readers/frame_reader/protobuff_loader.h"
 #include "vtx/common/readers/frame_reader/universal_deserializer.h"
 #include "vtx/common/readers/schema_reader/schema_registry.h"
@@ -276,13 +280,15 @@ namespace VTX {
 //  Data source 1 -- JSON
 // ===================================================================
 //  Parses the whole JSON blob on Initialize(), then cursors through the
-//  deserialized ArenaReplayJson frame-by-frame.  The manual MapFrame()
-//  bridge from arena_mappings.h handles the arena-types -> VTX conversion.
+//  deserialized ArenaReplayJson frame-by-frame.  GenericNativeLoader walks
+//  StructMapping<> / StructFrameBinding<> from arena_mappings.h to produce
+//  each VTX::Frame -- same PropertyAddressCache path as the FBS source.
 
 class ArenaJsonDataSource : public VTX::IFrameDataSource {
 public:
-    explicit ArenaJsonDataSource(std::string filepath)
-        : filepath_(std::move(filepath)) {}
+    ArenaJsonDataSource(std::string filepath, const VTX::PropertyAddressCache& cache)
+        : filepath_(std::move(filepath))
+        , loader_(cache, false) {}
 
     bool Initialize() override {
         std::ifstream ifs(filepath_);
@@ -310,7 +316,8 @@ public:
         }
 
         const ArenaFrame& af = replay_.frames[cursor_++];
-        out_frame = ArenaToVtx::MapFrame(af);
+        out_frame = VTX::Frame {};
+        loader_.LoadFrame<ArenaFrame>(af, out_frame, "ArenaFrame");
 
         out_time = {af.game_time, std::nullopt, VTX::GameTime::EFilterType::OnlyIncreasing};
 
@@ -323,6 +330,7 @@ private:
     std::string filepath_;
     nlohmann::json root_;
     ArenaReplayJson replay_;
+    VTX::GenericNativeLoader loader_;
     size_t total_ = 0;
     size_t cursor_ = 0;
 };
@@ -561,7 +569,7 @@ int main() {
     VTX_INFO("on every recorded frame; the persisted .vtx contains the post-processed values.");
 
     VTX_INFO("--- 1. JSON data source ---");
-    ArenaJsonDataSource json_ds(writer_dir + "/arena_replay_data.json");
+    ArenaJsonDataSource json_ds(writer_dir + "/arena_replay_data.json", arena_schema.GetPropertyCache());
     RunPipeline(json_ds, reader_dir + "/arena_from_json_ds.vtx", schema, "arena-adv-json-0001",
                 VTX::CreateFlatBuffersWriterFacade);
 
