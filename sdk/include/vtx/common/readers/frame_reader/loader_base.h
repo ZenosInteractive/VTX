@@ -38,9 +38,7 @@ namespace VTX {
      *       infinite recursion in LoadField.
      */
     template <typename T>
-    concept HasVtxConvert = requires(const T& t) {
-        { to_vtx_value(t) };
-    };
+    concept HasVtxConvert = requires(const T& t) { to_vtx_value(t); };
 
     /**
      * @brief CRTP base for the "source-format -> PropertyContainer" loader family.
