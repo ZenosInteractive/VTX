@@ -7,13 +7,41 @@
 #include "vtx/common/vtx_property_cache.h"
 #include "vtx/common/vtx_types.h"
 
+#include <concepts>
+#include <cstddef>
+#include <cstdint>
 #include <ranges>
-#include <type_traits>
 #include <string>
 #include <string_view>
-#include <cstdint>
-#include <cstddef>
+#include <type_traits>
+
 namespace VTX {
+
+    /**
+     * @brief ADL conversion hook for custom client types.
+     *
+     * Clients opt in to automatic conversion by defining a free function
+     * `to_vtx_value` in the SAME namespace as their type, returning a
+     * VTX-native or std type that LoadField already understands:
+     *
+     *   namespace mygame {
+     *       struct FVector { float X, Y, Z; };
+     *       inline VTX::Vector to_vtx_value(const FVector& v) { return {v.X, v.Y, v.Z}; }
+     *   }
+     *
+     * Then a StructMapping<MyStruct> that maps `&MyStruct::position` (where
+     * position is FVector) "just works": GenericLoaderBase::LoadField applies
+     * the ADL-resolved conversion automatically before storing.
+     *
+     * @note Do NOT define to_vtx_value for VTX-native types (Vector, Quat,
+     *       Transform, FloatRange, PropertyContainer) -- that would cause
+     *       infinite recursion in LoadField.
+     */
+    template <typename T>
+    concept HasVtxConvert = requires(const T& t) {
+        { to_vtx_value(t) };
+    };
+
     /**
      * @brief CRTP base for the "source-format -> PropertyContainer" loader family.
      *
@@ -39,6 +67,13 @@ namespace VTX {
         template <typename T>
         void LoadField(PropertyContainer& dest, const std::string& struct_name, const std::string& field_name,
                        const T& value) {
+            // ADL hook: if T has a `to_vtx_value` overload reachable via ADL,
+            // apply it first and recurse with the converted (VTX-native) value.
+            if constexpr (HasVtxConvert<T>) {
+                this->LoadField(dest, struct_name, field_name, to_vtx_value(value));
+                return;
+            }
+
             const PropertyAddress* address = AsDerived().ResolveField(dest.entity_type_id, struct_name, field_name);
             if (!address) {
                 return;
