@@ -37,6 +37,7 @@ namespace VTX {
         explicit GenericNativeLoader(const PropertyAddressCache& cache, bool debug = false)
             : cache_(&cache) {}
 
+
         /**
          * @brief Resolves a (struct, field) pair to a PropertyAddress via the cache.
          * @details struct_name is unused here (the cache is keyed by entity_type_id),
