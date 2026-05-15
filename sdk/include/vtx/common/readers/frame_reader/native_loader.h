@@ -35,8 +35,7 @@ namespace VTX {
     class GenericNativeLoader : public GenericLoaderBase<GenericNativeLoader> {
     public:
         explicit GenericNativeLoader(const PropertyAddressCache& cache, bool debug = false)
-            : cache_(&cache)
-            , debug_mode_(debug) {}
+            : cache_(&cache) {}
 
         /**
          * @brief Resolves a (struct, field) pair to a PropertyAddress via the cache.
@@ -167,7 +166,6 @@ namespace VTX {
         }
 
         const PropertyAddressCache* cache_;
-        bool debug_mode_;
     };
 
 } // namespace VTX
