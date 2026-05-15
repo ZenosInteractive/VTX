@@ -78,7 +78,7 @@ namespace VTX {
          * @param debug Enable verbose debug logging (currently unused).
          */
         explicit GenericBinaryLoader(const PropertyAddressCache& cache, bool debug = false)
-            : cache_(&cache){}
+            : cache_(&cache) {}
 
 
         /**

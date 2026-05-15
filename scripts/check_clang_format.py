@@ -25,7 +25,7 @@ import sys
 EXCLUDE_PATTERNS = [
     re.compile(r"^thirdparty/"),
     re.compile(r".*generated/"),
-    re.compile(r".*arena_generated\.h$"),
+    re.compile(r".*_generated\.h$"),   # vtx_codegen.py / flatc outputs (arena_generated.h, test_schema_generated.h, ...)
     re.compile(r".*portable-file-dialogs\.h$"),
 ]
 

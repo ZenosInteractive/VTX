@@ -249,29 +249,29 @@ namespace VTX {
             if constexpr (sizeof(T) == 2) {
                 uint16_t raw;
                 std::memcpy(&raw, &value, sizeof(T));
-                #if defined(_MSC_VER)
-                                raw = _byteswap_ushort(raw);
-                #else
-                                raw = __builtin_bswap16(raw);
-                #endif
-                                std::memcpy(&value, &raw, sizeof(T));
-                            } else if constexpr (sizeof(T) == 4) {
-                                uint32_t raw;
-                                std::memcpy(&raw, &value, sizeof(T));
-                #if defined(_MSC_VER)
-                                raw = _byteswap_ulong(raw);
-                #else
-                                raw = __builtin_bswap32(raw);
-                #endif
-                                std::memcpy(&value, &raw, sizeof(T));
-                            } else if constexpr (sizeof(T) == 8) {
-                                uint64_t raw;
-                                std::memcpy(&raw, &value, sizeof(T));
-                #if defined(_MSC_VER)
-                                raw = _byteswap_uint64(raw);
-                #else
-                                raw = __builtin_bswap64(raw);
-                #endif
+#if defined(_MSC_VER)
+                raw = _byteswap_ushort(raw);
+#else
+                raw = __builtin_bswap16(raw);
+#endif
+                std::memcpy(&value, &raw, sizeof(T));
+            } else if constexpr (sizeof(T) == 4) {
+                uint32_t raw;
+                std::memcpy(&raw, &value, sizeof(T));
+#if defined(_MSC_VER)
+                raw = _byteswap_ulong(raw);
+#else
+                raw = __builtin_bswap32(raw);
+#endif
+                std::memcpy(&value, &raw, sizeof(T));
+            } else if constexpr (sizeof(T) == 8) {
+                uint64_t raw;
+                std::memcpy(&raw, &value, sizeof(T));
+#if defined(_MSC_VER)
+                raw = _byteswap_uint64(raw);
+#else
+                raw = __builtin_bswap64(raw);
+#endif
                 std::memcpy(&value, &raw, sizeof(T));
             }
             return value;
