@@ -64,6 +64,7 @@ add_executable(vtx_tests
     common/test_frame_accessor.cpp
     common/test_vtx_game_times_extended.cpp
     common/test_native_loader.cpp
+    common/test_binary_loader.cpp
 
     writer/test_writer_basic.cpp
     writer/test_writer_edges.cpp
