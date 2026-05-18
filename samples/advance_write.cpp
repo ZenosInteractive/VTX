@@ -9,6 +9,7 @@
 //
 //     content/writer/arena/arena_replay_data.json       -> arena_from_json_ds.vtx
 //     content/writer/arena/arena_replay_data.proto.bin  -> arena_from_proto_ds.vtx
+//     content/writer/arena/arena_replay_data.bin        -> arena_from_bin_ds.vtx
 //     content/writer/arena/arena_replay_data.fbs.bin    -> arena_from_fbs_ds.vtx
 //
 // Each source implements VTX::IFrameDataSource (Initialize / GetNextFrame /
@@ -32,6 +33,12 @@
 //            by VTX::GenericFlatBufferLoader::LoadFrame().  Field addresses
 //            are resolved via PropertyAddressCache (O(1) by entity_type_id).
 //
+//   Bin   -> VTX::BinaryBinding<Tag> specializations in arena_binary_mappings.h
+//            are dispatched by VTX::GenericBinaryLoader::LoadFrame().  Each
+//            Transfer walks a VTX::BinaryCursor with typed Read<T>() calls in
+//            producer order; field addresses come from PropertyAddressCache,
+//            same path as FBS.
+//
 // The integration-style bindings use constant-named slots from arena_generated.h,
 // which is produced by:
 //
@@ -54,6 +61,7 @@
 
 #include "arena_generated.h"
 #include "arena_mappings.h"
+#include "arena_binary_mappings.h"
 #include "arena_data.pb.h"
 #include "arena_data_generated.h"
 
@@ -451,6 +459,89 @@ private:
     size_t cursor_ = 0;
 };
 
+// ===================================================================
+//  Data source 4 -- Raw binary (BinaryCursor + GenericBinaryLoader)
+// ===================================================================
+//  Reads the file produced by generate_replay.cpp::ExportBinarySource() --
+//  a magic-headed stream of length-prefixed frame blocks (see that file
+//  for the full layout).  Each frame block is carved with SubCursor() so
+//  reads are bounded to the frame.  The per-frame header (frame_index /
+//  game_time / utc_ticks) is consumed by the data source itself before
+//  handing the rest of the cursor to GenericBinaryLoader::LoadFrame, which
+//  dispatches to BinaryBinding<BinArenaFrame>::TransferToFrame.
+
+class ArenaBinaryDataSource : public VTX::IFrameDataSource {
+public:
+    ArenaBinaryDataSource(std::string filepath, const VTX::PropertyAddressCache& cache)
+        : filepath_(std::move(filepath))
+        , loader_(cache, false) {}
+
+    bool Initialize() override {
+        std::ifstream ifs(filepath_, std::ios::binary | std::ios::ate);
+        if (!ifs.is_open()) {
+            VTX_ERROR("[Bin  ] Could not open: {}", filepath_);
+            return false;
+        }
+        const size_t size = static_cast<size_t>(ifs.tellg());
+        ifs.seekg(0);
+        buffer_.resize(size);
+        ifs.read(reinterpret_cast<char*>(buffer_.data()), static_cast<std::streamsize>(size));
+
+        // Parse the file-level header to extract total_frames and validate the magic.
+        VTX::BinaryCursor header(buffer_.data(), buffer_.size());
+        const uint32_t magic = header.Read<uint32_t>();
+        if (magic != kMagic) {
+            VTX_ERROR("[Bin  ] Bad magic in {} (got 0x{:08X}, expected 0x{:08X})", filepath_, magic, kMagic);
+            return false;
+        }
+        const uint16_t version = header.Read<uint16_t>();
+        if (version != 1) {
+            VTX_ERROR("[Bin  ] Unsupported version {} in {}", version, filepath_);
+            return false;
+        }
+        total_ = header.Read<uint32_t>();
+        (void)header.Read<uint16_t>(); // fps (unused -- the writer infers from frame timing)
+        (void)header.Read<double>();   // duration_seconds (unused)
+        stream_pos_ = header.Tell();
+
+        VTX_INFO("[Bin  ] Opened {} ({} frames)", filepath_, static_cast<int>(total_));
+        return true;
+    }
+
+    bool GetNextFrame(VTX::Frame& out_frame, VTX::GameTime::GameTimeRegister& out_time) override {
+        if (frames_read_ >= total_) {
+            return false;
+        }
+
+        VTX::BinaryCursor stream(buffer_.data() + stream_pos_, buffer_.size() - stream_pos_);
+        const uint32_t frame_bytes = stream.Read<uint32_t>();
+        VTX::BinaryCursor frame = stream.SubCursor(frame_bytes);
+        stream_pos_ += sizeof(uint32_t) + frame_bytes;
+        ++frames_read_;
+
+        (void)frame.Read<int32_t>(); // frame_index -- the writer assigns its own
+        const float game_time = frame.Read<float>();
+        (void)frame.Read<int64_t>(); // utc_ticks -- writer assigns its own
+
+        out_frame = VTX::Frame {};
+        loader_.LoadFrame<BinArenaFrame>(frame, out_frame, "ArenaFrame");
+        out_time = {game_time, std::nullopt, VTX::GameTime::EFilterType::OnlyIncreasing};
+        return true;
+    }
+
+    size_t GetExpectedTotalFrames() const override { return total_; }
+
+private:
+    static constexpr uint32_t kMagic = 0x4E494241u; // 'ABIN' little-endian
+
+    std::string filepath_;
+    std::vector<uint8_t> buffer_;
+    size_t total_ = 0;
+    size_t frames_read_ = 0;
+    size_t stream_pos_ = 0;
+    VTX::GenericBinaryLoader loader_;
+};
+
 class ArenaConsistencyProcessor : public VTX::IFramePostProcessor {
 public:
     void Process(VTX::FrameMutationView& view, const VTX::FramePostProcessContext& /*ctx*/) override {
@@ -564,7 +655,7 @@ int main() {
     }
 
     VTX_INFO("=== advance_write - IFrameDataSource pattern ===");
-    VTX_INFO("Demonstrates JSON, Protobuf and FlatBuffers sources using integration-style bindings.");
+    VTX_INFO("Demonstrates JSON, Protobuf, FlatBuffers and raw-binary sources using integration-style bindings.");
     VTX_INFO("Each writer also runs ArenaConsistencyProcessor (frame post-processor)");
     VTX_INFO("on every recorded frame; the persisted .vtx contains the post-processed values.");
 
@@ -583,11 +674,17 @@ int main() {
     RunPipeline(fbs_ds, reader_dir + "/arena_from_fbs_ds.vtx", schema, "arena-adv-fbs-0001",
                 VTX::CreateFlatBuffersWriterFacade);
 
+    VTX_INFO("--- 4. Raw binary data source ---");
+    ArenaBinaryDataSource bin_ds(writer_dir + "/arena_replay_data.bin", arena_schema.GetPropertyCache());
+    RunPipeline(bin_ds, reader_dir + "/arena_from_bin_ds.vtx", schema, "arena-adv-bin-0001",
+                VTX::CreateFlatBuffersWriterFacade);
+
     VTX_INFO("=== Complete ===");
     VTX_INFO("Outputs (content/reader/arena/):");
     VTX_INFO("  arena_from_json_ds.vtx   (from JSON source)");
     VTX_INFO("  arena_from_proto_ds.vtx  (from Protobuf source)");
     VTX_INFO("  arena_from_fbs_ds.vtx    (from FlatBuffers source)");
+    VTX_INFO("  arena_from_bin_ds.vtx    (from raw binary source -- BinaryCursor)");
 
     google::protobuf::ShutdownProtobufLibrary();
     return 0;

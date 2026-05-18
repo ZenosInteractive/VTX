@@ -386,7 +386,144 @@ static void ExportProtoSource(const std::vector<FrameSnapshot>& frames, const st
     replay.SerializeToOstream(&ofs);
 }
 
-// ---- 4c: FlatBuffers binary ----
+// ---- 4c: Raw binary (BinaryCursor sample) ----
+// Layout (all little-endian, byte-aligned):
+//
+//   Header:
+//     MAGIC: u32   "ABIN" (0x4E494241)
+//     VERSION: u16  1
+//     TOTAL_FRAMES: u32
+//     FPS: u16
+//     DURATION_SECONDS: double
+//
+//   For each frame:
+//     FRAME_BYTES: u32   (length of the frame block that follows -- lets
+//                         the consumer SubCursor() the frame as a bounded region)
+//     [frame block, FRAME_BYTES bytes:]
+//       FRAME_INDEX: i32
+//       GAME_TIME:   float
+//       UTC_TICKS:   i64
+//       PLAYER_COUNT: u32
+//       per player: u16-len UniqueID, u16-len Name, i32 Team, f32 Health, f32 Armor,
+//                   3x f64 Position, 4x f32 Rotation, 3x f64 Velocity,
+//                   u8 IsAlive, i32 Score, i32 Deaths
+//       PROJ_COUNT: u32
+//       per projectile: u16-len UniqueID, u16-len OwnerID, 3x f64 Position,
+//                       3x f64 Velocity, f32 Damage, u16-len Type
+//       MatchState: u16-len UniqueID, i32 ScoreTeam1, i32 ScoreTeam2,
+//                   i32 Round, u16-len Phase, f32 TimeRemaining
+//
+// This layout exercises three BinaryCursor primitives: Read<T>() for POD,
+// ReadLenString<uint16_t>() for length-prefixed strings, and SubCursor()
+// to carve each frame as its own bounded slice.
+static void ExportBinarySource(const std::vector<FrameSnapshot>& frames, const std::string& path) {
+    std::vector<uint8_t> buf;
+
+    auto append_bytes = [&](const void* p, size_t n) {
+        const uint8_t* b = static_cast<const uint8_t*>(p);
+        buf.insert(buf.end(), b, b + n);
+    };
+    auto append_lenstr = [&](const std::string& s) {
+        const uint16_t len = static_cast<uint16_t>(s.size());
+        append_bytes(&len, sizeof(len));
+        append_bytes(s.data(), s.size());
+    };
+    auto reserve_u32 = [&]() {
+        const size_t pos = buf.size();
+        const uint32_t zero = 0;
+        append_bytes(&zero, sizeof(zero));
+        return pos;
+    };
+    auto patch_u32 = [&](size_t pos, uint32_t value) {
+        std::memcpy(buf.data() + pos, &value, sizeof(value));
+    };
+
+    // ---- Header ----
+    const uint32_t magic = 0x4E494241u; // 'ABIN' little-endian
+    append_bytes(&magic, sizeof(magic));
+    const uint16_t version = 1;
+    append_bytes(&version, sizeof(version));
+    const uint32_t total = TOTAL_FRAMES;
+    append_bytes(&total, sizeof(total));
+    const uint16_t fps_u16 = static_cast<uint16_t>(FPS);
+    append_bytes(&fps_u16, sizeof(fps_u16));
+    const double duration = double(TOTAL_FRAMES) / FPS;
+    append_bytes(&duration, sizeof(duration));
+
+    // ---- Per frame ----
+    for (size_t i = 0; i < frames.size(); ++i) {
+        const auto& s = frames[i];
+
+        const size_t len_pos = reserve_u32();
+        const size_t frame_start = buf.size();
+
+        const int32_t frame_idx = static_cast<int32_t>(i);
+        append_bytes(&frame_idx, sizeof(frame_idx));
+        append_bytes(&s.game_time, sizeof(s.game_time));
+        append_bytes(&s.utc_ticks, sizeof(s.utc_ticks));
+
+        // Players
+        const uint32_t player_count = static_cast<uint32_t>(s.players.size());
+        append_bytes(&player_count, sizeof(player_count));
+        for (const auto& p : s.players) {
+            append_lenstr(p.unique_id);
+            append_lenstr(p.name);
+            const int32_t team = p.team;
+            append_bytes(&team, sizeof(team));
+            append_bytes(&p.health, sizeof(p.health));
+            append_bytes(&p.armor, sizeof(p.armor));
+            append_bytes(&p.pos_x, sizeof(p.pos_x));
+            append_bytes(&p.pos_y, sizeof(p.pos_y));
+            append_bytes(&p.pos_z, sizeof(p.pos_z));
+            append_bytes(&p.rot_x, sizeof(p.rot_x));
+            append_bytes(&p.rot_y, sizeof(p.rot_y));
+            append_bytes(&p.rot_z, sizeof(p.rot_z));
+            append_bytes(&p.rot_w, sizeof(p.rot_w));
+            append_bytes(&p.vel_x, sizeof(p.vel_x));
+            append_bytes(&p.vel_y, sizeof(p.vel_y));
+            append_bytes(&p.vel_z, sizeof(p.vel_z));
+            const uint8_t alive = p.is_alive ? 1 : 0;
+            append_bytes(&alive, sizeof(alive));
+            const int32_t score = p.score;
+            append_bytes(&score, sizeof(score));
+            const int32_t deaths = p.deaths;
+            append_bytes(&deaths, sizeof(deaths));
+        }
+
+        // Projectiles
+        const uint32_t proj_count = static_cast<uint32_t>(s.projectiles.size());
+        append_bytes(&proj_count, sizeof(proj_count));
+        for (const auto& pr : s.projectiles) {
+            append_lenstr(pr.unique_id);
+            append_lenstr(pr.owner_id);
+            append_bytes(&pr.pos_x, sizeof(pr.pos_x));
+            append_bytes(&pr.pos_y, sizeof(pr.pos_y));
+            append_bytes(&pr.pos_z, sizeof(pr.pos_z));
+            append_bytes(&pr.vel_x, sizeof(pr.vel_x));
+            append_bytes(&pr.vel_y, sizeof(pr.vel_y));
+            append_bytes(&pr.vel_z, sizeof(pr.vel_z));
+            append_bytes(&pr.damage, sizeof(pr.damage));
+            append_lenstr(pr.type);
+        }
+
+        // MatchState
+        append_lenstr(std::string("match_001"));
+        append_bytes(&s.match.score_team1, sizeof(s.match.score_team1));
+        append_bytes(&s.match.score_team2, sizeof(s.match.score_team2));
+        append_bytes(&s.match.round, sizeof(s.match.round));
+        append_lenstr(s.match.phase);
+        append_bytes(&s.match.time_remaining, sizeof(s.match.time_remaining));
+
+        // Backfill the frame length prefix.
+        const uint32_t frame_bytes = static_cast<uint32_t>(buf.size() - frame_start);
+        patch_u32(len_pos, frame_bytes);
+    }
+
+    std::ofstream ofs(path, std::ios::binary);
+    ofs.write(reinterpret_cast<const char*>(buf.data()), static_cast<std::streamsize>(buf.size()));
+}
+
+// ---- 4d: FlatBuffers binary ----
 static void ExportFbsSource(const std::vector<FrameSnapshot>& frames, const std::string& path) {
     // Build using the Object API (ArenaReplayT, FrameDataT, PlayerT, ...).
     ::arena_fb::ArenaReplayT replay;
@@ -465,9 +602,10 @@ int main() {
     auto sim_frames = RunSimulation(base_utc);
     VTX_INFO("Simulation complete: {} frames, {} players.", int(sim_frames.size()), NUM_PLAYERS);
 
-    // ---- Phase 2: Export 3 data-source files ----
+    // ---- Phase 2: Export 4 data-source files ----
     const std::string json_src = writer_dir + "/arena_replay_data.json";
     const std::string proto_src = writer_dir + "/arena_replay_data.proto.bin";
+    const std::string bin_src = writer_dir + "/arena_replay_data.bin";
     const std::string fbs_src = writer_dir + "/arena_replay_data.fbs.bin";
 
     ExportJsonSource(sim_frames, json_src);
@@ -475,6 +613,9 @@ int main() {
 
     ExportProtoSource(sim_frames, proto_src);
     VTX_INFO("Exported data source: {}", proto_src);
+
+    ExportBinarySource(sim_frames, bin_src);
+    VTX_INFO("Exported data source: {}", bin_src);
 
     ExportFbsSource(sim_frames, fbs_src);
     VTX_INFO("Exported data source: {}", fbs_src);
@@ -484,8 +625,9 @@ int main() {
     VTX_INFO("=== Generation Complete ===");
     VTX_INFO("  Data sources (content/writer/arena/):");
     VTX_INFO("    arena_replay_data.json       (JSON)");
-    VTX_INFO("    arena_replay_data.proto.bin   (Protobuf)");
-    VTX_INFO("    arena_replay_data.fbs.bin     (FlatBuffers)");
+    VTX_INFO("    arena_replay_data.proto.bin  (Protobuf)");
+    VTX_INFO("    arena_replay_data.bin        (Raw binary -- BinaryCursor sample)");
+    VTX_INFO("    arena_replay_data.fbs.bin    (FlatBuffers)");
 
 
     google::protobuf::ShutdownProtobufLibrary();
