@@ -30,6 +30,7 @@ target_link_libraries(vtx_writer
         $<BUILD_INTERFACE:VTX::deps::protobuf>
         $<BUILD_INTERFACE:VTX::deps::flatbuffers>
         $<BUILD_INTERFACE:VTX::deps::zstd>
+        $<$<PLATFORM_ID:Windows>:ws2_32>
 )
 
 # See note in vtx_reader/CMakeLists.txt -- Windows shared DLLs duplicate the

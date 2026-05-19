@@ -1,7 +1,6 @@
 #pragma once
 #include "vtx/common/vtx_types.h"
 #include "vtx/common/readers/schema_reader/schema_registry.h"
-#include "vtx/writer/serialization/vtx_to_flatbuffer.h"
 
 namespace fbsvtx {
     struct ContextualSchemaT;

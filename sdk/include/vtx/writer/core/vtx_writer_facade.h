@@ -51,4 +51,22 @@ namespace VTX {
     std::unique_ptr<IVtxWriterFacade> CreateFlatBuffersWriterFacade(const WriterFacadeConfig& config);
 
     std::unique_ptr<IVtxWriterFacade> CreateProtobuffWriterFacade(const WriterFacadeConfig& config);
+
+    struct NetworkWriterFacadeConfig {
+        std::string replay_name      = "";
+        std::string replay_uuid      = "";
+        std::string host             = "127.0.0.1";
+        uint16_t    port             = 0;
+        float       default_fps      = 60.0f;
+        bool        is_increasing    = true;
+        int32_t     chunk_max_frames = 1000;
+        size_t      chunk_max_bytes  = 10 * 1024 * 1024; // 10 MB
+        bool        use_compression  = true;
+        std::string schema_json_path = "";
+    };
+
+    std::unique_ptr<IVtxWriterFacade> CreateFlatBuffersNetworkWriterFacade(const NetworkWriterFacadeConfig& config);
+
+    std::unique_ptr<IVtxWriterFacade> CreateProtobuffNetworkWriterFacade(const NetworkWriterFacadeConfig& config);
+
 } // namespace VTX
