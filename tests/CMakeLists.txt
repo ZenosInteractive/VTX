@@ -71,6 +71,7 @@ add_executable(vtx_tests
     writer/test_roundtrip.cpp
     writer/test_writer_advanced.cpp
     writer/test_frame_post_processor.cpp
+    writer/test_network_sink.cpp
 
     reader/test_reader_context.cpp
     reader/test_corrupt_files.cpp
