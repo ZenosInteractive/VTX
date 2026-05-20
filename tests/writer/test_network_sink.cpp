@@ -16,7 +16,7 @@
 #include "vtx/common/vtx_types.h"
 #include "vtx/reader/core/vtx_reader_facade.h"
 #include "vtx/writer/core/vtx_writer_facade.h"
-#include "vtx/writer/policies/sinks/network_sink.h"  // brings in socket portability layer
+#include "vtx/writer/policies/sinks/network_sink.h" // brings in socket portability layer
 
 #include "util/test_fixtures.h"
 #include "vtx/writer/policies/formatters/flatbuffers_vtx_policy.h"
@@ -40,7 +40,7 @@ namespace {
 #ifdef _WIN32
         WsaScope wsa_; // Windows: must init Winsock before any socket call
 #endif
-        uint16_t               port = 0;
+        uint16_t port = 0;
         std::vector<std::byte> received;
 
         explicit LoopbackServer() {
@@ -49,13 +49,12 @@ namespace {
                 throw std::runtime_error("LoopbackServer: socket() failed");
 
             int reuse = 1;
-            ::setsockopt(server_sock_, SOL_SOCKET, SO_REUSEADDR,
-                         reinterpret_cast<const char*>(&reuse), sizeof(reuse));
+            ::setsockopt(server_sock_, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char*>(&reuse), sizeof(reuse));
 
-            sockaddr_in addr{};
-            addr.sin_family      = AF_INET;
+            sockaddr_in addr {};
+            addr.sin_family = AF_INET;
             addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-            addr.sin_port        = 0; // let OS pick a free port
+            addr.sin_port = 0; // let OS pick a free port
 
             if (::bind(server_sock_, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) != 0)
                 throw std::runtime_error("LoopbackServer: bind() failed");
@@ -63,7 +62,7 @@ namespace {
                 throw std::runtime_error("LoopbackServer: listen() failed");
 
             // Retrieve the port the OS assigned.
-            sockaddr_in  bound{};
+            sockaddr_in bound {};
             vtx_socklen_t len = sizeof(bound);
             ::getsockname(server_sock_, reinterpret_cast<sockaddr*>(&bound), &len);
             port = ntohs(bound.sin_port);
@@ -71,7 +70,7 @@ namespace {
             // Launch drain thread.  The promise signals that accept() is
             // imminent so the caller can safely connect before returning.
             std::promise<void> ready;
-            auto               ready_future = ready.get_future();
+            auto ready_future = ready.get_future();
 
             thread_ = std::thread([this, r = std::move(ready)]() mutable {
                 r.set_value(); // server is ready to accept
@@ -84,7 +83,7 @@ namespace {
                 }
 
                 std::array<char, 16384> buf;
-                int                     n;
+                int n;
                 while ((n = ::recv(client, buf.data(), static_cast<int>(buf.size()), 0)) > 0) {
                     for (int i = 0; i < n; ++i)
                         received.push_back(static_cast<std::byte>(buf[i]));
@@ -107,7 +106,7 @@ namespace {
 
     private:
         VtxSocketHandle server_sock_ = kVtxInvalidSocket;
-        std::thread     thread_;
+        std::thread thread_;
     };
 
     // -----------------------------------------------------------------------
@@ -116,37 +115,36 @@ namespace {
 
     VTX::Frame BuildFrame(int frame_index) {
         VTX::Frame f;
-        auto&      bucket = f.CreateBucket("entity");
+        auto& bucket = f.CreateBucket("entity");
 
         VTX::PropertyContainer pc;
-        pc.entity_type_id   = 0;
+        pc.entity_type_id = 0;
         pc.string_properties = {"player_0"};
-        pc.int32_properties  = {frame_index};
-        pc.float_properties  = {100.0f - float(frame_index)};
+        pc.int32_properties = {frame_index};
+        pc.float_properties = {100.0f - float(frame_index)};
 
         bucket.unique_ids.push_back("player_0");
         bucket.entities.push_back(std::move(pc));
         return f;
     }
 
-    VTX::NetworkWriterFacadeConfig MakeNetworkConfig(const std::string& host, uint16_t port,
-                                                     const std::string& uuid) {
+    VTX::NetworkWriterFacadeConfig MakeNetworkConfig(const std::string& host, uint16_t port, const std::string& uuid) {
         VTX::NetworkWriterFacadeConfig cfg;
-        cfg.host             = host;
-        cfg.port             = port;
-        cfg.replay_name      = "NetworkSinkTest";
-        cfg.replay_uuid      = uuid;
+        cfg.host = host;
+        cfg.port = port;
+        cfg.replay_name = "NetworkSinkTest";
+        cfg.replay_uuid = uuid;
         cfg.schema_json_path = VtxTest::FixturePath("test_schema.json");
-        cfg.default_fps      = 60.0f;
+        cfg.default_fps = 60.0f;
         cfg.chunk_max_frames = 50;
-        cfg.use_compression  = true;
+        cfg.use_compression = true;
         return cfg;
     }
 
     /// Writes received bytes to a temp file and opens it with the VTX reader.
     std::string WriteTempVtx(const std::vector<std::byte>& bytes, const std::string& name) {
         const std::string path = VtxTest::OutputPath(name);
-        std::ofstream     ofs(path, std::ios::binary);
+        std::ofstream ofs(path, std::ios::binary);
         ofs.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
         return path;
     }
@@ -175,12 +173,12 @@ TEST_F(NetworkSinkTest, FlatBuffers_ReceivedBytesParseableByReader) {
 
     LoopbackServer srv;
     {
-        auto writer = VTX::CreateFlatBuffersNetworkWriterFacade(
-            MakeNetworkConfig("127.0.0.1", srv.port, "uuid-net-fbs"));
+        auto writer =
+            VTX::CreateFlatBuffersNetworkWriterFacade(MakeNetworkConfig("127.0.0.1", srv.port, "uuid-net-fbs"));
         ASSERT_TRUE(writer);
 
         for (int i = 0; i < kFrames; ++i) {
-            auto                           frame = BuildFrame(i);
+            auto frame = BuildFrame(i);
             VTX::GameTime::GameTimeRegister t;
             t.game_time = float(i) / 60.0f;
             writer->RecordFrame(frame, t);
@@ -203,12 +201,12 @@ TEST_F(NetworkSinkTest, Protobuf_ReceivedBytesParseableByReader) {
 
     LoopbackServer srv;
     {
-        auto writer = VTX::CreateProtobuffNetworkWriterFacade(
-            MakeNetworkConfig("127.0.0.1", srv.port, "uuid-net-proto"));
+        auto writer =
+            VTX::CreateProtobuffNetworkWriterFacade(MakeNetworkConfig("127.0.0.1", srv.port, "uuid-net-proto"));
         ASSERT_TRUE(writer);
 
         for (int i = 0; i < kFrames; ++i) {
-            auto                           frame = BuildFrame(i);
+            auto frame = BuildFrame(i);
             VTX::GameTime::GameTimeRegister t;
             t.game_time = float(i) / 60.0f;
             writer->RecordFrame(frame, t);
@@ -232,13 +230,13 @@ TEST_F(NetworkSinkTest, ThrowsOnConnectionRefused) {
     VtxSocketHandle probe = ::socket(AF_INET, SOCK_STREAM, 0);
     ASSERT_NE(probe, kVtxInvalidSocket);
 
-    sockaddr_in addr{};
-    addr.sin_family      = AF_INET;
+    sockaddr_in addr {};
+    addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    addr.sin_port        = 0;
+    addr.sin_port = 0;
     ::bind(probe, reinterpret_cast<sockaddr*>(&addr), sizeof(addr));
 
-    sockaddr_in  bound{};
+    sockaddr_in bound {};
     vtx_socklen_t len = sizeof(bound);
     ::getsockname(probe, reinterpret_cast<sockaddr*>(&bound), &len);
     const uint16_t free_port = ntohs(bound.sin_port);
@@ -254,8 +252,8 @@ TEST_F(NetworkSinkTest, ThrowsOnConnectionRefused) {
 TEST_F(NetworkSinkTest, ZeroFrames_ProducesValidStream) {
     LoopbackServer srv;
     {
-        auto writer = VTX::CreateFlatBuffersNetworkWriterFacade(
-            MakeNetworkConfig("127.0.0.1", srv.port, "uuid-net-zero"));
+        auto writer =
+            VTX::CreateFlatBuffersNetworkWriterFacade(MakeNetworkConfig("127.0.0.1", srv.port, "uuid-net-zero"));
         ASSERT_TRUE(writer);
         writer->Stop(); // no frames recorded
     }
@@ -270,19 +268,19 @@ TEST_F(NetworkSinkTest, ZeroFrames_ProducesValidStream) {
 }
 
 TEST_F(NetworkSinkTest, MultipleChunks_SeekTableHasCorrectCount) {
-    constexpr int kFrames     = 10;
+    constexpr int kFrames = 10;
     constexpr int kChunkLimit = 1; // one frame per chunk → 10 chunks
 
     LoopbackServer srv;
     {
-        auto cfg             = MakeNetworkConfig("127.0.0.1", srv.port, "uuid-net-chunks");
+        auto cfg = MakeNetworkConfig("127.0.0.1", srv.port, "uuid-net-chunks");
         cfg.chunk_max_frames = kChunkLimit;
 
         auto writer = VTX::CreateFlatBuffersNetworkWriterFacade(cfg);
         ASSERT_TRUE(writer);
 
         for (int i = 0; i < kFrames; ++i) {
-            auto                           frame = BuildFrame(i);
+            auto frame = BuildFrame(i);
             VTX::GameTime::GameTimeRegister t;
             t.game_time = float(i) / 60.0f;
             writer->RecordFrame(frame, t);

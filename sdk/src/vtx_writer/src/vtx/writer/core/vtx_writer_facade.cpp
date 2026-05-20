@@ -91,16 +91,16 @@ namespace VTX {
         using SinkType = ChunkedNetworkSink<VTX::FlatBuffersVtxPolicy>;
 
         ReplayWriter<SinkType>::Config internal_cfg;
-        internal_cfg.default_fps                           = config.default_fps;
-        internal_cfg.is_increasing                         = config.is_increasing;
-        internal_cfg.chunker_config.max_frames             = config.chunk_max_frames;
-        internal_cfg.chunker_config.max_bytes              = config.chunk_max_bytes;
-        internal_cfg.schema_json_path                      = config.schema_json_path;
-        internal_cfg.sink_config.host                      = config.host;
-        internal_cfg.sink_config.port                      = config.port;
+        internal_cfg.default_fps = config.default_fps;
+        internal_cfg.is_increasing = config.is_increasing;
+        internal_cfg.chunker_config.max_frames = config.chunk_max_frames;
+        internal_cfg.chunker_config.max_bytes = config.chunk_max_bytes;
+        internal_cfg.schema_json_path = config.schema_json_path;
+        internal_cfg.sink_config.host = config.host;
+        internal_cfg.sink_config.port = config.port;
         internal_cfg.sink_config.header_config.replay_name = config.replay_name;
         internal_cfg.sink_config.header_config.replay_uuid = config.replay_uuid;
-        internal_cfg.sink_config.b_use_compression         = config.use_compression;
+        internal_cfg.sink_config.b_use_compression = config.use_compression;
 
         return std::make_unique<WriterFacadeImpl<SinkType>>(internal_cfg);
     }
@@ -109,16 +109,16 @@ namespace VTX {
         using SinkType = ChunkedNetworkSink<VTX::ProtobufVtxPolicy>;
 
         ReplayWriter<SinkType>::Config internal_cfg;
-        internal_cfg.default_fps                           = config.default_fps;
-        internal_cfg.is_increasing                         = config.is_increasing;
-        internal_cfg.chunker_config.max_frames             = config.chunk_max_frames;
-        internal_cfg.chunker_config.max_bytes              = config.chunk_max_bytes;
-        internal_cfg.schema_json_path                      = config.schema_json_path;
-        internal_cfg.sink_config.host                      = config.host;
-        internal_cfg.sink_config.port                      = config.port;
+        internal_cfg.default_fps = config.default_fps;
+        internal_cfg.is_increasing = config.is_increasing;
+        internal_cfg.chunker_config.max_frames = config.chunk_max_frames;
+        internal_cfg.chunker_config.max_bytes = config.chunk_max_bytes;
+        internal_cfg.schema_json_path = config.schema_json_path;
+        internal_cfg.sink_config.host = config.host;
+        internal_cfg.sink_config.port = config.port;
         internal_cfg.sink_config.header_config.replay_name = config.replay_name;
         internal_cfg.sink_config.header_config.replay_uuid = config.replay_uuid;
-        internal_cfg.sink_config.b_use_compression         = config.use_compression;
+        internal_cfg.sink_config.b_use_compression = config.use_compression;
 
         return std::make_unique<WriterFacadeImpl<SinkType>>(internal_cfg);
     }
