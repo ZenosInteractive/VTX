@@ -34,6 +34,10 @@ target_link_libraries(vtx_writer
         $<BUILD_INTERFACE:VTX::deps::protobuf>
         $<BUILD_INTERFACE:VTX::deps::flatbuffers>
         $<BUILD_INTERFACE:VTX::deps::zstd>
+        # IXWebSocket powers the WebSocket data source; it stays PRIVATE --
+        # websocket_client.cpp (PIMPL) is the only TU that touches it, so the
+        # dependency never reaches the public SDK headers.
+        $<BUILD_INTERFACE:VTX::deps::ixwebsocket>
 )
 
 # See note in vtx_reader/CMakeLists.txt -- Windows shared DLLs duplicate the
