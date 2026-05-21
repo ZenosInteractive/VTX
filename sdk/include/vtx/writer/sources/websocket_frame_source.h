@@ -17,10 +17,11 @@ namespace VTX {
     public:
         struct Config {
             std::string url;
-            Adapter     adapter;
+            Adapter adapter;
         };
 
-        explicit WebSocketFrameDataSource(Config config) : config_(std::move(config)) {}
+        explicit WebSocketFrameDataSource(Config config)
+            : config_(std::move(config)) {}
 
         bool Initialize() override { return client_.Connect(config_.url); }
 

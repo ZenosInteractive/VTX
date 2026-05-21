@@ -13,12 +13,12 @@
 namespace VTX::ws_detail {
 
     struct WebSocketClient::Impl {
-        ix::WebSocket                      ws;
-        mutable std::mutex                 mtx;
-        std::condition_variable            cv;
+        ix::WebSocket ws;
+        mutable std::mutex mtx;
+        std::condition_variable cv;
         std::queue<std::vector<std::byte>> queue;
-        bool                               open     = false;
-        bool                               finished = false;
+        bool open = false;
+        bool finished = false;
 
         Impl() { ix::initNetSystem(); }
 
@@ -28,7 +28,8 @@ namespace VTX::ws_detail {
         }
     };
 
-    WebSocketClient::WebSocketClient() : impl_(std::make_unique<Impl>()) {}
+    WebSocketClient::WebSocketClient()
+        : impl_(std::make_unique<Impl>()) {}
 
     WebSocketClient::~WebSocketClient() = default;
 
@@ -65,8 +66,8 @@ namespace VTX::ws_detail {
         impl_->ws.start();
 
         std::unique_lock<std::mutex> lock(impl_->mtx);
-        const bool signalled = impl_->cv.wait_for(lock, std::chrono::seconds(10),
-                                                  [impl] { return impl->open || impl->finished; });
+        const bool signalled =
+            impl_->cv.wait_for(lock, std::chrono::seconds(10), [impl] { return impl->open || impl->finished; });
         return signalled && impl_->open && !impl_->finished;
     }
 

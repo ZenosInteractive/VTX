@@ -12,7 +12,7 @@ namespace VTX::ws_detail {
         WebSocketClient();
         ~WebSocketClient();
 
-        WebSocketClient(const WebSocketClient&)            = delete;
+        WebSocketClient(const WebSocketClient&) = delete;
         WebSocketClient& operator=(const WebSocketClient&) = delete;
 
         /// Connects to the given WebSocket URL and blocks until and eturns false on connect / handshake / TLS failure.

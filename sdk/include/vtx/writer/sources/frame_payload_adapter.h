@@ -21,10 +21,9 @@ namespace VTX {
     /// frame, and false to signal a decode error (a source treats false as a
     /// reason to end the stream).
     template <typename A>
-    concept IFramePayloadAdapter =
-        requires(A& adapter, std::span<const std::byte> payload, VTX::Frame& frame,
-                 VTX::GameTime::GameTimeRegister& time) {
-            { adapter.ParseFrame(payload, frame, time) } -> std::convertible_to<bool>;
-        };
+    concept IFramePayloadAdapter = requires(A& adapter, std::span<const std::byte> payload, VTX::Frame& frame,
+                                            VTX::GameTime::GameTimeRegister& time) {
+                                       { adapter.ParseFrame(payload, frame, time) } -> std::convertible_to<bool>;
+                                   };
 
 } // namespace VTX
