@@ -69,6 +69,18 @@ target_include_directories(vtx_sample_post_process_write PRIVATE
 )
 vtx_configure_sample(vtx_sample_post_process_write)
 
+# --- websocket_consumer (WebSocket client data source -> .vtx file) ---
+add_executable(vtx_sample_websocket_consumer websocket_consumer.cpp)
+target_link_libraries(vtx_sample_websocket_consumer PRIVATE vtx_writer)
+target_include_directories(vtx_sample_websocket_consumer PRIVATE
+    "${VTX_COMMON_GENERATED_DIR}"
+)
+vtx_configure_sample(vtx_sample_websocket_consumer)
+
+# Show the companion Python test server in the IDE.
+source_group("WebSocket" FILES "${CMAKE_CURRENT_SOURCE_DIR}/websocket_server.py")
+target_sources(vtx_sample_websocket_consumer PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/websocket_server.py")
+
 # ==============================================================================
 # Arena-specific codegen (arena_data.proto + arena_data.fbs)
 #
