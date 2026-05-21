@@ -52,14 +52,14 @@
 // ===================================================================
 
 struct WsEntity {
-    std::string         id;
-    int                 type_id = -1;
-    std::vector<float>  floats;
+    std::string id;
+    int type_id = -1;
+    std::vector<float> floats;
     std::vector<double> translation;
 };
 
 struct WsFrame {
-    float                 game_time = 0.0f;
+    float game_time = 0.0f;
     std::vector<WsEntity> entities;
 };
 
@@ -79,8 +79,7 @@ struct VTX::JsonMapping<WsEntity> {
 template <>
 struct VTX::JsonMapping<WsFrame> {
     static constexpr auto GetFields() {
-        return std::make_tuple(MakeField("game_time", &WsFrame::game_time),
-                               MakeField("entities", &WsFrame::entities));
+        return std::make_tuple(MakeField("game_time", &WsFrame::game_time), MakeField("entities", &WsFrame::entities));
     }
 };
 
@@ -90,8 +89,8 @@ namespace {
         bool ParseFrame(std::span<const std::byte> message, VTX::Frame& out_frame,
                         VTX::GameTime::GameTimeRegister& out_time) const {
             const char* text = reinterpret_cast<const char*>(message.data());
-            const auto  json = nlohmann::json::parse(text, text + message.size(), nullptr,
-                                                     /*allow_exceptions=*/false);
+            const auto json = nlohmann::json::parse(text, text + message.size(), nullptr,
+                                                    /*allow_exceptions=*/false);
             if (json.is_discarded())
                 return false;
 
@@ -108,7 +107,7 @@ namespace {
             auto& bucket = out_frame.CreateBucket("entity");
             for (const auto& e : wf.entities) {
                 VTX::PropertyContainer pc;
-                pc.entity_type_id   = e.type_id;
+                pc.entity_type_id = e.type_id;
                 pc.float_properties = e.floats;
 
                 if (e.translation.size() == 3) {
@@ -127,7 +126,7 @@ namespace {
 } // namespace
 
 int main(int argc, char* argv[]) {
-    const std::string url         = (argc > 1) ? argv[1] : "ws://127.0.0.1:8765/";
+    const std::string url = (argc > 1) ? argv[1] : "ws://127.0.0.1:8765/";
     const std::string output_path = (argc > 2) ? argv[2] : "websocket_output.vtx";
     const std::string schema_path = (argc > 3) ? argv[3] : "content/writer/arena/arena_schema.json";
 
@@ -142,13 +141,13 @@ int main(int argc, char* argv[]) {
 
     // 2. Build the writer (FlatBuffers sink to disk).
     VTX::WriterFacadeConfig writer_cfg;
-    writer_cfg.output_filepath  = output_path;
+    writer_cfg.output_filepath = output_path;
     writer_cfg.schema_json_path = schema_path;
-    writer_cfg.replay_name      = "WebSocketConsumerSample";
-    writer_cfg.replay_uuid      = "websocket-0001";
-    writer_cfg.default_fps      = 60.0f;
+    writer_cfg.replay_name = "WebSocketConsumerSample";
+    writer_cfg.replay_uuid = "websocket-0001";
+    writer_cfg.default_fps = 60.0f;
     writer_cfg.chunk_max_frames = 500;
-    writer_cfg.use_compression  = true;
+    writer_cfg.use_compression = true;
 
     auto writer = VTX::CreateFlatBuffersWriterFacade(writer_cfg);
     if (!writer) {
@@ -157,15 +156,15 @@ int main(int argc, char* argv[]) {
     }
 
     // 3. Pull-driven loop: every message becomes a recorded frame.
-    VTX::Frame                      frame;
+    VTX::Frame frame;
     VTX::GameTime::GameTimeRegister time;
-    size_t                          processed = 0;
+    size_t processed = 0;
     while (source.GetNextFrame(frame, time)) {
         writer->RecordFrame(frame, time);
         ++processed;
 
-        frame = VTX::Frame{};
-        time  = VTX::GameTime::GameTimeRegister{};
+        frame = VTX::Frame {};
+        time = VTX::GameTime::GameTimeRegister {};
     }
 
     writer->Flush();
