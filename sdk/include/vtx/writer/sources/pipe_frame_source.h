@@ -1,16 +1,16 @@
 #pragma once
 
 #ifdef _WIN32
-#    ifndef WIN32_LEAN_AND_MEAN
-#        define WIN32_LEAN_AND_MEAN
-#    endif
-#    include <windows.h>
-#    include <fcntl.h>
-#    include <io.h>
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#include <fcntl.h>
+#include <io.h>
 #else
-#    include <cerrno>
-#    include <sys/stat.h>
-#    include <unistd.h>
+#include <cerrno>
+#include <sys/stat.h>
+#include <unistd.h>
 #endif
 
 #include <concepts>
@@ -26,10 +26,10 @@
 namespace VTX {
 
     template <typename A>
-    concept IPipeFrameAdapter = requires(A& adapter, std::span<const std::byte> payload,
-                                          VTX::Frame& frame, VTX::GameTime::GameTimeRegister& time) {
-        { adapter.ParseFrame(payload, frame, time) } -> std::convertible_to<bool>;
-    };
+    concept IPipeFrameAdapter = requires(A& adapter, std::span<const std::byte> payload, VTX::Frame& frame,
+                                         VTX::GameTime::GameTimeRegister& time) {
+                                    { adapter.ParseFrame(payload, frame, time) } -> std::convertible_to<bool>;
+                                };
 
     template <typename Adapter>
     class PipeFrameDataSource : public IFrameDataSource {
@@ -44,7 +44,8 @@ namespace VTX {
             Adapter adapter;
         };
 
-        explicit PipeFrameDataSource(Config config) : config_(std::move(config)) {}
+        explicit PipeFrameDataSource(Config config)
+            : config_(std::move(config)) {}
 
         ~PipeFrameDataSource() override {
             if (owns_file_ && file_)
@@ -55,12 +56,12 @@ namespace VTX {
 #endif
         }
 
-        PipeFrameDataSource(const PipeFrameDataSource&)            = delete;
+        PipeFrameDataSource(const PipeFrameDataSource&) = delete;
         PipeFrameDataSource& operator=(const PipeFrameDataSource&) = delete;
 
         bool Initialize() override {
             if (config_.pipe_path.empty()) {
-                file_      = stdin;
+                file_ = stdin;
                 owns_file_ = false;
 #ifdef _WIN32
                 ::_setmode(::_fileno(stdin), _O_BINARY);
@@ -71,7 +72,7 @@ namespace VTX {
             if (config_.as_server)
                 return OpenAsServer();
 
-            file_      = std::fopen(config_.pipe_path.c_str(), "rb");
+            file_ = std::fopen(config_.pipe_path.c_str(), "rb");
             owns_file_ = true;
             return file_ != nullptr;
         }
@@ -82,17 +83,17 @@ namespace VTX {
 
             // Read the 4-byte size prefix.  EOF here means a clean end.
             uint32_t size = 0;
-            if (!ReadExact(&size, sizeof(size),true))
+            if (!ReadExact(&size, sizeof(size), true))
                 return false;
             if (size == 0)
                 return false;
 
             buffer_.resize(size);
-            if (!ReadExact(buffer_.data(), size,false))
+            if (!ReadExact(buffer_.data(), size, false))
                 return false;
 
             const std::span<const std::byte> payload(reinterpret_cast<const std::byte*>(buffer_.data()),
-                                                      buffer_.size());
+                                                     buffer_.size());
             return config_.adapter.ParseFrame(payload, out_frame, out_time);
         }
 
@@ -100,21 +101,17 @@ namespace VTX {
         size_t GetExpectedTotalFrames() const override { return 0; }
 
     private:
-
         bool OpenAsServer() {
 #ifdef _WIN32
             // Create the named pipe, then block until a producer connects.
             HANDLE h = ::CreateNamedPipeA(config_.pipe_path.c_str(), PIPE_ACCESS_INBOUND,
-                                          PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
-                                          1,
-                                          64 * 1024, 64 * 1024, // out / in buffer sizes
-                                          0,
-                                          nullptr);
+                                          PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT, 1, 64 * 1024,
+                                          64 * 1024, // out / in buffer sizes
+                                          0, nullptr);
             if (h == INVALID_HANDLE_VALUE)
                 return false;
 
-            const BOOL connected =
-                ::ConnectNamedPipe(h, nullptr) ? TRUE : (::GetLastError() == ERROR_PIPE_CONNECTED);
+            const BOOL connected = ::ConnectNamedPipe(h, nullptr) ? TRUE : (::GetLastError() == ERROR_PIPE_CONNECTED);
             if (!connected) {
                 ::CloseHandle(h);
                 return false;
@@ -139,15 +136,15 @@ namespace VTX {
             created_fifo_ = true;
 
             // fopen on a FIFO blocks until a producer opens the write end.
-            file_      = std::fopen(config_.pipe_path.c_str(), "rb");
+            file_ = std::fopen(config_.pipe_path.c_str(), "rb");
             owns_file_ = true;
             return file_ != nullptr;
 #endif
         }
 
         bool ReadExact(void* dst, size_t n, bool allow_eof = false) {
-            auto*  bytes = static_cast<char*>(dst);
-            size_t got   = 0;
+            auto* bytes = static_cast<char*>(dst);
+            size_t got = 0;
             while (got < n) {
                 size_t r = std::fread(bytes + got, 1, n - got, file_);
                 if (r == 0) {
