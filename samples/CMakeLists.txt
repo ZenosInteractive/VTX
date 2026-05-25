@@ -69,6 +69,31 @@ target_include_directories(vtx_sample_post_process_write PRIVATE
 )
 vtx_configure_sample(vtx_sample_post_process_write)
 
+# --- pipe_producer (emits length-prefixed JSON frames on stdout) ---
+add_executable(vtx_sample_pipe_producer pipe_producer.cpp)
+target_link_libraries(vtx_sample_pipe_producer PRIVATE vtx_writer)
+vtx_configure_sample(vtx_sample_pipe_producer)
+
+# --- pipe_consumer (consumes JSON frames from a pipe -> .vtx file) ---
+add_executable(vtx_sample_pipe_consumer pipe_consumer.cpp)
+target_link_libraries(vtx_sample_pipe_consumer PRIVATE vtx_writer)
+target_include_directories(vtx_sample_pipe_consumer PRIVATE
+    "${VTX_COMMON_GENERATED_DIR}"
+)
+vtx_configure_sample(vtx_sample_pipe_consumer)
+
+# Show the pipe demo launcher scripts in the IDE.
+#   pipe_demo.bat            -- anonymous pipe, single launcher (producer | consumer)
+#   named_pipe_vtx.bat       -- named pipe, VTX server side       (run first)
+#   named_pipe_producer.bat  -- named pipe, producer client side  (run second)
+set(VTX_PIPE_SCRIPTS
+    "${CMAKE_CURRENT_SOURCE_DIR}/pipe_demo.bat"
+    "${CMAKE_CURRENT_SOURCE_DIR}/named_pipe_vtx.bat"
+    "${CMAKE_CURRENT_SOURCE_DIR}/named_pipe_producer.bat"
+)
+source_group("Pipe" FILES ${VTX_PIPE_SCRIPTS})
+target_sources(vtx_sample_pipe_consumer PRIVATE ${VTX_PIPE_SCRIPTS})
+
 # --- websocket_consumer (WebSocket client data source -> .vtx file) ---
 add_executable(vtx_sample_websocket_consumer websocket_consumer.cpp)
 target_link_libraries(vtx_sample_websocket_consumer PRIVATE vtx_writer)
