@@ -166,6 +166,84 @@ install(TARGETS libzstd_static
         EXPORT VTXTargets
         ARCHIVE DESTINATION lib)
 
+# ==============================================================================
+# mbedTLS + IXWebSocket -- WebSocket client transport for writer data sources.
+# ==============================================================================
+# Same FetchContent-from-source pattern as FlatBuffers / zstd: one pinned
+# version on every platform, no system packages, nothing shipped at runtime.
+#
+# IXWebSocket provides a battle-tested RFC 6455 client with TLS (wss://);
+# mbedTLS is its crypto backend.  The dependency is fully encapsulated behind
+# the PIMPL boundary in vtx_writer (websocket_client.cpp) -- it never leaks
+# into the public SDK headers.
+# ==============================================================================
+
+# --- mbedTLS (static, from source) ---
+FetchContent_Declare(
+    mbedtls_src
+    GIT_REPOSITORY https://github.com/Mbed-TLS/mbedtls.git
+    GIT_TAG        v3.6.2
+    GIT_SHALLOW    TRUE
+)
+set(ENABLE_TESTING         OFF CACHE BOOL "" FORCE)
+set(ENABLE_PROGRAMS        OFF CACHE BOOL "" FORCE)
+set(MBEDTLS_FATAL_WARNINGS OFF CACHE BOOL "" FORCE)
+
+set(_vtx_prev_shared_mbedtls ${BUILD_SHARED_LIBS})
+set(BUILD_SHARED_LIBS OFF)
+FetchContent_MakeAvailable(mbedtls_src)
+set(BUILD_SHARED_LIBS ${_vtx_prev_shared_mbedtls})
+
+foreach(_t mbedtls mbedx509 mbedcrypto)
+    if(TARGET ${_t})
+        set_target_properties(${_t} PROPERTIES FOLDER "Thirdparty/mbedtls")
+    endif()
+endforeach()
+
+# IXWebSocket calls find_package(MbedTLS) when USE_MBED_TLS is on.  Pre-seed
+# the result variables in the cache so the bundled FindMbedTLS's find_path /
+# find_library calls short-circuit and resolve to our FetchContent targets
+# instead of probing the system for an installed copy.
+set(MBEDTLS_INCLUDE_DIRS "${mbedtls_src_SOURCE_DIR}/include"
+    CACHE PATH "mbedTLS headers (VTX FetchContent build)" FORCE)
+set(MBEDTLS_LIBRARY    mbedtls    CACHE STRING "mbedTLS ssl target (VTX FetchContent)"    FORCE)
+set(MBEDX509_LIBRARY   mbedx509   CACHE STRING "mbedTLS x509 target (VTX FetchContent)"   FORCE)
+set(MBEDCRYPTO_LIBRARY mbedcrypto CACHE STRING "mbedTLS crypto target (VTX FetchContent)" FORCE)
+
+# --- IXWebSocket (static, from source, TLS via mbedTLS) ---
+FetchContent_Declare(
+    ixwebsocket_src
+    GIT_REPOSITORY https://github.com/machinezone/IXWebSocket.git
+    GIT_TAG        v12.0.0 # >= v12 required: earlier tags use the mbedTLS 2.x API
+    GIT_SHALLOW    TRUE
+)
+set(USE_TLS             ON  CACHE BOOL "" FORCE)
+set(USE_MBED_TLS        ON  CACHE BOOL "" FORCE)
+set(USE_OPEN_SSL        OFF CACHE BOOL "" FORCE)
+set(USE_ZLIB            OFF CACHE BOOL "" FORCE) # no permessage-deflate -> no zlib dep
+set(USE_WS              OFF CACHE BOOL "" FORCE) # skip the bundled `ws` CLI tool
+set(IXWEBSOCKET_INSTALL OFF CACHE BOOL "" FORCE)
+
+set(_vtx_prev_shared_ixws ${BUILD_SHARED_LIBS})
+set(BUILD_SHARED_LIBS OFF)
+FetchContent_MakeAvailable(ixwebsocket_src)
+set(BUILD_SHARED_LIBS ${_vtx_prev_shared_ixws})
+
+if(TARGET ixwebsocket)
+    set_target_properties(ixwebsocket PROPERTIES FOLDER "Thirdparty/ixwebsocket")
+    # IXWebSocket's bundled mbedTLS version detection doesn't account for
+    # mbedTLS 3.x relocating its version macros into build_info.h, so it
+    # never defines this guard -- which would leave IXSocketMbedTLS.cpp on
+    # the mbedTLS 2.x API and fail to compile.  We pin mbedTLS 3.6
+    # ourselves, so force the 3.x code path unconditionally.
+    target_compile_definitions(ixwebsocket PRIVATE IXWEBSOCKET_USE_MBED_TLS_MIN_VERSION_3)
+endif()
+
+# Public INTERFACE target -- one stable name regardless of upstream tweaks.
+add_library(VTX_deps_ixwebsocket INTERFACE)
+target_link_libraries(VTX_deps_ixwebsocket INTERFACE ixwebsocket)
+add_library(VTX::deps::ixwebsocket ALIAS VTX_deps_ixwebsocket)
+
 function(_vtx_use_bundled_windows_deps)
     if(NOT DEFINED VTX_PROTOC_EXE OR VTX_PROTOC_EXE STREQUAL "")
         set(VTX_PROTOC_EXE "${VTX_THIRDPARTY}/protobuf/bin/protoc.exe"
