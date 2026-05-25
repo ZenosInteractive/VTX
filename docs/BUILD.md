@@ -93,6 +93,8 @@ Binary dependencies are resolved through `cmake/VtxDependencies.cmake`:
 - Protocol Buffers (`protoc` + `libprotobuf`) -- system package on Linux / macOS, bundled `thirdparty/protobuf/` or vcpkg on Windows
 - FlatBuffers (`flatc` + headers) -- always FetchContent, pinned to `v24.12.23`
 - zstd -- always FetchContent, pinned to `v1.5.6`, linked statically
+- IXWebSocket (WebSocket transport for `WebSocketFrameDataSource`) -- always FetchContent, pinned to `v12.0.0`, linked PRIVATE into `vtx_writer`
+- mbedTLS (TLS backend for IXWebSocket -- powers `wss://`) -- always FetchContent, pinned to `v3.6.2`, built as a static library
 
 ### Windows
 
@@ -136,7 +138,7 @@ sudo dnf install cmake gcc-c++ protobuf-compiler protobuf-devel
 brew install cmake protobuf
 ```
 
-Neither FlatBuffers nor zstd is a system dependency -- the build fetches pinned source releases via CMake's `FetchContent`, compiles `flatc` + the zstd static library, and consumes everything in-tree.  This keeps the wire format and the compression library on the exact same version across Windows, Linux, and macOS regardless of what the distro packages.  First configure takes +30-90s while those two build from source; subsequent configures are instant thanks to the `build/_deps` cache.
+None of FlatBuffers, zstd, IXWebSocket or mbedTLS is a system dependency -- the build fetches pinned source releases via CMake's `FetchContent`, compiles `flatc` + the zstd / IXWebSocket / mbedTLS static libraries, and consumes everything in-tree.  This keeps the wire format, the compression library and the WebSocket / TLS stack on the exact same version across Windows, Linux, and macOS regardless of what the distro packages.  First configure takes +60-120s while they build from source; subsequent configures are instant thanks to the `build/_deps` cache.
 
 **Linux GUI tools (optional)** — the Inspector and Schema Creator additionally need the X11 dev stack because GLFW links against it. The default Linux build skips both tools (`BUILD_VTX_INSPECTOR` and `BUILD_VTX_SCHEMA_CREATOR` default to `OFF` on non-Windows), and the `tools/CMakeLists.txt` orchestrator only fetches GLFW when at least one GUI tool is enabled -- so a headless Linux build has zero X11 requirements. If you opt them back in:
 

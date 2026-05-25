@@ -2,20 +2,23 @@
 # VTX SDK -- Samples
 # ==============================================================================
 #
-# Five targets, in complexity order:
+# Sample targets (see docs/SAMPLES.md for the full per-sample reference):
 #
-#   vtx_sample_read            basic_read.cpp        reads a .vtx, prints summary
-#   vtx_sample_write           basic_write.cpp       writes synthetic frames
-#   vtx_sample_diff            basic_diff.cpp        structural diff of two frames
+#   Basic / smoke:
+#     vtx_sample_read                basic_read.cpp           reader smoke test
+#     vtx_sample_write               basic_write.cpp          writer smoke test
+#     vtx_sample_diff                basic_diff.cpp           hash-based diff
+#     vtx_sample_ready_api           ready_api.cpp            chunk-0 ready signalling
+#     vtx_sample_post_process_write  post_process_write.cpp   writer-side post-processor
 #
-#   vtx_sample_generate        generate_replay.cpp   arena simulator -> 3 data
-#                                                    source files (JSON + Proto
-#                                                    + FBS) under content/writer/arena/
+#   Streaming sources (live frames -> .vtx):
+#     vtx_sample_pipe_producer       pipe_producer.cpp        emits length-prefixed JSON frames
+#     vtx_sample_pipe_consumer       pipe_consumer.cpp        stdin / pipe client / named-pipe server
+#     vtx_sample_websocket_consumer  websocket_consumer.cpp   WebSocket client (ws:// + wss://)
 #
-#   vtx_sample_advance_write   advance_write.cpp     reads those 3 data sources
-#                                                    through SDK integration
-#                                                    primitives and writes .vtx
-#                                                    replays via IFrameDataSource.
+#   Arena pipeline (depends on protobuf + flatbuffers codegen):
+#     vtx_sample_generate            generate_replay.cpp      simulator -> 3 data sources
+#     vtx_sample_advance_write       advance_write.cpp        3 data sources -> 3 .vtx replays
 #
 # Third-party deps are resolved through VTX::deps::* targets established by
 # cmake/VtxDependencies.cmake -- portable across Windows and Linux.

@@ -12,6 +12,8 @@ governed by its own license:
                                               system / vcpkg on Linux/macOS
   - FlatBuffers         (Apache-2.0)       -- CMake FetchContent (v24.12.23)
   - Zstandard (zstd)    (BSD-3-Clause)     -- CMake FetchContent (v1.5.6)
+  - IXWebSocket         (BSD-3-Clause)     -- CMake FetchContent (v12.0.0)
+  - mbedTLS             (Apache-2.0)       -- CMake FetchContent (v3.6.2)
 
   Test and tooling dependencies (not distributed with SDK binaries):
   - GoogleTest          (BSD-3-Clause)     -- CMake FetchContent

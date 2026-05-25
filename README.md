@@ -13,6 +13,7 @@ VTX is an open binary format for real-time per-frame state data, plus a C++20 SD
 - **Dual-schema access.** Read as generic (portable across titles) or contextual (game-aware) from the same file.
 - **Random access by frame or timestamp.** Footer-indexed seek, not a linear scan. O(log n) lookup plus one chunk decompress.
 - **Both Protobuf and FlatBuffers.** SDK supports both backends out of the box. The file announces which in its magic bytes; readers auto-detect.
+- **Live streaming transports.** Ingest frames live from an OS pipe (Windows named pipe, POSIX FIFO, stdin) or a WebSocket connection, and emit the `.vtx` byte stream over a TCP socket instead of writing to disk. Same writer API behind each transport -- file or network, sink-agnostic.
 - **Engine-independent C++20.** No engine dependency. Language bindings wherever Protobuf or FlatBuffers exist (Python, Go, Rust, Java, JS).
 - **Open.** Apache-2.0. Spec, reference reader, and tooling all in the repo.
 
@@ -78,6 +79,21 @@ writer->SetPostProcessor(std::make_shared<HealthClamp>());
 ```
 
 For string-free, schema-driven processors with type-safety in compile time, use `scripts/vtx_codegen.py` to generate per-struct mutators and iteration helpers (`PlayerMutator`, `ForEachPlayer`, etc.) -- full reference in [`docs/POST_PROCESSING.md`](docs/POST_PROCESSING.md), runnable end-to-end demo in [`samples/post_process_write.cpp`](samples/post_process_write.cpp).
+
+#### Optional: stream frames live instead of reading a file source
+
+The same writer API can ingest frames from an OS pipe (Windows named pipes, POSIX FIFOs, stdin) or a WebSocket -- use `PipeFrameDataSource` / `WebSocketFrameDataSource` (both implement `IFrameDataSource`) and feed each frame into `writer->RecordFrame`. To emit the `.vtx` byte stream over a TCP socket instead of writing to disk, swap the file facade for `CreateFlatBuffersNetworkWriterFacade` / `CreateProtobuffNetworkWriterFacade` -- same `IVtxWriterFacade` behind both.
+
+```cpp
+// Ingest live frames from a Windows named pipe; record them into a .vtx
+VTX::PipeFrameDataSource<MyJsonAdapter>::Config cfg;
+cfg.pipe_path = "\\\\.\\pipe\\vtx";
+cfg.as_server = true;       // VTX creates the pipe and waits for a producer
+VTX::PipeFrameDataSource<MyJsonAdapter> source(cfg);
+source.Initialize();
+```
+
+External producers need nothing from the SDK -- they just open the pipe and write `[uint32 LE size][payload]` frames + a zero-size sentinel. Full reference in [`docs/SDK_API.md`](docs/SDK_API.md); runnable end-to-end demos (including a two-bats "two independent processes" scenario and a Python WebSocket server) in [`docs/SAMPLES.md`](docs/SAMPLES.md).
 
 ### Read a replay
 

@@ -33,13 +33,15 @@ Provides the shared type system, serialization infrastructure, and utilities use
 
 ### vtx_writer
 
-Records live frame data into `.vtx` replay files.
+Records live frame data into `.vtx` replay files (or streams the same bytes over a socket).
 
 - **Facade**: `IVtxWriterFacade` — `RecordFrame()`, `Flush()`, `Stop()`
-- **Factory**: `CreateFlatBuffersWriterFacade()`, `CreateProtobuffWriterFacade()`
-- **Config**: `WriterFacadeConfig` — output path, chunk size, compression, schema JSON path
+- **Factory**: `CreateFlatBuffersWriterFacade()` / `CreateProtobuffWriterFacade()` (file output); `CreateFlatBuffersNetworkWriterFacade()` / `CreateProtobuffNetworkWriterFacade()` (TCP socket output) — same `IVtxWriterFacade` behind both, so user code is sink-agnostic
+- **Config**: `WriterFacadeConfig` (file path) or `NetworkWriterFacadeConfig` (host + port) — chunk size, compression, schema JSON path
 - **Policy**: Template-parameterized writer policies select FlatBuffers or Protobuf serialization at compile time
-- **Data-source interface**: `IFrameDataSource` (`Initialize()` / `GetNextFrame()` / `GetExpectedTotalFrames()`) — streaming contract for adapters that convert third-party replay formats into VTX frames. See `samples/advance_write.cpp` for JSON / Protobuf / FlatBuffers implementations, and `tools/integrations/rl/rl15/rl15_data_source.h` for a production example.
+- **Sinks**: `ChunkedFileSink<Policy>` (file), `ChunkedNetworkSink<Policy>` (TCP stream) — both produce the **same `.vtx` byte sequence**, so a socket receiver only has to concatenate incoming bytes into a file to get a valid replay
+- **Data-source interface**: `IFrameDataSource` (`Initialize()` / `GetNextFrame()` / `GetExpectedTotalFrames()`). Concrete implementations: `samples/advance_write.cpp` (JSON / Protobuf / FlatBuffers from disk); `PipeFrameDataSource<Adapter>` (stdin, Windows named pipes, POSIX FIFOs — including a **server mode** that creates the pipe and waits, for independent game-injector-style external producers); `WebSocketFrameDataSource<Adapter>` (`ws://` + `wss://` with TLS). Both streaming sources share the `IFramePayloadAdapter` concept, so a single adapter plugs into either transport
+- **Dependencies**: protobuf + flatbuffers (serialization), zstd (chunk compression), IXWebSocket + mbedTLS (WebSocket transport; hidden behind a PIMPL boundary in `websocket_client.cpp` — never leak into the public SDK headers)
 
 ### vtx_reader
 

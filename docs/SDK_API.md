@@ -185,6 +185,27 @@ writer->Flush();  // Force-write any buffered chunk
 writer->Stop();   // Write footer and close file
 ```
 
+### Streaming sinks
+
+Same writer API, different transport.  Instead of writing the `.vtx` byte stream to a file, push it over a TCP socket to a remote ingestion server.  Use `CreateFlatBuffersNetworkWriterFacade` / `CreateProtobuffNetworkWriterFacade` and pass a `NetworkWriterFacadeConfig`:
+
+```cpp
+#include "vtx/writer/core/vtx_writer_facade.h"
+
+VTX::NetworkWriterFacadeConfig config;
+config.host             = "127.0.0.1";
+config.port             = 9000;
+config.schema_json_path = "schema.json";
+config.replay_name      = "Live Replay";
+config.chunk_max_frames = 1000;
+config.use_compression  = true;
+
+auto writer = VTX::CreateFlatBuffersNetworkWriterFacade(config);
+// RecordFrame / Flush / Stop exactly as with the file sink
+```
+
+The writer behaves identically behind the `IVtxWriterFacade` abstraction -- the same wire bytes that a `.vtx` file holds are sent over the socket in order, so the receiver just appends the incoming message bytes to a file and gets a valid `.vtx` parseable by `VTX::OpenReplayFile`.
+
 ---
 
 ## Frame Post-Processor
@@ -513,3 +534,74 @@ Unlike `ProtoBinding`, FlatBuffer field addresses are resolved once per field na
 | Protobuf message | `ProtoBinding<T>` + `GenericProtobufLoader` | Handles `has_*`/`set_*` + repeated fields |
 | FlatBuffers table | `FlatBufferBinding<T>` + `GenericFlatBufferLoader` | Zero-copy reads, cached addresses |
 | Completely custom wire format | Hand-build `VTX::PropertyContainer` inside your `GetNextFrame()` | No bindings needed |
+
+---
+
+## Streaming sources
+
+For ingestion from external processes that produce frames live (game injectors, capture daemons, CLI bridges), the SDK ships two ready-made `IFrameDataSource` implementations that handle the transport + per-frame framing.  Both are templates parameterised by an `Adapter` that interprets the payload bytes -- the transport stays format-agnostic.
+
+### PipeFrameDataSource\<Adapter\>  -- OS pipes (stdin, Windows named pipes, POSIX FIFOs)
+
+```cpp
+#include "vtx/writer/sources/pipe_frame_source.h"
+
+struct MyJsonAdapter {
+    bool ParseFrame(std::span<const std::byte> payload,
+                    VTX::Frame& out_frame,
+                    VTX::GameTime::GameTimeRegister& out_time) const {
+        /* decode payload bytes -> out_frame */
+        return true;
+    }
+};
+
+VTX::PipeFrameDataSource<MyJsonAdapter>::Config cfg;
+cfg.pipe_path = "\\\\.\\pipe\\vtx";   // Windows named pipe;  or  "/tmp/vtx.fifo"  on POSIX
+cfg.as_server = true;                  // VTX creates the pipe and waits for a producer
+VTX::PipeFrameDataSource<MyJsonAdapter> source(cfg);
+source.Initialize();                   // creates the pipe, blocks until a client connects
+```
+
+Wire protocol: `[uint32 LE size][payload of size bytes]` repeated, terminated by a zero-size sentinel.
+
+Three modes via `Config`:
+
+| `pipe_path` | `as_server` | Behaviour |
+|---|---|---|
+| empty | (ignored) | read from `stdin` (for shell pipelines `producer \| vtx_consumer`) |
+| set | `false` | connect to a pipe / FIFO a producer already created (VTX is the client) |
+| set | `true` | **create** the pipe (Windows `CreateNamedPipe`, POSIX `mkfifo`) and block until a producer connects (VTX is the server) |
+
+Server mode is the mode for an **external, independent producer** -- e.g. a game injector that opens the named pipe as a client when its game launches.  The producer needs nothing from the VTX SDK; it just speaks the framing.  See [`SAMPLES.md`](SAMPLES.md) for the demo `.bat` scripts.
+
+### WebSocketFrameDataSource\<Adapter\>  -- WebSocket (ws:// + wss://)
+
+```cpp
+#include "vtx/writer/sources/websocket_frame_source.h"
+
+VTX::WebSocketFrameDataSource<MyJsonAdapter>::Config cfg;
+cfg.url = "ws://127.0.0.1:8765/";     // or "wss://host/path" for TLS
+VTX::WebSocketFrameDataSource<MyJsonAdapter> source(cfg);
+source.Initialize();                   // TCP connect + WebSocket handshake; blocks until open
+```
+
+VTX acts as a WebSocket client.  Each incoming WebSocket message is one frame, handed to the `Adapter`.  Ping/pong, close, fragment reassembly are handled internally.  `wss://` verifies the server certificate against the OS trust store by default.  Auto-reconnect is disabled -- a dropped connection ends the stream so the writer finalises the `.vtx` instead of silently resuming mid-file.
+
+Backed by IXWebSocket + mbedTLS, both hidden behind a PIMPL boundary -- the public header carries no transitive dependency on either.
+
+### IFramePayloadAdapter (shared concept)
+
+Both streaming sources constrain their `Adapter` template parameter with the same compile-time concept:
+
+```cpp
+#include "vtx/writer/sources/frame_payload_adapter.h"
+
+template <typename A>
+concept IFramePayloadAdapter =
+    requires(A& a, std::span<const std::byte> payload,
+             VTX::Frame& f, VTX::GameTime::GameTimeRegister& t) {
+        { a.ParseFrame(payload, f, t) } -> std::convertible_to<bool>;
+    };
+```
+
+The source owns the transport and the framing; the adapter is the only place that knows the wire payload format (JSON, Protobuf, custom binary).  Returning `false` ends the stream.

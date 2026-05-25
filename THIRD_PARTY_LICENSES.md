@@ -16,6 +16,8 @@ requirements by preserving the notices reproduced in this file.
 | [Protocol Buffers](#protocol-buffers) | 3.x (bundled Windows `.lib`) or system | BSD-3-Clause |
 | [FlatBuffers](#flatbuffers) | 24.12.23 | CMake `FetchContent` | Apache-2.0 |
 | [Zstandard (zstd)](#zstandard-zstd) | 1.5.6 | CMake `FetchContent` | BSD-3-Clause |
+| [IXWebSocket](#ixwebsocket) | 12.0.0 | CMake `FetchContent` | BSD-3-Clause |
+| [mbedTLS](#mbedtls) | 3.6.2 | CMake `FetchContent` | Apache-2.0 |
 | [GoogleTest](#googletest) | 1.15.2 | CMake `FetchContent` (tests only) | BSD-3-Clause |
 | [Dear ImGui](#dear-imgui) | fetched by `tools/` | CMake `FetchContent` (GUI tools only) | MIT |
 | [GLFW](#glfw) | fetched by `tools/` | CMake `FetchContent` (GUI tools only) | zlib/libpng |
@@ -191,6 +193,63 @@ CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 POSSIBILITY OF SUCH DAMAGE.
 ```
+
+---
+
+## IXWebSocket
+
+- **Upstream**: https://github.com/machinezone/IXWebSocket
+- **Version**: v12.0.0 (pinned via CMake `FetchContent` in `cmake/VtxDependencies.cmake`, built as a static library and linked PRIVATE into `vtx_writer`)
+- **License**: BSD 3-Clause
+
+```
+Copyright (c) 2018-2025 Machine Zone, Inc.
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+* Redistributions of source code must retain the above copyright notice, this
+  list of conditions and the following disclaimer.
+
+* Redistributions in binary form must reproduce the above copyright notice,
+  this list of conditions and the following disclaimer in the documentation
+  and/or other materials provided with the distribution.
+
+* Neither the name of the copyright holder nor the names of its contributors
+  may be used to endorse or promote products derived from this software
+  without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
+```
+
+---
+
+## mbedTLS
+
+- **Upstream**: https://github.com/Mbed-TLS/mbedtls
+- **Version**: v3.6.2 (pinned via CMake `FetchContent` in `cmake/VtxDependencies.cmake`, built as a static library and used as the TLS backend for IXWebSocket; linked PRIVATE into `vtx_writer`)
+- **License**: Apache License 2.0
+
+Mbed TLS' upstream `NOTICE` (preserved per Apache-2.0 §4(d)):
+
+```
+Mbed TLS
+Copyright The Mbed TLS Contributors
+```
+
+The full Apache License 2.0 text is reproduced in [LICENSE](LICENSE) (VTX is
+also Apache-2.0 licensed, so the same license text governs both).
 
 ---
 
