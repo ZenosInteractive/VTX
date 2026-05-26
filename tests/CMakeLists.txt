@@ -72,6 +72,8 @@ add_executable(vtx_tests
     writer/test_writer_advanced.cpp
     writer/test_frame_post_processor.cpp
     writer/test_network_sink.cpp
+    writer/test_pipe_source.cpp
+    writer/test_websocket_source.cpp
 
     reader/test_reader_context.cpp
     reader/test_corrupt_files.cpp
@@ -90,6 +92,10 @@ target_link_libraries(vtx_tests PRIVATE
     vtx_writer
     vtx_reader
     vtx_differ
+    # test_websocket_source.cpp instantiates ix::WebSocketServer as an
+    # in-process loopback producer.  vtx_writer keeps IXWebSocket PRIVATE
+    # behind its PIMPL boundary, so the test target needs the dep directly.
+    $<BUILD_INTERFACE:VTX::deps::ixwebsocket>
 )
 
 target_include_directories(vtx_tests PRIVATE
