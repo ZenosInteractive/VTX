@@ -78,7 +78,7 @@ target_link_libraries(vtx_benchmarks PRIVATE
 target_include_directories(vtx_benchmarks PRIVATE
     # vtx_common keeps protobuf / flatbuffers headers PRIVATE; benchmarks
     # that touch PropertyContainer internals need the same thirdparty paths.
-    "${CMAKE_SOURCE_DIR}/thirdparty/protobuf/include"
+    "${PROJECT_SOURCE_DIR}/thirdparty/protobuf/include"
 )
 
 target_compile_definitions(vtx_benchmarks PRIVATE
@@ -101,7 +101,7 @@ set_target_properties(vtx_benchmarks PROPERTIES
 # add_custom_command fires.
 # ==============================================================================
 set(VTX_BENCH_FIXTURES_DIR_ABS "${CMAKE_CURRENT_SOURCE_DIR}/fixtures")
-set(VTX_BENCH_ARENA_SCHEMA     "${CMAKE_SOURCE_DIR}/samples/content/writer/arena/arena_schema.json")
+set(VTX_BENCH_ARENA_SCHEMA     "${PROJECT_SOURCE_DIR}/samples/content/writer/arena/arena_schema.json")
 set(VTX_BENCH_FIXTURE_10K      "${VTX_BENCH_FIXTURES_DIR_ABS}/synth_10k.vtx")
 
 # Ensure the fixtures directory exists before custom commands run.

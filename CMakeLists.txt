@@ -153,7 +153,7 @@ else()
 endif()
 
 # --- Install ---
-install(DIRECTORY "${CMAKE_SOURCE_DIR}/sdk/include/"
+install(DIRECTORY "${PROJECT_SOURCE_DIR}/sdk/include/"
         DESTINATION include
         FILES_MATCHING
         PATTERN "*.h"
@@ -164,7 +164,7 @@ install(DIRECTORY "${CMAKE_SOURCE_DIR}/sdk/include/"
         PATTERN "*.cpp" EXCLUDE
 )
 
-install(DIRECTORY "${CMAKE_SOURCE_DIR}/scripts/"
+install(DIRECTORY "${PROJECT_SOURCE_DIR}/scripts/"
         DESTINATION scripts
         USE_SOURCE_PERMISSIONS
         FILES_MATCHING
@@ -181,7 +181,7 @@ install(EXPORT VTXTargets
 )
 
 configure_package_config_file(
-    "${CMAKE_SOURCE_DIR}/cmake/VTXConfig.cmake.in"
+    "${PROJECT_SOURCE_DIR}/cmake/VTXConfig.cmake.in"
     "${CMAKE_CURRENT_BINARY_DIR}/VTXConfig.cmake"
     INSTALL_DESTINATION lib/cmake/VTX
 )
@@ -203,17 +203,17 @@ install(FILES
 # vtx-sdk-0.1.0-windows-x64.zip).  NOTICE is required by Apache 2.0
 # §4(d) for binary distributions.
 install(FILES
-    "${CMAKE_SOURCE_DIR}/LICENSE"
-    "${CMAKE_SOURCE_DIR}/NOTICE"
-    "${CMAKE_SOURCE_DIR}/README.md"
-    "${CMAKE_SOURCE_DIR}/CHANGELOG.md"
-    "${CMAKE_SOURCE_DIR}/SECURITY.md"
-    "${CMAKE_SOURCE_DIR}/THIRD_PARTY_LICENSES.md"
+    "${PROJECT_SOURCE_DIR}/LICENSE"
+    "${PROJECT_SOURCE_DIR}/NOTICE"
+    "${PROJECT_SOURCE_DIR}/README.md"
+    "${PROJECT_SOURCE_DIR}/CHANGELOG.md"
+    "${PROJECT_SOURCE_DIR}/SECURITY.md"
+    "${PROJECT_SOURCE_DIR}/THIRD_PARTY_LICENSES.md"
     DESTINATION .
 )
 
 # IDE helpers
-file(GLOB_RECURSE IDE_SCRIPT_FILES "${CMAKE_SOURCE_DIR}/scripts/*")
+file(GLOB_RECURSE IDE_SCRIPT_FILES "${PROJECT_SOURCE_DIR}/scripts/*")
 set(ROOT_CONFIG_FILES "${CMAKE_CURRENT_LIST_FILE}")
 add_custom_target(vtx_utility_scripts SOURCES ${IDE_SCRIPT_FILES})
 source_group("Scripts" FILES ${IDE_SCRIPT_FILES})

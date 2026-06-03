@@ -20,7 +20,7 @@ project(vtx_common)
 # ==============================================================================
 # 1. Schema code generation (Protobuf + FlatBuffers)
 # ==============================================================================
-set(SCHEMA_DIR    "${CMAKE_SOURCE_DIR}/sdk/src/schemas")
+set(SCHEMA_DIR    "${VTX_SDK_SOURCE_DIR}/sdk/src/schemas")
 
 # Generated protobuf/flatbuffers code lives under the build tree, not the
 # source tree.  Reasons:
@@ -70,8 +70,8 @@ add_custom_command(
 # 2. Source files
 # ==============================================================================
 file(GLOB_RECURSE EXISTING_HEADERS CONFIGURE_DEPENDS
-    "${CMAKE_SOURCE_DIR}/sdk/include/vtx/common/*.h"
-    "${CMAKE_SOURCE_DIR}/sdk/include/vtx/common/*.hpp"
+    "${VTX_SDK_SOURCE_DIR}/sdk/include/vtx/common/*.h"
+    "${VTX_SDK_SOURCE_DIR}/sdk/include/vtx/common/*.hpp"
 )
 
 file(GLOB_RECURSE EXISTING_SOURCES CONFIGURE_DEPENDS
@@ -150,7 +150,7 @@ target_link_libraries(vtx_common
 # ==============================================================================
 target_include_directories(vtx_common
     PUBLIC
-        $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/sdk/include>
+        $<BUILD_INTERFACE:${VTX_SDK_SOURCE_DIR}/sdk/include>
         $<BUILD_INTERFACE:${VTX_JSON_INCLUDE_DIR}>
         $<BUILD_INTERFACE:${VTX_XXHASH_INCLUDE_DIR}>
         $<INSTALL_INTERFACE:include>
@@ -161,7 +161,7 @@ target_include_directories(vtx_common
 # ==============================================================================
 # 5. Runtime deps + IDE filters
 # ==============================================================================
-source_group(TREE "${CMAKE_SOURCE_DIR}/sdk/include/vtx/common" PREFIX "Header Files" FILES ${EXISTING_HEADERS})
+source_group(TREE "${VTX_SDK_SOURCE_DIR}/sdk/include/vtx/common" PREFIX "Header Files" FILES ${EXISTING_HEADERS})
 source_group(TREE "${SCHEMA_DIR}" PREFIX "Schemas" FILES ${IDE_SCHEMA_FILES})
 source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}" PREFIX "Source Files" FILES ${EXISTING_SOURCES})
 

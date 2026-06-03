@@ -139,12 +139,12 @@ if(TARGET vtx_sample_diff)
     add_test(
         NAME vtx_sample_diff_smoke
         COMMAND $<TARGET_FILE:vtx_sample_diff>
-                "${CMAKE_SOURCE_DIR}/samples/content/reader/arena/arena_from_fbs_ds.vtx"
+                "${PROJECT_SOURCE_DIR}/samples/content/reader/arena/arena_from_fbs_ds.vtx"
                 --fail-on-empty
     )
     set_tests_properties(vtx_sample_diff_smoke PROPERTIES
         LABELS "vtx;samples"
         TIMEOUT 60
-        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/samples"
+        WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}/samples"
     )
 endif()
