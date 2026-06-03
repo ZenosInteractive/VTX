@@ -178,6 +178,7 @@ bool VTX::SchemaRegistry::LoadFromRawString(const std::string& raw_json) {
 
         auto& struct_cache = property_cache_.structs[type_id];
         struct_cache.name = struct_name;
+        struct_cache.type_max_indices = struct_def.type_max_indices;
 
         for (const auto& field : struct_def.fields) {
             if (field.type_id != VTX::FieldType::None) {
