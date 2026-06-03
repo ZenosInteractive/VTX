@@ -4,8 +4,8 @@ project(vtx_differ)
 # 1. Source files and headers
 # ==============================================================================
 file(GLOB_RECURSE HEADERS CONFIGURE_DEPENDS
-    "${CMAKE_SOURCE_DIR}/sdk/include/vtx/differ/*.h"
-    "${CMAKE_SOURCE_DIR}/sdk/include/vtx/differ/*.hpp"
+    "${VTX_SDK_SOURCE_DIR}/sdk/include/vtx/differ/*.h"
+    "${VTX_SDK_SOURCE_DIR}/sdk/include/vtx/differ/*.hpp"
 )
 
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS
@@ -41,7 +41,7 @@ endif()
 # ==============================================================================
 # 3. VS filters
 # ==============================================================================
-source_group(TREE "${CMAKE_SOURCE_DIR}/sdk/include" PREFIX "Header Files" FILES ${HEADERS})
+source_group(TREE "${VTX_SDK_SOURCE_DIR}/sdk/include" PREFIX "Header Files" FILES ${HEADERS})
 source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}" PREFIX "Source Files" FILES ${SOURCES})
 
 install(TARGETS vtx_differ EXPORT VTXTargets

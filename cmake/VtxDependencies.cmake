@@ -24,7 +24,7 @@
 #   - On Linux/macOS, resolve through system packages / package managers.
 # ==============================================================================
 
-set(VTX_THIRDPARTY "${CMAKE_SOURCE_DIR}/thirdparty"
+set(VTX_THIRDPARTY "${PROJECT_SOURCE_DIR}/thirdparty"
     CACHE PATH "Path to the legacy bundled third-party dependency tree")
 
 set(VTX_DEPENDENCY_SOURCE "AUTO" CACHE STRING
