@@ -54,9 +54,17 @@ namespace VTX {
             return &prop_it->second;
         }
 
+        const std::vector<int32_t>* GetTypeMaxIndices(int32_t entity_type_id) const {
+            auto struct_it = cache_->structs.find(entity_type_id);
+            if (struct_it == cache_->structs.end())
+                return nullptr;
+            return &struct_it->second.type_max_indices;
+        }
+
         /**
          * @brief Load a single C++ instance into a PropertyContainer.
-         * @details Sets dest.entity_type_id (if not yet resolved), iterates
+         * @details Sets dest.entity_type_id (if not yet resolved), pre-sizes the
+         *          container to the schema's per-type max, iterates
          *          StructMapping<T>::GetFields(), dispatches each field, and
          *          computes the container hash at the end.
          */
@@ -71,6 +79,8 @@ namespace VTX {
                     dest.entity_type_id = it->second;
                 }
             }
+
+            this->PrepareContainer(dest);
 
             constexpr auto fields = StructMapping<T>::GetFields();
             std::apply([&](auto&&... f) { (ProcessField(src, dest, struct_name, f), ...); }, fields);

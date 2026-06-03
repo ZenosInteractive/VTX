@@ -47,7 +47,7 @@ namespace VTX {
     }
 
     /**
-     * @brief O(1) fast access key. 
+     * @brief O(1) fast access key.
      * Resolved ONCE during Setup() and used directly in the hot loop.
      */
     template <typename T>
@@ -84,6 +84,7 @@ namespace VTX {
         std::unordered_map<std::string, PropertyAddress> properties;
         std::unordered_map<uint64_t, std::string> names_by_lookup_key;
         std::vector<std::string> property_order;
+        std::vector<int32_t> type_max_indices;
 
         std::vector<OrderedPropertyView> GetPropertiesInOrder() const {
             std::vector<OrderedPropertyView> ordered_properties;

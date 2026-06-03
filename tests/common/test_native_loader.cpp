@@ -72,6 +72,22 @@ namespace vtx_native_loader_test {
         int deaths = 0;
     };
 
+    // -----------------------------------------------------------------
+    //  Setup 3: a struct whose StructMapping covers only a SUBSET of the
+    //  "Player" schema, and only the LOW index of each type. Used to prove
+    //  the loader pre-sizes the container to the schema's per-type max
+    //  (filling the unmapped high-index slots with defaults) instead of
+    //  growing lazily to the highest written index.
+    // -----------------------------------------------------------------
+
+    struct PartialPlayer {
+        std::string unique_id; // String[0]  (Name = String[1] is left unmapped)
+        int team = 0;          // Int32[0]   (Score[1], Deaths[2] left unmapped)
+        float health = 0.0f;   // Float[0]   (Armor[1] left unmapped)
+        VTX::Vector position;  // Vector[0]  (Velocity[1] left unmapped)
+        // Rotation (Quat[0]) and IsAlive (Bool[0]) are not mapped at all.
+    };
+
 } // namespace vtx_native_loader_test
 
 // StructMapping specializations live in namespace VTX (qualified form).
@@ -99,6 +115,15 @@ struct VTX::StructMapping<vtx_native_loader_test::PlayerWithCustomVec> {
                                MakeStructField("Rotation", &P::rotation), MakeStructField("Velocity", &P::velocity),
                                MakeStructField("IsAlive", &P::is_alive), MakeStructField("Score", &P::score),
                                MakeStructField("Deaths", &P::deaths));
+    }
+};
+
+template <>
+struct VTX::StructMapping<vtx_native_loader_test::PartialPlayer> {
+    static constexpr auto GetFields() {
+        using P = vtx_native_loader_test::PartialPlayer;
+        return std::make_tuple(MakeStructField("UniqueID", &P::unique_id), MakeStructField("Team", &P::team),
+                               MakeStructField("Health", &P::health), MakeStructField("Position", &P::position));
     }
 };
 
@@ -161,6 +186,56 @@ TEST(NativeLoader, LoadsAllSlotsFromMappedStruct) {
 
     ASSERT_EQ(dest.bool_properties.size(), 1u);
     EXPECT_TRUE(dest.bool_properties[0]);
+
+    EXPECT_NE(dest.content_hash, 0u);
+}
+
+TEST(NativeLoader, PreSizesContainerToSchemaMaxOnPartialMapping) {
+    VTX::SchemaRegistry schema;
+    ASSERT_TRUE(schema.LoadFromJson(SchemaPath()));
+
+    VTX::GenericNativeLoader loader(schema.GetPropertyCache());
+
+    vtx_native_loader_test::PartialPlayer p {};
+    p.unique_id = "player_7";
+    p.team = 1;
+    p.health = 42.0f;
+    p.position = {1.0, 2.0, 3.0};
+
+    VTX::PropertyContainer dest;
+    loader.Load(p, dest, "Player");
+
+    EXPECT_GE(dest.entity_type_id, 0);
+
+    // Even though the mapping writes only the index-0 slot of each type, the
+    // container is pre-sized to the "Player" schema's per-type max. Unmapped
+    // high-index slots exist and hold their default value.
+
+    // String: max 2 (UniqueID, Name). Only UniqueID written.
+    ASSERT_EQ(dest.string_properties.size(), 2u);
+    EXPECT_EQ(dest.string_properties[0], "player_7");
+    EXPECT_EQ(dest.string_properties[1], ""); // Name -- default
+
+    // Int32: max 3 (Team, Score, Deaths). Only Team written.
+    ASSERT_EQ(dest.int32_properties.size(), 3u);
+    EXPECT_EQ(dest.int32_properties[0], 1);
+    EXPECT_EQ(dest.int32_properties[1], 0); // Score  -- default
+    EXPECT_EQ(dest.int32_properties[2], 0); // Deaths -- default
+
+    // Float: max 2 (Health, Armor). Only Health written.
+    ASSERT_EQ(dest.float_properties.size(), 2u);
+    EXPECT_FLOAT_EQ(dest.float_properties[0], 42.0f);
+    EXPECT_FLOAT_EQ(dest.float_properties[1], 0.0f); // Armor -- default
+
+    // Vector: max 2 (Position, Velocity). Only Position written.
+    ASSERT_EQ(dest.vector_properties.size(), 2u);
+    EXPECT_DOUBLE_EQ(dest.vector_properties[0].x, 1.0);
+    EXPECT_DOUBLE_EQ(dest.vector_properties[1].x, 0.0); // Velocity -- default
+
+    // Quat / Bool: not mapped at all, still pre-sized to their schema slot count.
+    ASSERT_EQ(dest.quat_properties.size(), 1u);
+    ASSERT_EQ(dest.bool_properties.size(), 1u);
+    EXPECT_FALSE(dest.bool_properties[0]); // IsAlive -- default
 
     EXPECT_NE(dest.content_hash, 0u);
 }

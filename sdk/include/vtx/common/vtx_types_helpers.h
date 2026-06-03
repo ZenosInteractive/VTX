@@ -18,17 +18,11 @@ using int64 = std::int64_t;
 namespace VTX {
     namespace Helpers {
 
-        /**
-         * @brief Prepares the container by pre-allocating memory based on a schema.
-         * @details Uses the schema's typeMaxIndices to ensure all internal vectors 
-         * are correctly sized, preventing reallocations and out-of-bounds access.
-         * @param container Container to pre allocate
-          * @param schema The schema definition for the structure to be held.
-         */
-        inline void PreparePropertyContainer(PropertyContainer& container, const SchemaStruct& schema) {
+        inline void ResizeContainerToMaxIndices(PropertyContainer& container,
+                                                const std::vector<int32_t>& type_max_indices) {
             auto GetNeeded = [&](FieldType type) -> int32_t {
                 size_t typeIdx = static_cast<size_t>(type);
-                return (typeIdx < schema.type_max_indices.size()) ? schema.type_max_indices[typeIdx] : 0;
+                return (typeIdx < type_max_indices.size()) ? type_max_indices[typeIdx] : 0;
             };
 
             if (int32_t n = GetNeeded(FieldType::Bool))
@@ -55,6 +49,10 @@ namespace VTX {
 
             if (int32_t n = GetNeeded(FieldType::Struct))
                 container.any_struct_properties.resize(n);
+        }
+
+        inline void PreparePropertyContainer(PropertyContainer& container, const SchemaStruct& schema) {
+            ResizeContainerToMaxIndices(container, schema.type_max_indices);
         }
 
         inline uint64_t CalculateContainerHash(const PropertyContainer& container) {

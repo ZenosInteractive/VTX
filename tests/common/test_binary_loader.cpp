@@ -238,25 +238,47 @@ TEST(BinaryLoader, ReadsTypedFieldsFromCursorIntoPropertyContainer) {
 
     EXPECT_GE(dest.entity_type_id, 0);
 
-    // Schema-driven slot indices for "Player":
-    //   string[0]=UniqueID  string[1]=Name
-    //   int32[0]=Team
-    //   float[0]=Health
-    //   vector[0]=Position
+    // The binding writes only a SUBSET of the "Player" schema (Name, UniqueID,
+    // Team, Health, Position). The loader still pre-sizes every scalar vector to
+    // the schema's per-type max, so slots the binding never touched exist and
+    // hold their default value. Schema-driven slot indices for "Player":
+    //   string[0]=UniqueID string[1]=Name
+    //   int32[0]=Team      int32[1]=Score    int32[2]=Deaths
+    //   float[0]=Health    float[1]=Armor
+    //   vector[0]=Position vector[1]=Velocity
+    //   quat[0]=Rotation
+    //   bool[0]=IsAlive
+
+    // Strings: both slots written.
     ASSERT_EQ(dest.string_properties.size(), 2u);
     EXPECT_EQ(dest.string_properties[0], "player_42");
     EXPECT_EQ(dest.string_properties[1], "Alice");
 
-    ASSERT_EQ(dest.int32_properties.size(), 1u);
+    // Int32: only Team written; Score/Deaths pre-sized to default 0.
+    ASSERT_EQ(dest.int32_properties.size(), 3u);
     EXPECT_EQ(dest.int32_properties[0], 1);
+    EXPECT_EQ(dest.int32_properties[1], 0);
+    EXPECT_EQ(dest.int32_properties[2], 0);
 
-    ASSERT_EQ(dest.float_properties.size(), 1u);
+    // Float: only Health written; Armor pre-sized to default 0.
+    ASSERT_EQ(dest.float_properties.size(), 2u);
     EXPECT_FLOAT_EQ(dest.float_properties[0], 75.5f);
+    EXPECT_FLOAT_EQ(dest.float_properties[1], 0.0f);
 
-    ASSERT_EQ(dest.vector_properties.size(), 1u);
+    // Vector: only Position written; Velocity pre-sized to default (0,0,0).
+    ASSERT_EQ(dest.vector_properties.size(), 2u);
     EXPECT_DOUBLE_EQ(dest.vector_properties[0].x, 1.0);
     EXPECT_DOUBLE_EQ(dest.vector_properties[0].y, 2.0);
     EXPECT_DOUBLE_EQ(dest.vector_properties[0].z, 3.0);
+    EXPECT_DOUBLE_EQ(dest.vector_properties[1].x, 0.0);
+    EXPECT_DOUBLE_EQ(dest.vector_properties[1].y, 0.0);
+    EXPECT_DOUBLE_EQ(dest.vector_properties[1].z, 0.0);
+
+    // Quat / Bool: never written by the binding, but pre-sized to their schema
+    // slot count so reads at the schema index are safe.
+    ASSERT_EQ(dest.quat_properties.size(), 1u);
+    ASSERT_EQ(dest.bool_properties.size(), 1u);
+    EXPECT_FALSE(dest.bool_properties[0]);
 
     EXPECT_NE(dest.content_hash, 0u);
     // Cursor fully consumed.

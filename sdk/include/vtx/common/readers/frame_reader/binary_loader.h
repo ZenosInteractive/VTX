@@ -106,12 +106,21 @@ namespace VTX {
             return &prop_it->second;
         }
 
+        const std::vector<int32_t>* GetTypeMaxIndices(int32_t entity_type_id) const {
+            auto struct_it = cache_->structs.find(entity_type_id);
+            if (struct_it == cache_->structs.end()) {
+                return nullptr;
+            }
+            return &struct_it->second.type_max_indices;
+        }
+
 
         /**
          * @brief Deserialize one entity from @p cursor into @p dest.
          * @details Sets dest.entity_type_id from @p struct_name if not yet
-         *          resolved, dispatches to BinaryBinding<Tag>::Transfer, and
-         *          recomputes the container content hash on exit.
+         *          resolved, pre-sizes the container to the schema's per-type max,
+         *          dispatches to BinaryBinding<Tag>::Transfer, and recomputes the
+         *          container content hash on exit.
          * @tparam Tag Empty marker struct identifying the binary layout.
          * @param cursor Source cursor; advances as the binding reads.
          * @param dest Target property container (cleared / populated in place).
@@ -125,6 +134,9 @@ namespace VTX {
                     dest.entity_type_id = it->second;
                 }
             }
+
+            this->PrepareContainer(dest);
+
             BinaryBinding<Tag>::Transfer(cursor, dest, *this, struct_name);
             dest.content_hash = Helpers::CalculateContainerHash(dest);
         }

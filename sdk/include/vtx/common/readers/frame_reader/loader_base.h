@@ -6,6 +6,7 @@
 #pragma once
 #include "vtx/common/vtx_property_cache.h"
 #include "vtx/common/vtx_types.h"
+#include "vtx/common/vtx_types_helpers.h"
 
 #include <concepts>
 #include <cstddef>
@@ -151,6 +152,20 @@ namespace VTX {
         }
 
     protected:
+        /**
+         *The Derived loader MUST provide:
+         *const std::vector<int32_t>* GetTypeMaxIndices(int32_t entity_type_id) const;
+         */
+        void PrepareContainer(PropertyContainer& dest) {
+            if (dest.entity_type_id < 0) {
+                return;
+            }
+            const std::vector<int32_t>* type_max_indices = AsDerived().GetTypeMaxIndices(dest.entity_type_id);
+            if (type_max_indices != nullptr) {
+                Helpers::ResizeContainerToMaxIndices(dest, *type_max_indices);
+            }
+        }
+
         template <typename It>
         void FillFlatArray(PropertyContainer& dest, FieldType type, int32_t idx, const It& src) {
             using ValueType = std::ranges::range_value_t<It>;

@@ -47,6 +47,13 @@ namespace VTX {
             return &prop_it->second;
         }
 
+        const std::vector<int32_t>* GetTypeMaxIndices(int32_t entity_type_id) const {
+            auto struct_it = cache_->structs.find(entity_type_id);
+            if (struct_it == cache_->structs.end())
+                return nullptr;
+            return &struct_it->second.type_max_indices;
+        }
+
 
         template <typename ProtoType>
         void Load(const ProtoType& src, PropertyContainer& dest, const std::string& struct_name) {
@@ -56,6 +63,9 @@ namespace VTX {
                     dest.entity_type_id = it->second;
                 }
             }
+
+            this->PrepareContainer(dest);
+
             ProtoBinding<ProtoType>::Transfer(src, dest, *this, struct_name);
             dest.content_hash = Helpers::CalculateContainerHash(dest);
         }
