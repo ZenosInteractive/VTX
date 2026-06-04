@@ -122,22 +122,34 @@ struct VTX::BinaryBinding<BinArenaFrame> {
         bucket.entities.clear();
         bucket.unique_ids.clear();
 
+        // This hand-written binding adds entities directly -- it does NOT go
+        // through GenericLoaderBase::ExtractActor -- so it enforces the same
+        // per-bucket invariant by hand: append an entity only when its unique_id
+        // (string_properties[0]) is not already present in the bucket.
+        auto try_add = [&bucket](VTX::PropertyContainer&& pc) {
+            if (pc.string_properties.empty() || bucket.HasUniqueId(pc.string_properties.front())) {
+                return;
+            }
+            bucket.unique_ids.push_back(pc.string_properties.front());
+            bucket.entities.push_back(std::move(pc));
+        };
+
         const uint32_t player_count = cur.Read<uint32_t>();
         for (uint32_t i = 0; i < player_count; ++i) {
-            auto& pc = bucket.entities.emplace_back();
+            VTX::PropertyContainer pc;
             loader.Load<BinPlayer>(cur, pc, VTX::ArenaSchema::Player::StructName);
-            bucket.unique_ids.push_back(pc.string_properties.front());
+            try_add(std::move(pc));
         }
 
         const uint32_t proj_count = cur.Read<uint32_t>();
         for (uint32_t i = 0; i < proj_count; ++i) {
-            auto& pc = bucket.entities.emplace_back();
+            VTX::PropertyContainer pc;
             loader.Load<BinProjectile>(cur, pc, VTX::ArenaSchema::Projectile::StructName);
-            bucket.unique_ids.push_back(pc.string_properties.front());
+            try_add(std::move(pc));
         }
 
-        auto& mc = bucket.entities.emplace_back();
+        VTX::PropertyContainer mc;
         loader.Load<BinMatchState>(cur, mc, VTX::ArenaSchema::MatchState::StructName);
-        bucket.unique_ids.push_back(mc.string_properties.front());
+        try_add(std::move(mc));
     }
 };
