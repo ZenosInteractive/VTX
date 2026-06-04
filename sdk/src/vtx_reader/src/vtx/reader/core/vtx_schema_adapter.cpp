@@ -15,7 +15,8 @@ namespace VTX {
 
         SchemaRegistry temp_registry;
         if (!temp_registry.LoadFromRawString(json_str)) {
-            VTX_ERROR("Failed to parse embed json schema.");
+            VTX_ERROR("Embedded schema is invalid; continuing without property resolution:\n{}",
+                      temp_registry.GetValidationResult().ToString());
             return;
         }
 

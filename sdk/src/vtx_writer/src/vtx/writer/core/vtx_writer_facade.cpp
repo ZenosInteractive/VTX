@@ -4,12 +4,28 @@
 
 #include "vtx/writer/core/writer.h"
 
+#include "vtx/common/readers/schema_reader/schema_registry.h"
+#include "vtx/common/vtx_logger.h"
 #include "vtx/writer/policies/formatters/flatbuffers_vtx_policy.h"
 #include "vtx/writer/policies/formatters/protobuff_vtx_policy.h"
 #include "vtx/writer/policies/sinks/file_sink.h"
 #include "vtx/writer/policies/sinks/network_sink.h"
 
 namespace VTX {
+
+    namespace {
+        bool WriterSchemaIsAcceptable(const std::string& schema_json_path) {
+            if (schema_json_path.empty()) {
+                return true;
+            }
+            SchemaRegistry probe;
+            if (!probe.LoadFromJson(schema_json_path)) {
+                VTX_ERROR("Refusing to create writer: schema '{}' is missing or invalid.", schema_json_path);
+                return false;
+            }
+            return true;
+        }
+    } // namespace
 
     template <typename SinkPolicyType>
     class WriterFacadeImpl : public IVtxWriterFacade {
@@ -52,6 +68,9 @@ namespace VTX {
 
 
     std::unique_ptr<IVtxWriterFacade> CreateFlatBuffersWriterFacade(const WriterFacadeConfig& config) {
+        if (!WriterSchemaIsAcceptable(config.schema_json_path)) {
+            return nullptr;
+        }
         using SinkType = ChunkedFileSink<VTX::FlatBuffersVtxPolicy>;
 
         ReplayWriter<SinkType>::Config internal_cfg;
@@ -70,6 +89,9 @@ namespace VTX {
     }
 
     std::unique_ptr<IVtxWriterFacade> CreateProtobuffWriterFacade(const WriterFacadeConfig& config) {
+        if (!WriterSchemaIsAcceptable(config.schema_json_path)) {
+            return nullptr;
+        }
         using SinkType = VTX::ChunkedFileSink<VTX::ProtobufVtxPolicy>;
 
         ReplayWriter<SinkType>::Config internal_cfg;
@@ -88,6 +110,9 @@ namespace VTX {
     }
 
     std::unique_ptr<IVtxWriterFacade> CreateFlatBuffersNetworkWriterFacade(const NetworkWriterFacadeConfig& config) {
+        if (!WriterSchemaIsAcceptable(config.schema_json_path)) {
+            return nullptr;
+        }
         using SinkType = ChunkedNetworkSink<VTX::FlatBuffersVtxPolicy>;
 
         ReplayWriter<SinkType>::Config internal_cfg;
@@ -106,6 +131,9 @@ namespace VTX {
     }
 
     std::unique_ptr<IVtxWriterFacade> CreateProtobuffNetworkWriterFacade(const NetworkWriterFacadeConfig& config) {
+        if (!WriterSchemaIsAcceptable(config.schema_json_path)) {
+            return nullptr;
+        }
         using SinkType = ChunkedNetworkSink<VTX::ProtobufVtxPolicy>;
 
         ReplayWriter<SinkType>::Config internal_cfg;

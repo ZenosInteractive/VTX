@@ -58,6 +58,7 @@ add_executable(vtx_tests
     common/test_vtx_game_times_state.cpp
     common/test_schema_registry.cpp
     common/test_schema_registry_errors.cpp
+    common/test_schema_validator.cpp
     common/test_property_address_cache.cpp
     common/test_content_hash_edges.cpp
     common/test_time_utils.cpp
@@ -146,5 +147,17 @@ if(TARGET vtx_sample_diff)
         LABELS "vtx;samples"
         TIMEOUT 60
         WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/samples"
+    )
+endif()
+
+# Self-checking schema-validator sample (inline schemas; exit 0 == all checks pass).
+if(TARGET vtx_sample_schema_validation)
+    add_test(
+        NAME vtx_sample_schema_validation_smoke
+        COMMAND $<TARGET_FILE:vtx_sample_schema_validation>
+    )
+    set_tests_properties(vtx_sample_schema_validation_smoke PROPERTIES
+        LABELS "vtx;samples"
+        TIMEOUT 60
     )
 endif()

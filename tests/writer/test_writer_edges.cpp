@@ -6,6 +6,7 @@
 
 #include <gtest/gtest.h>
 #include <filesystem>
+#include <fstream>
 #include <memory>
 #include <string>
 
@@ -240,4 +241,42 @@ TEST(WriterEdges, GiantFrameLargerThanChunkMaxBytes) {
     ASSERT_EQ(entities.size(), 1u);
     ASSERT_GE(entities[0].string_properties.size(), 2u);
     EXPECT_EQ(entities[0].string_properties[1].size(), 64u * 1024u);
+}
+
+// ---------------------------------------------------------------------------
+// Schema validation gate -- a writer factory refuses to start with a bad
+// schema (returns nullptr) instead of silently producing a broken replay.
+// An empty schema path is allowed; a *provided* one must exist and validate.
+// ---------------------------------------------------------------------------
+
+TEST(WriterSchemaGate, ReturnsNullForMissingSchemaFile) {
+    auto cfg = MakeBaseConfig("schemagate_missing.vtx", "sg-missing");
+    cfg.schema_json_path = VtxTest::OutputPath("definitely_missing_schema_84213.json");
+
+    EXPECT_FALSE(VTX::CreateFlatBuffersWriterFacade(cfg)) << "missing schema must yield no writer";
+    EXPECT_FALSE(VTX::CreateProtobuffWriterFacade(cfg)) << "missing schema must yield no writer";
+}
+
+TEST(WriterSchemaGate, ReturnsNullForInvalidSchema) {
+    // A schema with an unknown typeId -- the validator rejects it.
+    const std::string bad_path = VtxTest::OutputPath("schemagate_invalid_schema.json");
+    {
+        std::ofstream out(bad_path);
+        out << R"({"version":"1.0.0","buckets":["entity"],"property_mapping":[)"
+               R"({"struct":"S","values":[{"name":"X","typeId":"Bogus","containerType":"None",)"
+               R"("keyId":"None","structType":"","meta":{"defaultValue":"","fixedArrayDim":1}}]}]})";
+    }
+
+    auto cfg = MakeBaseConfig("schemagate_invalid.vtx", "sg-invalid");
+    cfg.schema_json_path = bad_path;
+
+    EXPECT_FALSE(VTX::CreateFlatBuffersWriterFacade(cfg)) << "invalid schema must yield no writer";
+    EXPECT_FALSE(VTX::CreateProtobuffWriterFacade(cfg)) << "invalid schema must yield no writer";
+}
+
+TEST(WriterSchemaGate, SucceedsForValidSchema) {
+    auto cfg = MakeBaseConfig("schemagate_valid.vtx", "sg-valid"); // MakeBaseConfig uses test_schema.json
+    auto writer = VTX::CreateFlatBuffersWriterFacade(cfg);
+    ASSERT_TRUE(writer) << "a valid schema must produce a writer";
+    writer->Stop();
 }

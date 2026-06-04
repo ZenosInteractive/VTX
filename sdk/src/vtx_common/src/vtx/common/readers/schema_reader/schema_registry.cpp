@@ -6,49 +6,15 @@
 
 #include "vtx/common/vtx_logger.h"
 #include "vtx/common/readers/schema_reader/game_schema_types.h"
+#include "vtx/common/readers/schema_reader/schema_enums.h"
+#include "vtx/common/readers/schema_reader/schema_validator.h"
 
 
 using json = nlohmann::json;
 
 
-static VTX::FieldType StringToTypeEnum(const std::string& type) {
-    static const std::unordered_map<std::string, VTX::FieldType> map_type = {
-        {"int8", VTX::FieldType::Int8},           {"Int8", VTX::FieldType::Int8},
-        {"uint8", VTX::FieldType::Int8},          {"UInt8", VTX::FieldType::Int8},
-        {"int32", VTX::FieldType::Int32},         {"Int32", VTX::FieldType::Int32},
-        {"uint32", VTX::FieldType::Int32},        {"UInt32", VTX::FieldType::Int32},
-        {"int", VTX::FieldType::Int32},           {"Int", VTX::FieldType::Int32},
-        {"int64", VTX::FieldType::Int64},         {"Int64", VTX::FieldType::Int64},
-        {"uint64", VTX::FieldType::Int64},        {"UInt64", VTX::FieldType::Int64},
-        {"long", VTX::FieldType::Int64},          {"Long", VTX::FieldType::Int64},
-        {"float", VTX::FieldType::Float},         {"Float", VTX::FieldType::Float},
-        {"double", VTX::FieldType::Double},       {"Double", VTX::FieldType::Double},
-        {"bool", VTX::FieldType::Bool},           {"Bool", VTX::FieldType::Bool},
-        {"string", VTX::FieldType::String},       {"String", VTX::FieldType::String},
-        {"vector", VTX::FieldType::Vector},       {"Vector", VTX::FieldType::Vector},
-        {"quat", VTX::FieldType::Quat},           {"Quat", VTX::FieldType::Quat},
-        {"transform", VTX::FieldType::Transform}, {"Transform", VTX::FieldType::Transform},
-        {"struct", VTX::FieldType::Struct},       {"Struct", VTX::FieldType::Struct}};
-
-    auto it = map_type.find(type);
-    if (it != map_type.end())
-        return it->second;
-
-    return VTX::FieldType::None;
-};
-
-
-static VTX::FieldContainerType StringToContainerEnum(const std::string& container) {
-    static const std::unordered_map<std::string, VTX::FieldContainerType> map_container = {
-        {"array", VTX::FieldContainerType::Array},
-        {"map", VTX::FieldContainerType::Map},
-    };
-
-    auto it = map_container.find(container);
-    if (it != map_container.end())
-        return it->second;
-
-    return VTX::FieldContainerType::None;
+VTX::SchemaValidationResult VTX::SchemaRegistry::ValidateSchema(const std::string& raw_json) {
+    return VTX::SchemaValidator {}.Validate(raw_json);
 }
 
 VTX::SchemaRegistry::SchemaRegistry() {
@@ -85,6 +51,21 @@ bool VTX::SchemaRegistry::LoadFromRawString(const std::string& raw_json) {
         VTX_ERROR("JSON does not contain 'property_mapping'.");
         b_is_valid_ = false;
         return b_is_valid_;
+    }
+
+    // Reject malformed schemas up front -- before resolving anything into
+    // indices and long before a frame is built. Unknown type/container values,
+    // duplicate names, unresolved struct references, bad defaults, etc. are
+    // fatal; warnings are surfaced but do not block the load.
+    last_validation_ = VTX::SchemaValidator {}.Validate(json_content_);
+    if (last_validation_.HasErrors()) {
+        VTX_ERROR("Schema validation failed ({} error(s), {} warning(s)):\n{}", last_validation_.ErrorCount(),
+                  last_validation_.WarningCount(), last_validation_.ToString());
+        b_is_valid_ = false;
+        return b_is_valid_;
+    }
+    if (last_validation_.WarningCount() > 0) {
+        VTX_WARN("Schema validation warnings:\n{}", last_validation_.ToString());
     }
 
     structs_.clear();
@@ -131,18 +112,13 @@ bool VTX::SchemaRegistry::LoadFromRawString(const std::string& raw_json) {
                 field.name = field_json.value("name", "");
                 field.struct_type = field_json.value("structType", "");
 
-                std::string container = field_json.value("containerType", "None");
-                field.container_type = StringToContainerEnum(container);
+                // Validation already guaranteed these resolve; value_or keeps the
+                // historical "unknown -> None" fallback as a defensive default.
+                const std::string container = field_json.value("containerType", "None");
+                field.container_type = VTX::ParseContainerType(container).value_or(VTX::FieldContainerType::None);
 
-                field.type_id = VTX::FieldType::None;
-                if (field_json.contains("typeId")) {
-                    field.type_id = StringToTypeEnum(field_json.value("typeId", "None"));
-                }
-
-                field.key_id = VTX::FieldType::None;
-                if (field_json.contains("keyId")) {
-                    field.key_id = StringToTypeEnum(field_json.value("keyId", "None"));
-                }
+                field.type_id = VTX::ParseFieldType(field_json.value("typeId", "None")).value_or(VTX::FieldType::None);
+                field.key_id = VTX::ParseFieldType(field_json.value("keyId", "None")).value_or(VTX::FieldType::None);
 
                 field.index = index_counters[{field.type_id, field.container_type}]++;
 
