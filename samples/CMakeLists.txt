@@ -10,6 +10,7 @@
 #     vtx_sample_diff                basic_diff.cpp           hash-based diff
 #     vtx_sample_ready_api           ready_api.cpp            chunk-0 ready signalling
 #     vtx_sample_post_process_write  post_process_write.cpp   writer-side post-processor
+#     vtx_sample_schema_validation   schema_validation.cpp    schema validator demo + self-check
 #
 #   Streaming sources (live frames -> .vtx):
 #     vtx_sample_pipe_producer       pipe_producer.cpp        emits length-prefixed JSON frames
@@ -58,6 +59,11 @@ vtx_configure_sample(vtx_sample_write)
 add_executable(vtx_sample_diff basic_diff.cpp)
 target_link_libraries(vtx_sample_diff PRIVATE vtx_reader vtx_differ)
 vtx_configure_sample(vtx_sample_diff)
+
+# --- schema_validation (schema validator demo + self-check) ---
+add_executable(vtx_sample_schema_validation schema_validation.cpp)
+target_link_libraries(vtx_sample_schema_validation PRIVATE vtx_common)
+vtx_configure_sample(vtx_sample_schema_validation)
 
 # --- ready_api (chunk-0 "ready" signalling: poll / block / callback) ---
 add_executable(vtx_sample_ready_api ready_api.cpp)

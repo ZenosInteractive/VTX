@@ -15,6 +15,7 @@
 #include <google/protobuf/stubs/port.h>
 
 #include "game_schema_types.h"
+#include "schema_validation_result.h"
 #include "vtx/common/vtx_property_cache.h"
 #include "vtx/common/vtx_types.h"
 
@@ -89,13 +90,26 @@ namespace VTX {
 
         const VTX::PropertyAddressCache& GetPropertyCache() const { return property_cache_; }
 
+        /**
+         * @brief Validate a schema document without loading it.
+         * @details Runs the full SchemaValidator rule set over @p raw_json and
+         * returns the collected issues. Useful for tooling and pre-flight checks.
+         */
+        static SchemaValidationResult ValidateSchema(const std::string& raw_json);
+
+        /**
+         * @brief The validation result produced by the most recent Load* call.
+         */
+        const SchemaValidationResult& GetValidationResult() const { return last_validation_; }
+
     private:
         std::string json_content_;
         std::unordered_map<std::string, SchemaStruct> structs_; ///< Storage map: Struct Name -> Definition.
         std::unordered_map<std::string, int32_t> struct_type_ids_;
         VTX::PropertyAddressCache property_cache_;
         int32_t current_type_id_ = 0;
-        bool b_is_valid_; ///< Internal validity flag.
+        bool b_is_valid_;                        ///< Internal validity flag.
+        SchemaValidationResult last_validation_; ///< Issues from the most recent Load*.
     };
 
 } // namespace VTX
