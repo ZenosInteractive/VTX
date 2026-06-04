@@ -213,3 +213,37 @@ TEST(NativeLoader, HasVtxConvertConceptDetectsAdlOverload) {
 
     SUCCEED();
 }
+
+// AppendActorList funnels every entity through GenericLoaderBase::ExtractActor,
+// which enforces the per-bucket invariant: a unique_id may appear at most once.
+// A duplicate id in the source list is rejected (skipped) -- the first
+// occurrence wins and no second entity/id is appended.
+TEST(NativeLoader, AppendActorListRejectsDuplicateUniqueIdWithinBucket) {
+    VTX::SchemaRegistry schema;
+    ASSERT_TRUE(schema.LoadFromJson(SchemaPath()));
+
+    VTX::GenericNativeLoader loader(schema.GetPropertyCache());
+
+    std::vector<vtx_native_loader_test::PlainPlayer> players(3);
+    players[0].unique_id = "p1";
+    players[0].health = 10.0f;
+    players[1].unique_id = "p2";
+    players[1].health = 20.0f;
+    players[2].unique_id = "p1"; // duplicate of players[0] -- must be rejected
+    players[2].health = 30.0f;
+
+    VTX::Bucket bucket;
+    loader.AppendActorList(bucket, "Player", players,
+                           [](const vtx_native_loader_test::PlainPlayer& p) { return p.unique_id; });
+
+    // Only the two distinct ids survive, in first-seen order.
+    ASSERT_EQ(bucket.unique_ids.size(), 2u);
+    ASSERT_EQ(bucket.entities.size(), 2u);
+    EXPECT_EQ(bucket.unique_ids[0], "p1");
+    EXPECT_EQ(bucket.unique_ids[1], "p2");
+
+    // The surviving "p1" is the FIRST occurrence (health 10), not the dropped
+    // duplicate (health 30).
+    ASSERT_FALSE(bucket.entities[0].float_properties.empty());
+    EXPECT_FLOAT_EQ(bucket.entities[0].float_properties[0], 10.0f);
+}

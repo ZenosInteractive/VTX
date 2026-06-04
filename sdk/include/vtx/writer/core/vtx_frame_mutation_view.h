@@ -130,6 +130,36 @@ namespace VTX {
             return EntityMutator(bucket_->entities.back());
         }
 
+        /**
+         * @brief Append a new entity tagged with @p unique_id.
+         */
+        EntityMutator AddEntity(std::string unique_id) {
+            if (!bucket_)
+                return {};
+            if (bucket_->HasUniqueId(unique_id))
+                return {};
+            bucket_->entities.emplace_back();
+            bucket_->unique_ids.push_back(std::move(unique_id));
+            return EntityMutator(bucket_->entities.back());
+        }
+
+        /**
+         * @brief Assign (or rename) the unique_id of an existing entity.
+         */
+        bool SetUniqueId(uint32_t entity_index, std::string unique_id) {
+            if (!bucket_ || entity_index >= bucket_->entities.size())
+                return false;
+            if (bucket_->unique_ids.size() < bucket_->entities.size())
+                bucket_->unique_ids.resize(bucket_->entities.size());
+            for (size_t i = 0; i < bucket_->unique_ids.size(); ++i) {
+                if (i != entity_index && bucket_->unique_ids[i] == unique_id) {
+                    return false;
+                }
+            }
+            bucket_->unique_ids[entity_index] = std::move(unique_id);
+            return true;
+        }
+
         void RemoveEntity(uint32_t entity_index) {
             if (!bucket_ || entity_index >= bucket_->entities.size())
                 return;

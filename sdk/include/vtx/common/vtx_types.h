@@ -20,6 +20,7 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -472,6 +473,18 @@ namespace VTX {
         std::vector<PropertyContainer> entities; ///< The actual properties for each entity/ID.
         std::vector<EntityRange>
             type_ranges; //< Ranges to know were a type starts and ends, assumes entites are ordered by type
+
+        /**
+         * @brief True if @p id is already present in this bucket's unique_ids.
+         */
+        bool HasUniqueId(std::string_view id) const {
+            for (const std::string& existing : unique_ids) {
+                if (existing == id) {
+                    return true;
+                }
+            }
+            return false;
+        }
 
         std::span<const PropertyContainer> GetEntitiesOfType(int32_t typeId) const {
             if (typeId >= 0 && typeId < type_ranges.size()) {

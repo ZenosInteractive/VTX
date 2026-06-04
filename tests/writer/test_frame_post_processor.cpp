@@ -334,3 +334,42 @@ TEST_F(WriterPostProcessorTest, ClearPostProcessorCallsClearAndUnregisters) {
     writer->Flush();
     writer->Stop();
 }
+
+// ---------------------------------------------------------------------------
+// BucketMutator unique_id enforcement (post-processing / mutation path)
+// ---------------------------------------------------------------------------
+
+TEST(BucketMutator, AddEntityWithIdRejectsDuplicate) {
+    VTX::Bucket bucket;
+    VTX::BucketMutator bm(bucket);
+
+    EXPECT_TRUE(bm.AddEntity("a").valid());
+    EXPECT_TRUE(bm.AddEntity("b").valid());
+    EXPECT_FALSE(bm.AddEntity("a").valid()); // duplicate id -> rejected, nothing added
+
+    ASSERT_EQ(bucket.entities.size(), 2u);
+    ASSERT_EQ(bucket.unique_ids.size(), 2u);
+    EXPECT_EQ(bucket.unique_ids[0], "a");
+    EXPECT_EQ(bucket.unique_ids[1], "b");
+}
+
+TEST(BucketMutator, SetUniqueIdEnforcesUniquenessAtAssignment) {
+    VTX::Bucket bucket;
+    VTX::BucketMutator bm(bucket);
+
+    // Two anonymous entities: the no-arg AddEntity() leaves an empty placeholder
+    // id, the real id is assigned afterwards via SetUniqueId.
+    bm.AddEntity();
+    bm.AddEntity();
+    ASSERT_EQ(bucket.entities.size(), 2u);
+
+    EXPECT_TRUE(bm.SetUniqueId(0, "x"));
+    EXPECT_FALSE(bm.SetUniqueId(1, "x")); // "x" already used by entity 0 -> rejected
+    EXPECT_TRUE(bm.SetUniqueId(1, "y"));
+    EXPECT_TRUE(bm.SetUniqueId(0, "x")); // re-assigning the same id to the same entity is a no-op
+
+    EXPECT_EQ(bucket.unique_ids[0], "x");
+    EXPECT_EQ(bucket.unique_ids[1], "y");
+
+    EXPECT_FALSE(bm.SetUniqueId(99, "z")); // out-of-range index -> rejected
+}

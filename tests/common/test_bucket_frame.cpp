@@ -94,3 +94,22 @@ TEST(Bucket, GetEntitiesOfTypeWithEnumOverloadCompiles) {
     auto players = bucket.GetEntitiesOfType(ArenaEntity::Player);
     EXPECT_EQ(players.size(), 1u);
 }
+
+// ---------------------------------------------------------------------------
+// Bucket::HasUniqueId
+// ---------------------------------------------------------------------------
+
+TEST(Bucket, HasUniqueIdDetectsPresence) {
+    VTX::Bucket bucket;
+    bucket.unique_ids = {"alpha", "beta"};
+
+    EXPECT_TRUE(bucket.HasUniqueId("alpha"));
+    EXPECT_TRUE(bucket.HasUniqueId("beta"));
+    EXPECT_FALSE(bucket.HasUniqueId("gamma"));
+}
+
+TEST(Bucket, HasUniqueIdEmptyBucketIsAlwaysFalse) {
+    VTX::Bucket bucket;
+    EXPECT_FALSE(bucket.HasUniqueId("anything"));
+    EXPECT_FALSE(bucket.HasUniqueId(""));
+}

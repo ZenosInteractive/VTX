@@ -259,9 +259,13 @@ namespace VTX {
 
         template <typename Src, typename IdFunc>
         void ExtractActor(const Src& src, Bucket& bucket, const std::string& schema_type, IdFunc id_func) {
+            auto unique_id = id_func(src);
+            if (bucket.HasUniqueId(unique_id)) {
+                return;
+            }
             PropertyContainer& entity = bucket.entities.emplace_back();
             AsDerived().Load(src, entity, schema_type);
-            bucket.unique_ids.push_back(id_func(src));
+            bucket.unique_ids.push_back(std::move(unique_id));
         }
     };
 } // namespace VTX
