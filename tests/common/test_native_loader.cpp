@@ -322,3 +322,43 @@ TEST(NativeLoader, AppendActorListRejectsDuplicateUniqueIdWithinBucket) {
     ASSERT_FALSE(bucket.entities[0].float_properties.empty());
     EXPECT_FLOAT_EQ(bucket.entities[0].float_properties[0], 10.0f);
 }
+
+// Unknown entity type names must fail at creation -- never become a ghost
+// (entity_type_id == -1) that the serializer would silently drop later.
+TEST(NativeLoader, AppendActorListRejectsUnknownEntityType) {
+    VTX::SchemaRegistry schema;
+    ASSERT_TRUE(schema.LoadFromJson(SchemaPath()));
+    VTX::GenericNativeLoader loader(schema.GetPropertyCache());
+
+    std::vector<vtx_native_loader_test::PlainPlayer> players(2);
+    players[0].unique_id = "p1";
+    players[1].unique_id = "p2";
+
+    VTX::Bucket bucket;
+    // "GhostType" is not in the schema -> rejected at creation: no entity, no id.
+    loader.AppendActorList(bucket, "GhostType", players,
+                           [](const vtx_native_loader_test::PlainPlayer& p) { return p.unique_id; });
+    EXPECT_TRUE(bucket.entities.empty());
+    EXPECT_TRUE(bucket.unique_ids.empty());
+
+    // A known type still works -- the gate only rejects unknown names.
+    loader.AppendActorList(bucket, "Player", players,
+                           [](const vtx_native_loader_test::PlainPlayer& p) { return p.unique_id; });
+    EXPECT_EQ(bucket.entities.size(), 2u);
+    EXPECT_EQ(bucket.unique_ids.size(), 2u);
+}
+
+TEST(NativeLoader, DirectLoadDoesNotPopulateUnknownEntityType) {
+    VTX::SchemaRegistry schema;
+    ASSERT_TRUE(schema.LoadFromJson(SchemaPath()));
+    VTX::GenericNativeLoader loader(schema.GetPropertyCache());
+
+    vtx_native_loader_test::PlainPlayer p {};
+    p.health = 50.0f;
+
+    VTX::PropertyContainer dest;
+    loader.Load(p, dest, "GhostType"); // unknown type -> not resolved, not populated
+
+    EXPECT_EQ(dest.entity_type_id, -1);
+    EXPECT_TRUE(dest.float_properties.empty());
+}
