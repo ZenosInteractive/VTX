@@ -62,6 +62,16 @@ namespace VTX {
         }
 
         /**
+         * @brief Map a struct name to its entity type id, or -1 if unknown.
+         * @details Lets the base reject entity creation when a type name does not
+         *          resolve to a schema struct.
+         */
+        int32_t GetTypeId(const std::string& struct_name) const {
+            auto it = cache_->name_to_id.find(struct_name);
+            return it == cache_->name_to_id.end() ? -1 : it->second;
+        }
+
+        /**
          * @brief Load a single C++ instance into a PropertyContainer.
          * @details Sets dest.entity_type_id (if not yet resolved), pre-sizes the
          *          container to the schema's per-type max, iterates
@@ -73,11 +83,8 @@ namespace VTX {
             static_assert(has_struct_mapping_v<T>,
                           "GenericNativeLoader::Load<T> requires a StructMapping<T> specialization.");
 
-            if (dest.entity_type_id == -1) {
-                auto it = cache_->name_to_id.find(struct_name);
-                if (it != cache_->name_to_id.end()) {
-                    dest.entity_type_id = it->second;
-                }
+            if (!this->EnsureResolvedType(dest, struct_name)) {
+                return;
             }
 
             this->PrepareContainer(dest);

@@ -268,17 +268,36 @@ namespace VTX {
             }
         }
 
+        bool EnsureResolvedType(PropertyContainer& dest, const std::string& struct_name) {
+            if (dest.entity_type_id != -1) {
+                return true;
+            }
+            const int32_t type_id = AsDerived().GetTypeId(struct_name);
+            if (type_id < 0) {
+                VTX_ERROR("Unknown entity type '{}' is not in the schema.", struct_name);
+                return false;
+            }
+            dest.entity_type_id = type_id;
+            return true;
+        }
+
     private:
         Derived& AsDerived() { return static_cast<Derived&>(*this); }
         const Derived& AsDerived() const { return static_cast<const Derived&>(*this); }
 
         template <typename Src, typename IdFunc>
         void ExtractActor(const Src& src, Bucket& bucket, const std::string& schema_type, IdFunc id_func) {
+            const int32_t type_id = AsDerived().GetTypeId(schema_type);
+            if (type_id < 0) {
+                VTX_ERROR("Unknown entity type '{}' is not in the schema; entity rejected at creation.", schema_type);
+                return;
+            }
             auto unique_id = id_func(src);
             if (bucket.HasUniqueId(unique_id)) {
                 return;
             }
             PropertyContainer& entity = bucket.entities.emplace_back();
+            entity.entity_type_id = type_id;
             AsDerived().Load(src, entity, schema_type);
             bucket.unique_ids.push_back(std::move(unique_id));
         }
