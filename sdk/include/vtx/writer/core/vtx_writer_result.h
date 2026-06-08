@@ -1,8 +1,7 @@
 /**
  * @file vtx_writer_result.h
  * @brief Per-frame and per-pipeline outcome types for the writer.
-
- * @details Makes frame rejection observable.
+ *
  * @author Zenos Interactive
  */
 #pragma once
@@ -11,55 +10,43 @@
 #include <cstdint>
 #include <string>
 #include <utility>
+#include <vector>
+
+#include "vtx/common/vtx_diagnostics.h"
 
 namespace VTX {
-
-    /**
-     * @brief Why a frame did not enter the chunk pipeline.
-     */
-    enum class FrameRejectReason {
-        None = 0,
-        GameTimeRejected,
-        ValidationFailed,
-    };
-
-    inline const char* ToString(FrameRejectReason reason) {
-        switch (reason) {
-        case FrameRejectReason::None:
-            return "None";
-        case FrameRejectReason::GameTimeRejected:
-            return "GameTimeRejected";
-        case FrameRejectReason::ValidationFailed:
-            return "ValidationFailed";
-        }
-        return "Unknown";
-    }
 
     /**
      * @brief Outcome of a single TryRecordFrame() call.
      */
     struct RecordResult {
         bool written = false;
-        FrameRejectReason reason = FrameRejectReason::None;
-        std::string detail;
-        int32_t frame_index = -1;
-
+        VtxError error {};
+        uint32_t frame_index = -1;
         bool IsWritten() const { return written; }
 
         static RecordResult MadeWritten(int32_t index) {
             RecordResult r;
             r.written = true;
-            r.reason = FrameRejectReason::None;
             r.frame_index = index;
             return r;
         }
 
-        static RecordResult MadeRejected(FrameRejectReason reason, std::string detail) {
+        static RecordResult MadeRejected(VtxError error) {
             RecordResult r;
             r.written = false;
-            r.reason = reason;
-            r.detail = std::move(detail);
+            r.error = std::move(error);
             return r;
+        }
+
+        static RecordResult MadeRejected(VtxErrorCode code, std::string message,
+                                         const char* source_api = "TryRecordFrame") {
+            VtxError error;
+            error.code = code;
+            error.severity = Severity::Error;
+            error.message = std::move(message);
+            error.source_api = source_api;
+            return MadeRejected(std::move(error));
         }
     };
 
@@ -72,6 +59,7 @@ namespace VTX {
         size_t skipped = 0;
         size_t validation_errors = 0;
         size_t timer_errors = 0;
+        std::vector<VtxError> errors;
 
         size_t Total() const { return written + rejected + skipped; }
 
@@ -81,11 +69,12 @@ namespace VTX {
                 return;
             }
             ++rejected;
-            if (result.reason == FrameRejectReason::ValidationFailed) {
-                ++validation_errors;
-            } else if (result.reason == FrameRejectReason::GameTimeRejected) {
+            if (result.error.code == VtxErrorCode::GameTimeRejected) {
                 ++timer_errors;
+            } else {
+                ++validation_errors;
             }
+            errors.push_back(result.error);
         }
     };
 

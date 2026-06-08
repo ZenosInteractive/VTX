@@ -72,14 +72,14 @@ namespace VTX {
 
             if (!timer_.AddTimeRegistry(game_time_register)) {
                 timer_.Rollback();
-                return RecordResult::MadeRejected(FrameRejectReason::GameTimeRejected,
+                return RecordResult::MadeRejected(VtxErrorCode::GameTimeRejected,
                                                   "game-time registry rejected by the timer");
             }
 
             const int32_t prospective_index = total_frames_ + 1;
             if (!timer_.ResolveGameTimes(prospective_index)) {
                 timer_.Rollback();
-                return RecordResult::MadeRejected(FrameRejectReason::GameTimeRejected,
+                return RecordResult::MadeRejected(VtxErrorCode::GameTimeRejected,
                                                   "game-time could not be resolved (non-monotonic / invalid)");
             }
 
@@ -103,7 +103,7 @@ namespace VTX {
             std::string validation_detail;
             if (!FinalizeFrame(native_frame, validation_detail)) {
                 timer_.Rollback();
-                return RecordResult::MadeRejected(FrameRejectReason::ValidationFailed, std::move(validation_detail));
+                return RecordResult::MadeRejected(VtxErrorCode::EntityTypeUnresolved, std::move(validation_detail));
             }
 
             if (retain_snapshot_) {

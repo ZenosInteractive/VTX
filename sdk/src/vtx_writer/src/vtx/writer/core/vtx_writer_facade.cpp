@@ -43,7 +43,7 @@ namespace VTX {
         RecordResult TryRecordFrame(VTX::Frame& native_frame,
                                     const VTX::GameTime::GameTimeRegister& game_time_register) override {
             if (stopped_) {
-                return RecordResult::MadeRejected(FrameRejectReason::None, "writer already stopped");
+                return RecordResult::MadeRejected(VtxErrorCode::InvalidArgument, "writer already stopped");
             }
             return writer_.TryRecordFrame(native_frame, game_time_register);
         }

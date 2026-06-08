@@ -1,7 +1,10 @@
 #pragma once
 #include "vtx/common/vtx_concepts.h"
+#include "vtx/common/vtx_diagnostics.h"
 #include "vtx/common/vtx_logger.h"
 #include "vtx/common/vtx_property_cache.h"
+#include "vtx/common/readers/schema_reader/schema_enums.h"
+#include <string>
 #include <type_traits>
 
 namespace VTX {
@@ -64,6 +67,35 @@ namespace VTX {
                 return default_val;
             }
             return values[key.index];
+        }
+
+        template <VtxScalarType T>
+        VtxResult<T> TryGet(PropertyKey<T> key) const {
+            if (!data_) {
+                VtxError error;
+                error.code = VtxErrorCode::InvalidArgument;
+                error.message = "entity view is empty";
+                error.source_api = "TryGet";
+                return VtxResult<T>::Failure(error);
+            }
+            if (!key.IsValid()) {
+                VtxError error;
+                error.code = VtxErrorCode::InvalidArgument;
+                error.message = "invalid property key";
+                error.source_api = "TryGet";
+                return VtxResult<T>::Failure(error);
+            }
+            constexpr auto MemberPtr = GetContainerMember<T>();
+            const auto& values = data_->*MemberPtr;
+            if (static_cast<size_t>(key.index) >= values.size()) {
+                VtxError error;
+                error.code = VtxErrorCode::FieldIndexOutOfRange;
+                error.message = "property index " + std::to_string(key.index) + " is out of range (size " +
+                                std::to_string(values.size()) + ")";
+                error.source_api = "TryGet";
+                return VtxResult<T>::Failure(error);
+            }
+            return VtxResult<T>::Success(values[key.index]);
         }
 
         template <VtxArrayType T>
@@ -178,6 +210,83 @@ namespace VTX {
                 return Get<T>(structId, propName);
             }
             return PropertyKey<T> {-1};
+        }
+
+        template <VtxScalarType T>
+        VtxResult<PropertyKey<T>> TryResolve(int32_t structId, const std::string& propName) const {
+            const auto structIt = cache_.structs.find(structId);
+            if (structIt == cache_.structs.end()) {
+                VtxError error;
+                error.code = VtxErrorCode::NotFound;
+                error.message = "struct id " + std::to_string(structId) + " not found in schema";
+                error.field_path = propName;
+                error.source_api = "TryResolve";
+                return VtxResult<PropertyKey<T>>::Failure(error);
+            }
+            const StructSchemaCache& struct_cache = structIt->second;
+            const auto propIt = struct_cache.properties.find(propName);
+            if (propIt == struct_cache.properties.end()) {
+                VtxError error;
+                error.code = VtxErrorCode::NotFound;
+                error.message = "property '" + propName + "' not found in struct '" + struct_cache.name + "'";
+                error.entity_type = struct_cache.name;
+                error.field_path = struct_cache.name + "." + propName;
+                error.source_api = "TryResolve";
+                return VtxResult<PropertyKey<T>>::Failure(error);
+            }
+
+            const PropertyAddress& addr = propIt->second;
+            const std::string field_path = struct_cache.name + "." + propName;
+            if (addr.container_type != VTX::FieldContainerType::None) {
+                VtxError error;
+                error.code = VtxErrorCode::ContainerMismatch;
+                error.message = "property '" + field_path + "' is not a scalar field";
+                error.entity_type = struct_cache.name;
+                error.field_path = field_path;
+                error.expected_container = std::string(VTX::ToString(addr.container_type));
+                error.provided_container = "None";
+                error.source_api = "TryResolve";
+                return VtxResult<PropertyKey<T>>::Failure(error);
+            }
+
+            const VTX::FieldType expected = addr.type_id;
+            const VTX::FieldType provided = GetExpectedFieldType<T>();
+            if (expected != provided) {
+                VtxError error;
+                error.code = VtxErrorCode::TypeMismatch;
+                error.message = "property '" + field_path + "' is " + std::string(VTX::ToString(expected)) +
+                                " but was requested as " + std::string(VTX::ToString(provided));
+                error.entity_type = struct_cache.name;
+                error.field_path = field_path;
+                error.expected_type = std::string(VTX::ToString(expected));
+                error.provided_type = std::string(VTX::ToString(provided));
+                error.expected_container = "None";
+                error.provided_container = "None";
+                error.source_api = "TryResolve";
+                return VtxResult<PropertyKey<T>>::Failure(error);
+            }
+
+            return VtxResult<PropertyKey<T>>::Success(PropertyKey<T> {static_cast<int32_t>(addr.index)});
+        }
+
+        template <VtxScalarType T>
+        VtxResult<PropertyKey<T>> TryResolve(const std::string& structName, const std::string& propName) const {
+            const int32_t structId = FindStructId(structName);
+            if (structId == -1) {
+                VtxError error;
+                error.code = VtxErrorCode::NotFound;
+                error.message = "struct '" + structName + "' not found in schema";
+                error.entity_type = structName;
+                error.field_path = structName + "." + propName;
+                error.source_api = "TryResolve";
+                return VtxResult<PropertyKey<T>>::Failure(error);
+            }
+            return TryResolve<T>(structId, propName);
+        }
+
+        template <VtxScalarType T, typename EnumType, typename std::enable_if_t<std::is_enum_v<EnumType>, int> = 0>
+        VtxResult<PropertyKey<T>> TryResolve(EnumType structEnum, const std::string& propName) const {
+            return TryResolve<T>(static_cast<int32_t>(structEnum), propName);
         }
 
         template <VtxArrayType T>

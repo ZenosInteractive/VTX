@@ -9,6 +9,7 @@
 
 #include "vtx/common/readers/schema_reader/schema_registry.h"
 #include "vtx/common/vtx_diagnostics.h"
+#include "vtx/common/vtx_frame_accessor.h"
 #include "vtx/common/vtx_types.h"
 #include "vtx/common/vtx_validation.h"
 
@@ -228,4 +229,60 @@ TEST(Diagnostics, ValidateFramePropagatesEntityContext) {
     EXPECT_EQ(d.frame_index, 9);
     EXPECT_EQ(d.bucket, "entity");
     EXPECT_EQ(d.unique_id, "ghost");
+}
+
+// ---------------------------------------------------------------------------
+// #4 -- strict accessors: FrameAccessor::TryResolve + EntityView::TryGet
+// ---------------------------------------------------------------------------
+
+TEST(Diagnostics, TryResolveReturnsKeyForValidField) {
+    VTX::FrameAccessor accessor;
+    accessor.InitializeFromCache(LoadSchema().GetPropertyCache());
+
+    const auto result = accessor.TryResolve<float>("Player", "Health");
+    ASSERT_TRUE(result.ok) << result.error.ToString();
+    EXPECT_TRUE(result.value.IsValid());
+}
+
+TEST(Diagnostics, TryResolveReportsTypeMismatch) {
+    VTX::FrameAccessor accessor;
+    accessor.InitializeFromCache(LoadSchema().GetPropertyCache());
+
+    const auto result = accessor.TryResolve<int32_t>("Player", "Health"); // Health is Float
+    ASSERT_FALSE(result.ok);
+    EXPECT_EQ(result.error.code, VTX::VtxErrorCode::TypeMismatch);
+    EXPECT_EQ(result.error.expected_type, "Float");
+    EXPECT_EQ(result.error.provided_type, "Int32");
+    EXPECT_EQ(result.error.field_path, "Player.Health");
+    EXPECT_EQ(result.error.source_api, "TryResolve");
+}
+
+TEST(Diagnostics, TryResolveReportsMissingStructOrField) {
+    VTX::FrameAccessor accessor;
+    accessor.InitializeFromCache(LoadSchema().GetPropertyCache());
+
+    EXPECT_EQ(accessor.TryResolve<float>("Player", "Nope").error.code, VTX::VtxErrorCode::NotFound);
+    EXPECT_EQ(accessor.TryResolve<float>("Nope", "Health").error.code, VTX::VtxErrorCode::NotFound);
+}
+
+TEST(Diagnostics, EntityViewTryGetReadsValueOrReportsOutOfRange) {
+    VTX::FrameAccessor accessor;
+    accessor.InitializeFromCache(LoadSchema().GetPropertyCache());
+
+    const auto health = accessor.TryResolve<float>("Player", "Health"); // index 0
+    const auto armor = accessor.TryResolve<float>("Player", "Armor");   // index 1
+    ASSERT_TRUE(health.ok);
+    ASSERT_TRUE(armor.ok);
+
+    VTX::PropertyContainer pc = MakePlayer(1);
+    pc.float_properties = {123.0f}; // only Health present; Armor slot missing
+    const VTX::EntityView view(pc);
+
+    const auto got = view.TryGet(health.value);
+    ASSERT_TRUE(got.ok) << got.error.ToString();
+    EXPECT_FLOAT_EQ(got.value, 123.0f);
+
+    const auto oob = view.TryGet(armor.value);
+    EXPECT_FALSE(oob.ok);
+    EXPECT_EQ(oob.error.code, VTX::VtxErrorCode::FieldIndexOutOfRange);
 }

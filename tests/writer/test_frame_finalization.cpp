@@ -18,6 +18,7 @@
 #include <utility>
 #include <vector>
 
+#include "vtx/common/vtx_diagnostics.h"
 #include "vtx/common/vtx_frame_accessor.h"
 #include "vtx/common/vtx_types.h"
 #include "vtx/common/vtx_types_helpers.h"
@@ -31,8 +32,6 @@
 #include "util/test_fixtures.h"
 
 namespace {
-
-    using VTX::FrameRejectReason;
 
     // Player schema layout (test_schema.json):
     //   string[0]=UniqueID string[1]=Name
@@ -140,7 +139,7 @@ TEST(FrameFinalization, TryRecordFrameReportsWrittenWithMonotonicIndex) {
     auto f0 = MakeFrameWith({MakePlayer("a", 1, 100.0f)});
     const auto r0 = writer->TryRecordFrame(f0, Increasing(0.0f));
     EXPECT_TRUE(r0.IsWritten());
-    EXPECT_EQ(r0.reason, FrameRejectReason::None);
+    EXPECT_EQ(r0.error.code, VTX::VtxErrorCode::None);
     EXPECT_EQ(r0.frame_index, 0);
 
     auto f1 = MakeFrameWith({MakePlayer("b", 1, 100.0f)});
@@ -164,8 +163,8 @@ TEST(FrameFinalization, TryRecordFrameRejectsBadGameTimeAndKeepsIndexContiguous)
     auto bad = MakeFrameWith({MakePlayer("b", 1, 100.0f)});
     const auto rbad = writer->TryRecordFrame(bad, Increasing(-50.0f));
     EXPECT_FALSE(rbad.IsWritten());
-    EXPECT_EQ(rbad.reason, FrameRejectReason::GameTimeRejected);
-    EXPECT_FALSE(rbad.detail.empty());
+    EXPECT_EQ(rbad.error.code, VTX::VtxErrorCode::GameTimeRejected);
+    EXPECT_FALSE(rbad.error.message.empty());
     EXPECT_EQ(rbad.frame_index, -1);
 
     // The rejected frame did not consume an index: the next written frame is 1.
@@ -190,8 +189,8 @@ TEST(FrameFinalization, TryRecordFrameRejectsUnresolvedEntityType) {
 
     const auto r = writer->TryRecordFrame(frame, Increasing(0.0f));
     EXPECT_FALSE(r.IsWritten());
-    EXPECT_EQ(r.reason, FrameRejectReason::ValidationFailed);
-    EXPECT_FALSE(r.detail.empty());
+    EXPECT_EQ(r.error.code, VTX::VtxErrorCode::EntityTypeUnresolved);
+    EXPECT_FALSE(r.error.message.empty());
 
     // A rejected frame leaves no snapshot behind.
     EXPECT_EQ(writer->GetLastFinalizedFrame(), nullptr);
@@ -307,6 +306,48 @@ TEST(FrameFinalization, FreezeRevokesMutationHandles) {
     EXPECT_FALSE(bucket_after.valid());
     EXPECT_FALSE(bucket_after.AddEntity().valid());
     EXPECT_EQ(bucket_after.entity_count(), 1u); // AddEntity was a no-op
+}
+
+TEST(FrameFinalization, TrySetAppliesValueAndReportsOutOfRange) {
+    VTX::SchemaRegistry registry;
+    ASSERT_TRUE(registry.LoadFromJson(VtxTest::FixturePath("test_schema.json")));
+    VTX::FrameAccessor accessor;
+    accessor.InitializeFromCache(registry.GetPropertyCache());
+
+    VTX::Frame frame = MakeFrameWith({MakePlayer("a", 1, 100.0f)});
+    VTX::FrameMutationView view(frame, accessor);
+
+    const auto health = accessor.Get<float>("Player", "Health");
+    ASSERT_TRUE(health.IsValid());
+
+    auto entity = view.GetBucket("entity").entity(0);
+    const auto applied = entity.TrySet(health, 7.0f);
+    EXPECT_TRUE(applied.ok) << applied.error.ToString();
+    EXPECT_FLOAT_EQ(frame.GetMutableBuckets()[0].entities[0].float_properties[0], 7.0f);
+
+    // A key past the entity's slots fails with FieldIndexOutOfRange.
+    const auto oob = entity.TrySet(VTX::PropertyKey<float> {99}, 1.0f);
+    EXPECT_FALSE(oob.ok);
+    EXPECT_EQ(oob.error.code, VTX::VtxErrorCode::FieldIndexOutOfRange);
+}
+
+TEST(FrameFinalization, TrySetOnFrozenHandleFails) {
+    VTX::SchemaRegistry registry;
+    ASSERT_TRUE(registry.LoadFromJson(VtxTest::FixturePath("test_schema.json")));
+    VTX::FrameAccessor accessor;
+    accessor.InitializeFromCache(registry.GetPropertyCache());
+
+    VTX::Frame frame = MakeFrameWith({MakePlayer("a", 1, 100.0f)});
+    VTX::FrameMutationView view(frame, accessor);
+    const auto health = accessor.Get<float>("Player", "Health");
+    auto entity = view.GetBucket("entity").entity(0);
+
+    view.Freeze();
+
+    const auto result = entity.TrySet(health, 5.0f);
+    EXPECT_FALSE(result.ok);
+    EXPECT_EQ(result.error.code, VTX::VtxErrorCode::InvalidArgument);
+    EXPECT_FLOAT_EQ(frame.GetMutableBuckets()[0].entities[0].float_properties[0], 100.0f);
 }
 
 // ---------------------------------------------------------------------------
