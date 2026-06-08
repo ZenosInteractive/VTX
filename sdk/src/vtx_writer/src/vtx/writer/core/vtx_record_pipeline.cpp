@@ -4,39 +4,37 @@ VTX::RecordPipeline::RecordPipeline(std::unique_ptr<IFrameDataSource> source, st
     : source_(std::move(source))
     , writer_(std::move(writer)) {}
 
-bool VTX::RecordPipeline::Run(std::function<void(float, std::string)> on_progress) {
+VTX::PipelineReport VTX::RecordPipeline::Run(std::function<void(float, std::string)> on_progress) {
+    PipelineReport report;
     if (!source_ || !writer_)
-        return false;
+        return report;
 
     if (!source_->Initialize()) {
-        return false;
+        return report;
     }
 
-    size_t total_frames = source_->GetExpectedTotalFrames();
-    size_t frames_processed = 0;
+    const size_t total_frames = source_->GetExpectedTotalFrames();
     int last_percent = -1;
 
     VTX::Frame native_frame;
     VTX::GameTime::GameTimeRegister time_register;
 
-
     while (source_->GetNextFrame(native_frame, time_register)) {
-        writer_->RecordFrame(native_frame, time_register);
-        frames_processed++;
+        const RecordResult result = writer_->TryRecordFrame(native_frame, time_register);
+        report.Account(result);
 
+        const size_t processed = report.Total();
         if (total_frames > 0) {
-            int percent = static_cast<int>((frames_processed * 100) / total_frames);
+            const int percent = static_cast<int>((processed * 100) / total_frames);
             if (percent > last_percent) {
                 if (on_progress) {
                     on_progress(percent / 100.0f, "Converting... " + std::to_string(percent) + "%");
                 }
                 last_percent = percent;
             }
-        } else {
-            if (frames_processed % 100 == 0) {
-                if (on_progress) {
-                    on_progress(0.0f, "Processed " + std::to_string(frames_processed) + " frames...");
-                }
+        } else if (processed % 100 == 0) {
+            if (on_progress) {
+                on_progress(0.0f, "Processed " + std::to_string(processed) + " frames...");
             }
         }
     }
@@ -44,5 +42,5 @@ bool VTX::RecordPipeline::Run(std::function<void(float, std::string)> on_progres
     writer_->Stop();
     if (on_progress)
         on_progress(1.0f, "");
-    return frames_processed > 0;
+    return report;
 }

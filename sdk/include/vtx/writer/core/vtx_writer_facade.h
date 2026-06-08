@@ -7,6 +7,7 @@
 #include "vtx/common/vtx_types.h"
 #include "vtx/common/readers/schema_reader/schema_registry.h"
 #include "vtx/writer/core/vtx_frame_post_processor.h"
+#include "vtx/writer/core/vtx_writer_result.h"
 
 
 namespace VTX {
@@ -18,6 +19,13 @@ namespace VTX {
 
         virtual void RecordFrame(VTX::Frame& native_frame,
                                  const VTX::GameTime::GameTimeRegister& game_time_register) = 0;
+
+        virtual RecordResult TryRecordFrame(VTX::Frame& native_frame,
+                                            const VTX::GameTime::GameTimeRegister& game_time_register) = 0;
+        virtual const VTX::Frame* GetLastFinalizedFrame() const = 0;
+        virtual const VTX::PropertyContainer* FindEntity(const std::string& bucket_name,
+                                                         const std::string& unique_id) const = 0;
+
         virtual void Flush() = 0;
         virtual void Stop() = 0;
         virtual VTX::SchemaRegistry& GetSchema() = 0;
@@ -42,6 +50,8 @@ namespace VTX {
         size_t chunk_max_bytes = 10 * 1024 * 1024; // 10 MB
         bool use_compression = true;
         std::string schema_json_path = "";
+
+        bool retain_finalized_snapshot = false;
     };
     enum class SerializationFormat : uint8_t {
         Flatbuffers,
@@ -63,6 +73,7 @@ namespace VTX {
         size_t chunk_max_bytes = 10 * 1024 * 1024; // 10 MB
         bool use_compression = true;
         std::string schema_json_path = "";
+        bool retain_finalized_snapshot = false;
     };
 
     std::unique_ptr<IVtxWriterFacade> CreateFlatBuffersNetworkWriterFacade(const NetworkWriterFacadeConfig& config);

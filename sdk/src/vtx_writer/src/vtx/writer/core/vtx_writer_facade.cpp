@@ -40,6 +40,21 @@ namespace VTX {
             writer_.RecordFrame(native_frame, game_time_register);
         }
 
+        RecordResult TryRecordFrame(VTX::Frame& native_frame,
+                                    const VTX::GameTime::GameTimeRegister& game_time_register) override {
+            if (stopped_) {
+                return RecordResult::MadeRejected(FrameRejectReason::None, "writer already stopped");
+            }
+            return writer_.TryRecordFrame(native_frame, game_time_register);
+        }
+
+        const VTX::Frame* GetLastFinalizedFrame() const override { return writer_.GetLastFinalizedFrame(); }
+
+        const VTX::PropertyContainer* FindEntity(const std::string& bucket_name,
+                                                 const std::string& unique_id) const override {
+            return writer_.FindEntity(bucket_name, unique_id);
+        }
+
         void Flush() override {
             if (stopped_)
                 return;
@@ -81,6 +96,7 @@ namespace VTX {
 
         internal_cfg.sink_config.filename = config.output_filepath;
         internal_cfg.schema_json_path = config.schema_json_path;
+        internal_cfg.retain_finalized_snapshot = config.retain_finalized_snapshot;
         internal_cfg.sink_config.header_config.replay_name = config.replay_name;
         internal_cfg.sink_config.header_config.replay_uuid = config.replay_uuid;
         internal_cfg.sink_config.b_use_compression = config.use_compression;
@@ -104,6 +120,7 @@ namespace VTX {
 
         internal_cfg.sink_config.filename = config.output_filepath;
         internal_cfg.schema_json_path = config.schema_json_path;
+        internal_cfg.retain_finalized_snapshot = config.retain_finalized_snapshot;
 
         internal_cfg.sink_config.b_use_compression = config.use_compression;
         return std::make_unique<WriterFacadeImpl<SinkType>>(internal_cfg);
@@ -121,6 +138,7 @@ namespace VTX {
         internal_cfg.chunker_config.max_frames = config.chunk_max_frames;
         internal_cfg.chunker_config.max_bytes = config.chunk_max_bytes;
         internal_cfg.schema_json_path = config.schema_json_path;
+        internal_cfg.retain_finalized_snapshot = config.retain_finalized_snapshot;
         internal_cfg.sink_config.host = config.host;
         internal_cfg.sink_config.port = config.port;
         internal_cfg.sink_config.header_config.replay_name = config.replay_name;
@@ -142,6 +160,7 @@ namespace VTX {
         internal_cfg.chunker_config.max_frames = config.chunk_max_frames;
         internal_cfg.chunker_config.max_bytes = config.chunk_max_bytes;
         internal_cfg.schema_json_path = config.schema_json_path;
+        internal_cfg.retain_finalized_snapshot = config.retain_finalized_snapshot;
         internal_cfg.sink_config.host = config.host;
         internal_cfg.sink_config.port = config.port;
         internal_cfg.sink_config.header_config.replay_name = config.replay_name;

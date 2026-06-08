@@ -3,9 +3,14 @@
 #include <vector>
 #include <optional>
 #include "vtx/common/vtx_types.h"
+#include "vtx/common/vtx_types_helpers.h"
 #include "vtx/common/vtx_frame_accessor.h"
 #include "vtx/writer/core/vtx_frame_mutation_view.h"
 #include "vtx/writer/core/vtx_frame_post_processor.h"
+#include "vtx/writer/core/vtx_writer_result.h"
+
+#include <algorithm>
+#include <string>
 
 
 namespace VTX {
@@ -37,6 +42,7 @@ namespace VTX {
             bool is_increasing = true;
             ChunkingPolicy chunker_config;
             std::string schema_json_path;
+            bool retain_finalized_snapshot = false;
         };
 
         ReplayWriter(Config config)
@@ -44,6 +50,7 @@ namespace VTX {
             , chunker_(config.chunker_config)
             , registry_({})
             , sanitizer_(nullptr) {
+            retain_snapshot_ = config.retain_finalized_snapshot;
             timer_.Setup(config.default_fps, config.is_increasing);
             registry_.LoadFromJson(config.schema_json_path);
             auto schema = Serializer::CreateSchema(registry_);
@@ -59,18 +66,21 @@ namespace VTX {
             }
         }
 
-        void RecordFrame(VTX::Frame& native_frame, const VTX::GameTime::GameTimeRegister& game_time_register) {
+        RecordResult TryRecordFrame(VTX::Frame& native_frame,
+                                    const VTX::GameTime::GameTimeRegister& game_time_register) {
             timer_.CreateSnapshot();
 
             if (!timer_.AddTimeRegistry(game_time_register)) {
                 timer_.Rollback();
-                return;
+                return RecordResult::MadeRejected(FrameRejectReason::GameTimeRejected,
+                                                  "game-time registry rejected by the timer");
             }
 
-            int32_t prospectiveIndex = total_frames_ + 1;
-            if (!timer_.ResolveGameTimes(prospectiveIndex)) {
+            const int32_t prospective_index = total_frames_ + 1;
+            if (!timer_.ResolveGameTimes(prospective_index)) {
                 timer_.Rollback();
-                return;
+                return RecordResult::MadeRejected(FrameRejectReason::GameTimeRejected,
+                                                  "game-time could not be resolved (non-monotonic / invalid)");
             }
 
             if (post_processor_) {
@@ -87,19 +97,37 @@ namespace VTX {
                 } catch (const std::exception& e) {
                     (void)e;
                 } catch (...) {}
+                view.Freeze();
+            }
+
+            std::string validation_detail;
+            if (!FinalizeFrame(native_frame, validation_detail)) {
+                timer_.Rollback();
+                return RecordResult::MadeRejected(FrameRejectReason::ValidationFailed, std::move(validation_detail));
+            }
+
+            if (retain_snapshot_) {
+                last_finalized_ = native_frame;
+                has_last_finalized_ = true;
             }
 
             std::unique_ptr<FrameType> sink_frame = Serializer::FromNative(std::move(native_frame));
-            size_t frameSize = Serializer::GetFrameSize(*sink_frame);
+            size_t frame_size = Serializer::GetFrameSize(*sink_frame);
 
             if (!pending_frames_.empty() &&
-                chunker_.ShouldFlush(pending_frames_.size(), current_chunk_bytes_, frameSize)) {
+                chunker_.ShouldFlush(pending_frames_.size(), current_chunk_bytes_, frame_size)) {
                 Flush();
             }
 
+            const int32_t assigned_index = total_frames_;
             total_frames_++;
-            current_chunk_bytes_ += frameSize;
+            current_chunk_bytes_ += frame_size;
             pending_frames_.push_back(std::move(sink_frame));
+            return RecordResult::MadeWritten(assigned_index);
+        }
+
+        void RecordFrame(VTX::Frame& native_frame, const VTX::GameTime::GameTimeRegister& game_time_register) {
+            (void)TryRecordFrame(native_frame, game_time_register);
         }
 
         void Flush() {
@@ -137,6 +165,22 @@ namespace VTX {
 
         VTX::SchemaRegistry& GetRegistry() { return registry_; }
 
+        const VTX::Frame* GetLastFinalizedFrame() const { return has_last_finalized_ ? &last_finalized_ : nullptr; }
+
+        const VTX::PropertyContainer* FindEntity(const std::string& bucket_name, const std::string& unique_id) const {
+            if (!has_last_finalized_) {
+                return nullptr;
+            }
+            const VTX::Bucket& bucket = last_finalized_.GetBucket(bucket_name);
+            const size_t count = std::min(bucket.unique_ids.size(), bucket.entities.size());
+            for (size_t i = 0; i < count; ++i) {
+                if (bucket.unique_ids[i] == unique_id) {
+                    return &bucket.entities[i];
+                }
+            }
+            return nullptr;
+        }
+
         void SetPostProcessor(std::shared_ptr<IFramePostProcessor> processor) {
             if (processor) {
                 FramePostProcessorInitContext init_ctx;
@@ -167,6 +211,19 @@ namespace VTX {
         }
 
     private:
+        bool FinalizeFrame(VTX::Frame& frame, std::string& out_detail) {
+            for (auto& bucket : frame.GetMutableBuckets()) {
+                for (auto& entity : bucket.entities) {
+                    if (entity.entity_type_id < 0) {
+                        out_detail = "frame contains an entity whose type does not resolve to a schema struct";
+                        return false;
+                    }
+                    entity.content_hash = Helpers::CalculateContainerHash(entity);
+                }
+            }
+            return true;
+        }
+
         SinkPolicy sink_;
         ChunkingPolicy chunker_;
 
@@ -180,5 +237,9 @@ namespace VTX {
 
         FrameAccessor frame_accessor_ = {};
         std::shared_ptr<IFramePostProcessor> post_processor_;
+
+        bool retain_snapshot_ = false;
+        VTX::Frame last_finalized_;
+        bool has_last_finalized_ = false;
     };
 } // namespace VTX

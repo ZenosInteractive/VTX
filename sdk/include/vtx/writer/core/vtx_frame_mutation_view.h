@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
 #include <span>
 #include <string>
 #include <vector>
@@ -10,12 +11,14 @@
 #include "vtx/common/vtx_types.h"
 
 namespace VTX {
-
     class EntityMutator {
     public:
         EntityMutator() = default;
-        explicit EntityMutator(PropertyContainer& data)
-            : data_(&data) {}
+        explicit EntityMutator(PropertyContainer& data, std::shared_ptr<bool> frozen = nullptr)
+            : data_(&data)
+            , frozen_(std::move(frozen)) {}
+
+        bool IsFrozen() const noexcept { return frozen_ && *frozen_; }
 
         template <VtxScalarType T>
         typename EntityView::template ScalarRetType<T> Get(PropertyKey<T> key) const {
@@ -24,7 +27,7 @@ namespace VTX {
 
         template <VtxScalarType T>
         void Set(PropertyKey<T> key, T value) {
-            if (!data_ || !key.IsValid())
+            if (!data_ || IsFrozen() || !key.IsValid())
                 return;
             constexpr auto MemberPtr = EntityView::GetContainerMember<T>();
             auto& values = data_->*MemberPtr;
@@ -34,15 +37,15 @@ namespace VTX {
         }
 
         EntityMutator GetMutableView(PropertyKey<EntityView> key) {
-            if (!data_ || !key.IsValid())
+            if (!data_ || IsFrozen() || !key.IsValid())
                 return {};
             if (static_cast<size_t>(key.index) >= data_->any_struct_properties.size())
                 return {};
-            return EntityMutator(data_->any_struct_properties[key.index]);
+            return EntityMutator(data_->any_struct_properties[key.index], frozen_);
         }
 
         std::span<PropertyContainer> GetMutableViewArray(PropertyKey<std::span<const PropertyContainer>> key) {
-            if (!data_ || !key.IsValid())
+            if (!data_ || IsFrozen() || !key.IsValid())
                 return {};
             return data_->any_struct_arrays.GetMutableSubArray(key.index);
         }
@@ -51,33 +54,38 @@ namespace VTX {
         auto GetMutableArray(PropertyKey<T> key) {
             constexpr auto MemberPtr = EntityView::GetArrayContainerMember<T>();
             using SpanType = decltype((data_->*MemberPtr).GetMutableSubArray(0));
-            if (!data_ || !key.IsValid())
+            if (!data_ || IsFrozen() || !key.IsValid())
                 return SpanType {};
             return (data_->*MemberPtr).GetMutableSubArray(key.index);
         }
 
         EntityView AsView() const { return data_ ? EntityView(*data_) : EntityView(); }
 
-        PropertyContainer* raw() noexcept { return data_; }
+        // Mutable raw access is revoked once frozen; const access (read) stays.
+        PropertyContainer* raw() noexcept { return IsFrozen() ? nullptr : data_; }
         const PropertyContainer* raw() const noexcept { return data_; }
-        bool valid() const noexcept { return data_ != nullptr; }
+        bool valid() const noexcept { return data_ != nullptr && !IsFrozen(); }
 
     private:
         PropertyContainer* data_ = nullptr;
+        std::shared_ptr<bool> frozen_;
     };
 
     class BucketMutator {
     public:
         BucketMutator() = default;
-        explicit BucketMutator(Bucket& bucket)
-            : bucket_(&bucket) {}
+        explicit BucketMutator(Bucket& bucket, std::shared_ptr<bool> frozen = nullptr)
+            : bucket_(&bucket)
+            , frozen_(std::move(frozen)) {}
+
+        bool IsFrozen() const noexcept { return frozen_ && *frozen_; }
 
         size_t entity_count() const noexcept { return bucket_ ? bucket_->entities.size() : 0; }
 
         EntityMutator entity(uint32_t i) {
             if (!bucket_ || i >= bucket_->entities.size())
                 return {};
-            return EntityMutator(bucket_->entities[i]);
+            return EntityMutator(bucket_->entities[i], frozen_);
         }
 
         EntityView entity_view(uint32_t i) const {
@@ -89,11 +97,12 @@ namespace VTX {
         class iterator {
         public:
             iterator() = default;
-            iterator(Bucket* b, size_t i)
+            iterator(Bucket* b, size_t i, std::shared_ptr<bool> frozen)
                 : bucket_(b)
-                , idx_(i) {}
+                , idx_(i)
+                , frozen_(std::move(frozen)) {}
 
-            EntityMutator operator*() const { return EntityMutator(bucket_->entities[idx_]); }
+            EntityMutator operator*() const { return EntityMutator(bucket_->entities[idx_], frozen_); }
             iterator& operator++() {
                 ++idx_;
                 return *this;
@@ -104,13 +113,14 @@ namespace VTX {
         private:
             Bucket* bucket_ = nullptr;
             size_t idx_ = 0;
+            std::shared_ptr<bool> frozen_;
         };
 
-        iterator begin() { return bucket_ ? iterator {bucket_, 0} : iterator {}; }
-        iterator end() { return bucket_ ? iterator {bucket_, bucket_->entities.size()} : iterator {}; }
+        iterator begin() { return bucket_ ? iterator {bucket_, 0, frozen_} : iterator {}; }
+        iterator end() { return bucket_ ? iterator {bucket_, bucket_->entities.size(), frozen_} : iterator {}; }
 
         std::span<PropertyContainer> entities_of_type(int32_t type_id) {
-            if (!bucket_)
+            if (!bucket_ || IsFrozen())
                 return {};
             if (type_id < 0 || static_cast<size_t>(type_id) >= bucket_->type_ranges.size())
                 return {};
@@ -122,32 +132,32 @@ namespace VTX {
         }
 
         EntityMutator AddEntity() {
-            if (!bucket_)
+            if (!bucket_ || IsFrozen())
                 return {};
             bucket_->entities.emplace_back();
             if (bucket_->unique_ids.size() + 1 == bucket_->entities.size())
                 bucket_->unique_ids.emplace_back();
-            return EntityMutator(bucket_->entities.back());
+            return EntityMutator(bucket_->entities.back(), frozen_);
         }
 
         /**
          * @brief Append a new entity tagged with @p unique_id.
          */
         EntityMutator AddEntity(std::string unique_id) {
-            if (!bucket_)
+            if (!bucket_ || IsFrozen())
                 return {};
             if (bucket_->HasUniqueId(unique_id))
                 return {};
             bucket_->entities.emplace_back();
             bucket_->unique_ids.push_back(std::move(unique_id));
-            return EntityMutator(bucket_->entities.back());
+            return EntityMutator(bucket_->entities.back(), frozen_);
         }
 
         /**
          * @brief Assign (or rename) the unique_id of an existing entity.
          */
         bool SetUniqueId(uint32_t entity_index, std::string unique_id) {
-            if (!bucket_ || entity_index >= bucket_->entities.size())
+            if (!bucket_ || IsFrozen() || entity_index >= bucket_->entities.size())
                 return false;
             if (bucket_->unique_ids.size() < bucket_->entities.size())
                 bucket_->unique_ids.resize(bucket_->entities.size());
@@ -161,7 +171,7 @@ namespace VTX {
         }
 
         void RemoveEntity(uint32_t entity_index) {
-            if (!bucket_ || entity_index >= bucket_->entities.size())
+            if (!bucket_ || IsFrozen() || entity_index >= bucket_->entities.size())
                 return;
             bucket_->entities.erase(bucket_->entities.begin() + entity_index);
             if (entity_index < bucket_->unique_ids.size())
@@ -180,7 +190,7 @@ namespace VTX {
 
         template <class Predicate>
         size_t RemoveIf(Predicate pred) {
-            if (!bucket_)
+            if (!bucket_ || IsFrozen())
                 return 0;
             const size_t before = bucket_->entities.size();
             std::vector<uint8_t> keep(before, 1);
@@ -210,7 +220,7 @@ namespace VTX {
         }
 
         void Clear() {
-            if (!bucket_)
+            if (!bucket_ || IsFrozen())
                 return;
             bucket_->entities.clear();
             bucket_->unique_ids.clear();
@@ -220,12 +230,13 @@ namespace VTX {
             }
         }
 
-        Bucket* raw() noexcept { return bucket_; }
+        Bucket* raw() noexcept { return IsFrozen() ? nullptr : bucket_; }
         const Bucket* raw() const noexcept { return bucket_; }
-        bool valid() const noexcept { return bucket_ != nullptr; }
+        bool valid() const noexcept { return bucket_ != nullptr && !IsFrozen(); }
 
     private:
         Bucket* bucket_ = nullptr;
+        std::shared_ptr<bool> frozen_;
     };
 
     class FrameMutationView {
@@ -234,6 +245,16 @@ namespace VTX {
         FrameMutationView(Frame& frame, const FrameAccessor& accessor)
             : frame_(&frame)
             , accessor_(&accessor) {}
+
+        /**
+         * @brief Freeze the frame: revoke mutation on every handle derived from
+         *        this view (including ones already handed out / stashed).
+         */
+        void Freeze() noexcept {
+            if (frozen_)
+                *frozen_ = true;
+        }
+        bool IsFrozen() const noexcept { return frozen_ && *frozen_; }
 
         bool HasBucket(const std::string& name) const {
             if (!frame_)
@@ -247,13 +268,13 @@ namespace VTX {
             auto it = frame_->bucket_map.find(name);
             if (it == frame_->bucket_map.end())
                 return {};
-            return BucketMutator(frame_->buckets[it->second]);
+            return BucketMutator(frame_->buckets[it->second], frozen_);
         }
 
         BucketMutator GetBucket(int32_t bucket_index) {
             if (!frame_ || bucket_index < 0 || static_cast<size_t>(bucket_index) >= frame_->buckets.size())
                 return {};
-            return BucketMutator(frame_->buckets[static_cast<size_t>(bucket_index)]);
+            return BucketMutator(frame_->buckets[static_cast<size_t>(bucket_index)], frozen_);
         }
 
         size_t bucket_count() const noexcept { return frame_ ? frame_->buckets.size() : 0; }
@@ -286,6 +307,7 @@ namespace VTX {
     private:
         Frame* frame_ = nullptr;
         const FrameAccessor* accessor_ = nullptr;
+        std::shared_ptr<bool> frozen_ = std::make_shared<bool>(false);
     };
 
 } // namespace VTX
