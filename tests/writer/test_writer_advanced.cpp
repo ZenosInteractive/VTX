@@ -205,6 +205,7 @@ TEST_P(WriterAdvancedTest, ThrowsWhenParentDirectoryDoesNotExist) {
         std::filesystem::path(VtxTest::OutputPath("writer_missing_dir")) / "nested";
     std::filesystem::remove_all(missing_dir.parent_path());
     cfg.output_filepath = (missing_dir / "out.vtx").string();
+    cfg.create_output_dirs = false; // opt out of auto-creation to exercise the throw path
 
     EXPECT_THROW(
         {
@@ -212,6 +213,47 @@ TEST_P(WriterAdvancedTest, ThrowsWhenParentDirectoryDoesNotExist) {
             (void)writer;
         },
         std::runtime_error);
+}
+
+TEST_P(WriterAdvancedTest, CreatesParentDirectoryWhenMissing) {
+    auto cfg = MakeConfig(GetParam(), "autocreate_dir", 8, true);
+    const std::filesystem::path root = std::filesystem::path(VtxTest::OutputPath("writer_autocreate"));
+    std::filesystem::remove_all(root);
+    cfg.output_filepath = (root / "a" / "b" / "out.vtx").string();
+    // create_output_dirs defaults to true -> the missing a/b chain is created.
+
+    {
+        auto writer = CreateWriter(GetParam(), cfg);
+        ASSERT_NE(writer, nullptr);
+        auto frame = MakeSimpleFrame(0);
+        VTX::GameTime::GameTimeRegister t;
+        t.game_time = 0.0f;
+        writer->RecordFrame(frame, t);
+        writer->Stop();
+    }
+
+    EXPECT_TRUE(std::filesystem::exists(cfg.output_filepath));
+    auto ctx = VTX::OpenReplayFile(cfg.output_filepath);
+    EXPECT_TRUE(ctx) << ctx.GetError().message;
+}
+
+TEST_P(WriterAdvancedTest, DestructorFinalizesWhenStopForgotten) {
+    auto cfg = MakeConfig(GetParam(), "dtor_finalize", 8, true);
+    {
+        auto writer = CreateWriter(GetParam(), cfg);
+        ASSERT_NE(writer, nullptr);
+        for (int i = 0; i < 5; ++i) {
+            auto frame = MakeSimpleFrame(i);
+            VTX::GameTime::GameTimeRegister t;
+            t.game_time = float(i) / 60.0f;
+            writer->RecordFrame(frame, t);
+        }
+        // No Stop()/Flush() -- the facade destructor must finalize the file.
+    }
+
+    auto ctx = VTX::OpenReplayFile(cfg.output_filepath);
+    ASSERT_TRUE(ctx) << ctx.GetError().message;
+    EXPECT_EQ(ctx.reader->GetTotalFrames(), 5);
 }
 
 INSTANTIATE_TEST_SUITE_P(BothBackends, WriterAdvancedTest,
