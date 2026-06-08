@@ -11,6 +11,8 @@
 #include "vtx/writer/policies/sinks/file_sink.h"
 #include "vtx/writer/policies/sinks/network_sink.h"
 
+#include <filesystem>
+
 namespace VTX {
 
     namespace {
@@ -25,6 +27,15 @@ namespace VTX {
             }
             return true;
         }
+
+        void EnsureOutputDir(const std::string& filepath) {
+            const std::filesystem::path parent = std::filesystem::path(filepath).parent_path();
+            if (parent.empty()) {
+                return;
+            }
+            std::error_code ec;
+            std::filesystem::create_directories(parent, ec);
+        }
     } // namespace
 
     template <typename SinkPolicyType>
@@ -32,6 +43,14 @@ namespace VTX {
     public:
         WriterFacadeImpl(typename ReplayWriter<SinkPolicyType>::Config internal_config)
             : writer_(internal_config) {}
+
+        ~WriterFacadeImpl() override {
+            if (!stopped_) {
+                try {
+                    Stop();
+                } catch (...) {}
+            }
+        }
 
 
         void RecordFrame(VTX::Frame& native_frame, const VTX::GameTime::GameTimeRegister& game_time_register) override {
@@ -86,6 +105,9 @@ namespace VTX {
         if (!WriterSchemaIsAcceptable(config.schema_json_path)) {
             return nullptr;
         }
+        if (config.create_output_dirs) {
+            EnsureOutputDir(config.output_filepath);
+        }
         using SinkType = ChunkedFileSink<VTX::FlatBuffersVtxPolicy>;
 
         ReplayWriter<SinkType>::Config internal_cfg;
@@ -107,6 +129,9 @@ namespace VTX {
     std::unique_ptr<IVtxWriterFacade> CreateProtobufWriterFacade(const WriterFacadeConfig& config) {
         if (!WriterSchemaIsAcceptable(config.schema_json_path)) {
             return nullptr;
+        }
+        if (config.create_output_dirs) {
+            EnsureOutputDir(config.output_filepath);
         }
         using SinkType = VTX::ChunkedFileSink<VTX::ProtobufVtxPolicy>;
 

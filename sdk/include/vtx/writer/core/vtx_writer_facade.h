@@ -50,9 +50,10 @@ namespace VTX {
         size_t chunk_max_bytes = 10 * 1024 * 1024; // 10 MB
         bool use_compression = true;
         std::string schema_json_path = "";
-
         bool retain_finalized_snapshot = false;
+        bool create_output_dirs = true;
     };
+
     enum class SerializationFormat : uint8_t {
         Flatbuffers,
         Protobuf,
