@@ -25,7 +25,10 @@ Provides the shared type system, serialization infrastructure, and utilities use
 | Types | `vtx_types.h` | `Vector`, `Quat`, `Transform`, `FloatRange`, `FlatArray<T>`, `PropertyContainer`, `Bucket`, `Frame`, `FileHeader`, `FileFooter`, `VtxFormat` |
 | SoA containers | `vtx_types.h` | `FlatArray<T>` — contiguous data + offset arrays for Structure of Arrays layout |
 | Property cache | `vtx_property_cache.h` | `PropertyAddressCache` — O(1) indexed property lookup by type and slot |
-| Schema | `schema_registry.h`, `game_schema_types.h` | Schema definitions parsed from JSON; maps property names to typed indices |
+| Schema | `schema_registry.h`, `game_schema_types.h` | Schema definitions parsed from JSON; maps property names to typed indices; pre-sizes `PropertyContainer` arrays to per-type max on load |
+| Schema validation | `schema_validator.h`, `schema_validation_result.h` | Rule-based pre-resolution validation (`SchemaValidator` / `SchemaIssue`); malformed schemas rejected at load. `SchemaValidationResult::ToReport()` bridges to the diagnostics model |
+| Diagnostics | `vtx_diagnostics.h` | One SDK-wide error model: `Severity`, `VtxErrorCode`, `VtxDiagnostic` (`VtxError`/`VtxWarning`), `VtxResult<T>`, `ValidationReport` |
+| Validation | `vtx_validation.h`, `vtx_frame_accessor.h` | `ValidateSchema` / `ValidateEntity` / `ValidateFrame`; strict accessors `FrameAccessor::TryResolve`, `EntityView::TryGet`, `EntityMutator::TrySet` |
 | Compression | `vtx_deserializer_service.h` | zstd-based chunk compression/decompression |
 | Logger | `vtx_logger.h` | Thread-safe singleton logger with `VTX_INFO`, `VTX_WARN`, `VTX_ERROR`, `VTX_DEBUG` macros using `std::format` syntax |
 | Hashing | `vtx_types_helpers.h` | xxHash64 content hashing for fast entity comparison |
@@ -35,12 +38,13 @@ Provides the shared type system, serialization infrastructure, and utilities use
 
 Records live frame data into `.vtx` replay files (or streams the same bytes over a socket).
 
-- **Facade**: `IVtxWriterFacade` — `RecordFrame()`, `Flush()`, `Stop()`
+- **Facade**: `IVtxWriterFacade` — `RecordFrame()`, `TryRecordFrame()` (returns a `RecordResult`), `Flush()`, `Stop()`, `SetPostProcessor()`
+- **Finalization & strict recording**: each frame is validated (entity types resolve to schema structs), content-hashed (after schema fields + post-processor overrides), and **frozen** (stashed mutation handles revoked) before it enters the chunk pipeline. `TryRecordFrame()` makes rejection observable via `RecordResult` (carries a `VtxError`); the writer assigns a monotonic frame index; an opt-in `retain_finalized_snapshot` keeps the last finalized frame queryable via `GetLastFinalizedFrame()` / `FindEntity()`. `RecordPipeline::Run()` returns a `PipelineReport`
 - **Factory**: `CreateFlatBuffersWriterFacade()` / `CreateProtobuffWriterFacade()` (file output); `CreateFlatBuffersNetworkWriterFacade()` / `CreateProtobuffNetworkWriterFacade()` (TCP socket output) — same `IVtxWriterFacade` behind both, so user code is sink-agnostic
 - **Config**: `WriterFacadeConfig` (file path) or `NetworkWriterFacadeConfig` (host + port) — chunk size, compression, schema JSON path
 - **Policy**: Template-parameterized writer policies select FlatBuffers or Protobuf serialization at compile time
 - **Sinks**: `ChunkedFileSink<Policy>` (file), `ChunkedNetworkSink<Policy>` (TCP stream) — both produce the **same `.vtx` byte sequence**, so a socket receiver only has to concatenate incoming bytes into a file to get a valid replay
-- **Data-source interface**: `IFrameDataSource` (`Initialize()` / `GetNextFrame()` / `GetExpectedTotalFrames()`). Concrete implementations: `samples/advance_write.cpp` (JSON / Protobuf / FlatBuffers from disk); `PipeFrameDataSource<Adapter>` (stdin, Windows named pipes, POSIX FIFOs — including a **server mode** that creates the pipe and waits, for independent game-injector-style external producers); `WebSocketFrameDataSource<Adapter>` (`ws://` + `wss://` with TLS). Both streaming sources share the `IFramePayloadAdapter` concept, so a single adapter plugs into either transport
+- **Data-source interface**: `IFrameDataSource` (`Initialize()` / `GetNextFrame()` / `GetExpectedTotalFrames()`). Concrete implementations: `samples/advance_write.cpp` (JSON / Protobuf / FlatBuffers from disk); `PipeFrameDataSource<Adapter>` (stdin, Windows named pipes, POSIX FIFOs — including a **server mode** that creates the pipe and waits, for independent game-injector-style external producers); `WebSocketFrameDataSource<Adapter>` (`ws://` + `wss://` with TLS). Both streaming sources share the `IFramePayloadAdapter` concept, so a single adapter plugs into either transport. A `SharedMemoryFrameDataSource` (zero-copy SPSC ring, pluggable `ISharedMemoryTransport`) is present in-tree but **experimental / WIP and not yet functional** — landed unintentionally, not a supported input path
 - **Dependencies**: protobuf + flatbuffers (serialization), zstd (chunk compression), IXWebSocket + mbedTLS (WebSocket transport; hidden behind a PIMPL boundary in `websocket_client.cpp` — never leak into the public SDK headers)
 
 ### vtx_reader
@@ -50,9 +54,11 @@ Streams and random-accesses `.vtx` replay files with a chunk-based cache.
 - **Facade**: `IVtxReaderFacade` — `GetFrame()`, `GetFrameSync()`, `GetRawFrameBytes()`, `GetSeekTable()`, etc.
 - **Factory**: `OpenReplayFile(filepath)` — auto-detects format from magic bytes, creates reader, wires chunk-state events
 - **Chunk state**: `ReaderChunkState` / `ReaderChunkSnapshot` — thread-safe tracker for loaded/loading/evicted chunks, automatically connected by `OpenReplayFile()`
-- **Context**: `ReaderContext` — bundles reader, chunk state, format, file size, and error info
+- **Context**: `ReaderContext` — bundles reader, chunk state, format, file size, and a structured `VtxError` (`GetError()`)
 - **Policy**: `ReplayReader<TPolicy>` — template over `FlatBuffersReaderPolicy` or `ProtobufReaderPolicy`
 - **Caching**: Sliding window cache with configurable backward/forward chunks. Async loading via `std::async` with `std::stop_token` cancellation
+- **Ready-state**: `IsReady()` / `IsReadyFailed()` / `GetReadyError()` (a `VtxError`) / `WaitUntilReady()`; `ReplayReaderEvents::OnReadyFailed(const VtxError&)` for the async chunk-0 warm
+- **Validation**: `ValidateReplay(reader)` (already-open) / `ValidateReplayFile(path)` validate a replay's embedded schema + every frame into a `ValidationReport` (`vtx_replay_validation.h`)
 
 ### vtx_differ
 
