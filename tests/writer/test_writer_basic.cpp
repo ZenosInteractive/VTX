@@ -56,7 +56,7 @@ TEST(WriterBasic, FlatBuffersFactoryProducesValidWriter) {
 TEST(WriterBasic, ProtobufFactoryProducesValidWriter) {
     const auto cfg = MakeConfig("writer_basic_proto.vtx", "uuid-proto-basic");
     {
-        auto writer = VTX::CreateProtobuffWriterFacade(cfg);
+        auto writer = VTX::CreateProtobufWriterFacade(cfg);
         ASSERT_TRUE(writer);
         writer->Stop();
     }

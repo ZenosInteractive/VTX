@@ -104,7 +104,7 @@ namespace VTX {
         return std::make_unique<WriterFacadeImpl<SinkType>>(internal_cfg);
     }
 
-    std::unique_ptr<IVtxWriterFacade> CreateProtobuffWriterFacade(const WriterFacadeConfig& config) {
+    std::unique_ptr<IVtxWriterFacade> CreateProtobufWriterFacade(const WriterFacadeConfig& config) {
         if (!WriterSchemaIsAcceptable(config.schema_json_path)) {
             return nullptr;
         }
@@ -148,7 +148,7 @@ namespace VTX {
         return std::make_unique<WriterFacadeImpl<SinkType>>(internal_cfg);
     }
 
-    std::unique_ptr<IVtxWriterFacade> CreateProtobuffNetworkWriterFacade(const NetworkWriterFacadeConfig& config) {
+    std::unique_ptr<IVtxWriterFacade> CreateProtobufNetworkWriterFacade(const NetworkWriterFacadeConfig& config) {
         if (!WriterSchemaIsAcceptable(config.schema_json_path)) {
             return nullptr;
         }

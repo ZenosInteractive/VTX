@@ -667,7 +667,7 @@ int main() {
     VTX_INFO("--- 2. Protobuf data source ---");
     ArenaProtoDataSource proto_ds(writer_dir + "/arena_replay_data.proto.bin", arena_schema);
     RunPipeline(proto_ds, reader_dir + "/arena_from_proto_ds.vtx", schema, "arena-adv-proto-0001",
-                VTX::CreateProtobuffWriterFacade);
+                VTX::CreateProtobufWriterFacade);
 
     VTX_INFO("--- 3. FlatBuffers data source ---");
     ArenaFbsDataSource fbs_ds(writer_dir + "/arena_replay_data.fbs.bin", arena_schema.GetPropertyCache());

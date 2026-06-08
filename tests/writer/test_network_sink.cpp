@@ -202,7 +202,7 @@ TEST_F(NetworkSinkTest, Protobuf_ReceivedBytesParseableByReader) {
     LoopbackServer srv;
     {
         auto writer =
-            VTX::CreateProtobuffNetworkWriterFacade(MakeNetworkConfig("127.0.0.1", srv.port, "uuid-net-proto"));
+            VTX::CreateProtobufNetworkWriterFacade(MakeNetworkConfig("127.0.0.1", srv.port, "uuid-net-proto"));
         ASSERT_TRUE(writer);
 
         for (int i = 0; i < kFrames; ++i) {

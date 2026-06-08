@@ -109,7 +109,7 @@ namespace VTX {
     };
 
     std::unique_ptr<IVtxReaderFacade> CreateFlatBuffersFacade(const std::string& filepath);
-    std::unique_ptr<IVtxReaderFacade> CreateProtobuffFacade(const std::string& filepath);
+    std::unique_ptr<IVtxReaderFacade> CreateProtobufFacade(const std::string& filepath);
     ReaderContext OpenReplayFile(const std::string& filepath);
 
 } // namespace VTX

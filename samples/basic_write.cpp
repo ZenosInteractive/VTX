@@ -34,7 +34,7 @@ int main(int argc, char* argv[]) {
     config.chunk_max_frames = 500;
     config.use_compression = true;
 
-    // Create a FlatBuffers writer (use CreateProtobuffWriterFacade for Protobuf).
+    // Create a FlatBuffers writer (use CreateProtobufWriterFacade for Protobuf).
     auto writer = VTX::CreateFlatBuffersWriterFacade(config);
     if (!writer) {
         VTX_ERROR("Failed to create writer. Check schema path: {}", schema_path);
