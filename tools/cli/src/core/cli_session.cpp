@@ -11,7 +11,7 @@ namespace VtxCli {
 
         reader_context_ = VTX::OpenReplayFile(filepath);
         if (!reader_context_) {
-            last_error_ = reader_context_.error;
+            last_error_ = reader_context_.error.message;
             return false;
         }
 

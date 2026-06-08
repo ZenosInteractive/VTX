@@ -28,7 +28,7 @@ int main(int argc, char* argv[]) {
 
     auto result = VTX::OpenReplayFile(filepath);
     if (!result) {
-        VTX_ERROR("Failed to open: {}", result.error);
+        VTX_ERROR("Failed to open: {}", result.error.message);
         return 1;
     }
 

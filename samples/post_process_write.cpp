@@ -196,7 +196,7 @@ int main(int argc, char* argv[]) {
     // --- 3. Re-open the .vtx and prove the persisted bytes are post-processed.
     auto ctx = VTX::OpenReplayFile(output_path);
     if (!ctx) {
-        VTX_ERROR("Re-open failed: {}", ctx.GetError());
+        VTX_ERROR("Re-open failed: {}", ctx.GetError().message);
         return 1;
     }
     if (!ctx.WaitUntilReady(std::chrono::seconds(2))) {

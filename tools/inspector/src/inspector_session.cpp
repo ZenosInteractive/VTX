@@ -12,7 +12,7 @@ bool InspectorSession::LoadReplay(const std::string& filepath) {
 
     reader_context_ = VTX::OpenReplayFile(filepath);
     if (!reader_context_.Loaded()) {
-        AddGuiErrorLog(reader_context_.GetError());
+        AddGuiErrorLog(reader_context_.GetError().message);
         is_file_loaded_ = false;
         return false;
     }

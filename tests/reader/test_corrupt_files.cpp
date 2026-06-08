@@ -86,7 +86,7 @@ TEST(CorruptFile, EmptyFileReturnsError) {
     const auto path = WriteRawBytes("empty.vtx", std::span<const uint8_t> {});
     auto ctx = VTX::OpenReplayFile(path);
     EXPECT_FALSE(ctx);
-    EXPECT_FALSE(ctx.error.empty());
+    EXPECT_FALSE(ctx.error.message.empty());
     EXPECT_EQ(ctx.format, VTX::VtxFormat::Unknown);
 }
 
@@ -97,7 +97,7 @@ TEST(CorruptFile, FileSmallerThanMagicBytes) {
 
     auto ctx = VTX::OpenReplayFile(path);
     EXPECT_FALSE(ctx);
-    EXPECT_FALSE(ctx.error.empty());
+    EXPECT_FALSE(ctx.error.message.empty());
 }
 
 TEST(CorruptFile, ValidMagicButTruncatedHeader) {
@@ -108,7 +108,7 @@ TEST(CorruptFile, ValidMagicButTruncatedHeader) {
 
     auto ctx = VTX::OpenReplayFile(path);
     EXPECT_FALSE(ctx);
-    EXPECT_FALSE(ctx.error.empty());
+    EXPECT_FALSE(ctx.error.message.empty());
 }
 
 // ===========================================================================
@@ -129,7 +129,7 @@ TEST(CorruptFile, TruncatedBeforeFooter) {
 
     auto ctx = VTX::OpenReplayFile(truncated);
     EXPECT_FALSE(ctx);
-    EXPECT_FALSE(ctx.error.empty()); // must surface something, not crash
+    EXPECT_FALSE(ctx.error.message.empty()); // must surface something, not crash
 }
 
 TEST(CorruptFile, CorruptFooterSize) {
@@ -152,7 +152,7 @@ TEST(CorruptFile, CorruptFooterSize) {
     // Must not crash -- either returns error or opens with a diagnostic.
     // We don't care which, only that there's no UB / no hang.
     if (!ctx) {
-        EXPECT_FALSE(ctx.error.empty());
+        EXPECT_FALSE(ctx.error.message.empty());
     } else {
         // If it did open, at least basic metadata must be readable.
         SUCCEED();
@@ -177,7 +177,7 @@ TEST(CorruptFile, ChunkOffsetBeyondEof) {
     auto ctx = VTX::OpenReplayFile(mutated);
     if (!ctx) {
         // Catastrophic failure is acceptable -- not a crash.
-        EXPECT_FALSE(ctx.error.empty());
+        EXPECT_FALSE(ctx.error.message.empty());
         return;
     }
     // If the header survived, any frame load that references a truncated

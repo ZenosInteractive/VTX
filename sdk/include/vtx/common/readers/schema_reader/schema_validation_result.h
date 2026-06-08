@@ -17,13 +17,17 @@
 #include <utility>
 #include <vector>
 
+#include "vtx/common/vtx_diagnostics.h"
+
 namespace VTX {
 
     /**
      * @brief Severity of a single schema issue.
-     * @details Errors make the schema invalid; warnings are advisory and do not.
+     * @details Aliased to the SDK-wide Severity so schema validation feeds the
+     * same diagnostics model (VtxDiagnostic / ValidationReport) as every other
+     * layer instead of carrying a parallel enum.
      */
-    enum class SchemaIssueSeverity { Warning, Error };
+    using SchemaIssueSeverity = Severity;
 
     /**
      * @brief One problem found while validating a schema.
@@ -88,6 +92,28 @@ namespace VTX {
                 os << issue.message << '\n';
             }
             return os.str();
+        }
+
+
+        ValidationReport ToReport(const char* source_api = "ValidateSchema") const {
+            ValidationReport report;
+            for (const auto& issue : issues_) {
+                VtxDiagnostic diagnostic;
+                diagnostic.code = (issue.rule == "Json") ? VtxErrorCode::SchemaParseError : VtxErrorCode::SchemaInvalid;
+                diagnostic.severity = issue.severity;
+                diagnostic.message = issue.rule.empty() ? issue.message : ("(" + issue.rule + ") " + issue.message);
+                diagnostic.entity_type = issue.struct_name;
+                if (!issue.struct_name.empty() && !issue.field_name.empty()) {
+                    diagnostic.field_path = issue.struct_name + "." + issue.field_name;
+                } else if (!issue.field_name.empty()) {
+                    diagnostic.field_path = issue.field_name;
+                } else {
+                    diagnostic.field_path = issue.struct_name;
+                }
+                diagnostic.source_api = source_api;
+                report.Add(std::move(diagnostic));
+            }
+            return report;
         }
 
     private:

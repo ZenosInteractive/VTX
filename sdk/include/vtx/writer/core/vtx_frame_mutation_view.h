@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "vtx/common/vtx_concepts.h"
+#include "vtx/common/vtx_diagnostics.h"
 #include "vtx/common/vtx_frame_accessor.h"
 #include "vtx/common/vtx_types.h"
 
@@ -34,6 +35,43 @@ namespace VTX {
             if (static_cast<size_t>(key.index) >= values.size())
                 return;
             values[key.index] = std::move(value);
+        }
+
+        template <VtxScalarType T>
+        VtxStatus TrySet(PropertyKey<T> key, T value) {
+            if (!data_) {
+                VtxError error;
+                error.code = VtxErrorCode::InvalidArgument;
+                error.message = "invalid entity handle";
+                error.source_api = "TrySet";
+                return VtxStatus::Failure(error);
+            }
+            if (IsFrozen()) {
+                VtxError error;
+                error.code = VtxErrorCode::InvalidArgument;
+                error.message = "entity is frozen (frame already finalized)";
+                error.source_api = "TrySet";
+                return VtxStatus::Failure(error);
+            }
+            if (!key.IsValid()) {
+                VtxError error;
+                error.code = VtxErrorCode::InvalidArgument;
+                error.message = "invalid property key";
+                error.source_api = "TrySet";
+                return VtxStatus::Failure(error);
+            }
+            constexpr auto MemberPtr = EntityView::GetContainerMember<T>();
+            auto& values = data_->*MemberPtr;
+            if (static_cast<size_t>(key.index) >= values.size()) {
+                VtxError error;
+                error.code = VtxErrorCode::FieldIndexOutOfRange;
+                error.message = "property index " + std::to_string(key.index) + " is out of range (size " +
+                                std::to_string(values.size()) + ")";
+                error.source_api = "TrySet";
+                return VtxStatus::Failure(error);
+            }
+            values[key.index] = std::move(value);
+            return VtxStatus::Success(Unit {});
         }
 
         EntityMutator GetMutableView(PropertyKey<EntityView> key) {
@@ -246,10 +284,7 @@ namespace VTX {
             : frame_(&frame)
             , accessor_(&accessor) {}
 
-        /**
-         * @brief Freeze the frame: revoke mutation on every handle derived from
-         *        this view (including ones already handed out / stashed).
-         */
+
         void Freeze() noexcept {
             if (frozen_)
                 *frozen_ = true;

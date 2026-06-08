@@ -43,7 +43,7 @@ namespace {
 
         auto ctx = VTX::OpenReplayFile(path);
         if (!ctx) {
-            VTX_ERROR("OpenReplayFile failed: {}", ctx.error);
+            VTX_ERROR("OpenReplayFile failed: {}", ctx.error.message);
             return 1;
         }
 
@@ -54,7 +54,7 @@ namespace {
 
         if (!ready) {
             if (ctx.IsReadyFailed()) {
-                VTX_ERROR("Chunk 0 failed after {} ms: {}", elapsed_ms, ctx.GetReadyError());
+                VTX_ERROR("Chunk 0 failed after {} ms: {}", elapsed_ms, ctx.GetReadyError().message);
             } else {
                 VTX_ERROR("Chunk 0 not ready after {} ms (timeout)", elapsed_ms);
             }
@@ -78,7 +78,7 @@ namespace {
 
         auto ctx = VTX::OpenReplayFile(path);
         if (!ctx) {
-            VTX_ERROR("OpenReplayFile failed: {}", ctx.error);
+            VTX_ERROR("OpenReplayFile failed: {}", ctx.error.message);
             return 1;
         }
 
@@ -97,7 +97,7 @@ namespace {
         }
 
         if (ctx.IsReadyFailed()) {
-            VTX_ERROR("Chunk 0 failed after {} polls: {}", ticks, ctx.GetReadyError());
+            VTX_ERROR("Chunk 0 failed after {} polls: {}", ticks, ctx.GetReadyError().message);
             return 1;
         }
 
@@ -134,8 +134,8 @@ namespace {
             succeeded.store(true);
             done.store(true);
         };
-        events.OnReadyFailed = [&](const std::string& err) {
-            VTX_ERROR("[callback] OnReadyFailed: {}", err);
+        events.OnReadyFailed = [&](const VTX::VtxError& err) {
+            VTX_ERROR("[callback] OnReadyFailed: {}", err.message);
             done.store(true);
         };
         facade->SetEvents(events);
