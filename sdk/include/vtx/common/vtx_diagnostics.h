@@ -7,6 +7,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <ostream>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -156,6 +157,10 @@ namespace VTX {
             return os.str();
         }
     };
+
+    inline std::ostream& operator<<(std::ostream& os, const VtxDiagnostic& diagnostic) {
+        return os << diagnostic.ToString();
+    }
 
     using VtxError = VtxDiagnostic;
     using VtxWarning = VtxDiagnostic;

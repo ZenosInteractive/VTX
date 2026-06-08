@@ -67,7 +67,7 @@ int main(int argc, char* argv[]) {
     // ---- Open the replay -------------------------------------------------
     auto result = VTX::OpenReplayFile(filepath);
     if (!result) {
-        VTX_ERROR("Failed to open: {}", result.error);
+        VTX_ERROR("Failed to open: {}", result.error.message);
         return 1;
     }
     auto& reader = result.reader;

@@ -92,7 +92,7 @@ protected:
 
 TEST_F(ReaderContextHappy, ReportsFlatBuffersFormat) {
     EXPECT_EQ(ctx_.format, VTX::VtxFormat::FlatBuffers);
-    EXPECT_TRUE(ctx_.error.empty());
+    EXPECT_TRUE(ctx_.error.message.empty());
     EXPECT_GT(ctx_.size_in_mb, 0.0f);
     EXPECT_EQ(ctx_.reader->GetTotalFrames(), 5);
 }
@@ -150,7 +150,7 @@ TEST_F(ReaderContextHappy, HeaderAndFooterRoundtripMetadata) {
 TEST(ReaderContextFailure, NonexistentFileReturnsError) {
     auto ctx = VTX::OpenReplayFile(VtxTest::OutputPath("definitely_not_here.vtx"));
     EXPECT_FALSE(ctx);
-    EXPECT_FALSE(ctx.error.empty());
+    EXPECT_FALSE(ctx.error.message.empty());
     EXPECT_EQ(ctx.format, VTX::VtxFormat::Unknown);
 }
 
@@ -163,7 +163,7 @@ TEST(ReaderContextFailure, GarbageFileReturnsError) {
 
     auto ctx = VTX::OpenReplayFile(path);
     EXPECT_FALSE(ctx);
-    EXPECT_FALSE(ctx.error.empty());
+    EXPECT_FALSE(ctx.error.message.empty());
 }
 
 
@@ -181,7 +181,7 @@ TEST_F(ReaderContextHappy, ReadyFlipsWithinTimeoutOnValidReplay) {
     ASSERT_TRUE(ctx_.WaitUntilReady(std::chrono::seconds(5)));
     EXPECT_TRUE(ctx_.IsReady());
     EXPECT_FALSE(ctx_.IsReadyFailed());
-    EXPECT_TRUE(ctx_.GetReadyError().empty());
+    EXPECT_EQ(ctx_.GetReadyError().code, VTX::VtxErrorCode::None);
 }
 
 TEST_F(ReaderContextHappy, ReadyIsStableAcrossRepeatedQueries) {
@@ -211,7 +211,7 @@ TEST(ReaderContextReady, OnReadyFiresOnDirectFacadeWithPreWiredEvents) {
     evts.OnReady = [&]() {
         ready_count.fetch_add(1);
     };
-    evts.OnReadyFailed = [&](const std::string&) {
+    evts.OnReadyFailed = [&](const VTX::VtxError&) {
         failed_count.fetch_add(1);
     };
     facade->SetEvents(evts);
@@ -337,7 +337,7 @@ TEST(ReaderContextReady, ReadyFailsOnCorruptChunkZero) {
     EXPECT_FALSE(is_ready);
     EXPECT_FALSE(ctx.IsReady());
     EXPECT_TRUE(ctx.IsReadyFailed());
-    EXPECT_FALSE(ctx.GetReadyError().empty());
+    EXPECT_FALSE(ctx.GetReadyError().message.empty());
 }
 
 TEST_F(ReaderContextHappy, WaitUntilReadyIsIdempotent) {
@@ -457,10 +457,10 @@ TEST(ReaderContextReady, OnReadyFailedFiresOnDirectFacadeForCorruptChunkZero) {
     evts.OnReady = [&]() {
         ready_count.fetch_add(1);
     };
-    evts.OnReadyFailed = [&](const std::string& err) {
+    evts.OnReadyFailed = [&](const VTX::VtxError& err) {
         {
             std::lock_guard<std::mutex> lk(err_mu);
-            last_error = err;
+            last_error = err.message;
         }
         failed_count.fetch_add(1);
     };

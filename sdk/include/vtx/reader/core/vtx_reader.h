@@ -17,6 +17,7 @@
 #include <span>
 
 #include "vtx_deserializer_service.h"
+#include "vtx/common/vtx_diagnostics.h"
 #include "vtx/common/vtx_types.h"
 #include "vtx/common/vtx_concepts.h"
 #include "vtx/reader/core/vtx_schema_adapter.h"
@@ -41,7 +42,7 @@ namespace VTX {
         std::function<void(int32_t)> OnChunkLoadFinished;
         std::function<void(int32_t)> OnChunkEvicted;
         std::function<void()> OnReady;
-        std::function<void(const std::string&)> OnReadyFailed;
+        std::function<void(const VtxError&)> OnReadyFailed;
     };
 
     template <IVtxReaderPolicy SerializerPolicy>
@@ -72,7 +73,7 @@ namespace VTX {
                 std::lock_guard<std::mutex> lk(ready_mutex_);
                 if (!ready_.load() && !ready_failed_.load()) {
                     ready_failed_.store(true);
-                    ready_error_ = "Reader destroyed before first chunk was ready";
+                    ready_error_ = MakeReadyError("Reader destroyed before first chunk was ready");
                 }
             }
             ready_cv_.notify_all();
@@ -107,7 +108,7 @@ namespace VTX {
         bool IsReady() const { return ready_.load(std::memory_order_acquire); }
         bool IsReadyFailed() const { return ready_failed_.load(std::memory_order_acquire); }
 
-        std::string GetReadyError() const {
+        VtxError GetReadyError() const {
             std::lock_guard<std::mutex> lk(ready_mutex_);
             return ready_error_;
         }
@@ -579,7 +580,17 @@ namespace VTX {
             }
         }
 
-        void SignalFirstChunkReady(bool success, const std::string& error) {
+        static VtxError MakeReadyError(const std::string& message) {
+            VtxError error;
+            error.code = VtxErrorCode::ReplayNotReady;
+            error.severity = Severity::Error;
+            error.message = message;
+            error.source_api = "ReplayReader";
+            return error;
+        }
+
+        void SignalFirstChunkReady(bool success, const std::string& error_message) {
+            VtxError error; // meaningful only on failure
             {
                 std::lock_guard<std::mutex> lk(ready_mutex_);
                 if (ready_.load(std::memory_order_acquire) || ready_failed_.load(std::memory_order_acquire)) {
@@ -588,6 +599,7 @@ namespace VTX {
                 if (success) {
                     ready_.store(true, std::memory_order_release);
                 } else {
+                    error = MakeReadyError(error_message);
                     ready_failed_.store(true, std::memory_order_release);
                     ready_error_ = error;
                 }
@@ -685,7 +697,7 @@ namespace VTX {
 
         std::atomic<bool> ready_ {false};
         std::atomic<bool> ready_failed_ {false};
-        std::string ready_error_;
+        VtxError ready_error_;
         mutable std::mutex ready_mutex_;
         mutable std::condition_variable ready_cv_;
 

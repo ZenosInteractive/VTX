@@ -16,12 +16,15 @@ namespace VTX {
         ValidationReport report;
 
         if (!reader.WaitUntilReady()) {
-            VtxDiagnostic diagnostic;
-            diagnostic.code = VtxErrorCode::ReplayNotReady;
-            diagnostic.severity = Severity::Error;
-            diagnostic.message = "replay is not ready: " + reader.GetReadyError();
-            diagnostic.source_api = "ValidateReplay";
-            report.Add(std::move(diagnostic));
+            // The reader already reports the failure as a structured VtxError;
+            VtxError error = reader.GetReadyError();
+            if (error.code == VtxErrorCode::None) {
+                error.code = VtxErrorCode::ReplayNotReady;
+                error.severity = Severity::Error;
+                error.message = "replay did not become ready";
+            }
+            error.source_api = "ValidateReplay";
+            report.Add(std::move(error));
             return report;
         }
 
@@ -40,8 +43,6 @@ namespace VTX {
             }
         }
 
-        // Frames are validated against the reader's resolved property cache, which
-        // is always populated even when the embedded JSON document is absent.
         if (options.validate_frames) {
             const PropertyAddressCache schema = reader.GetPropertyAddressCache();
             const int32_t total = reader.GetTotalFrames();
@@ -70,12 +71,14 @@ namespace VTX {
 
         ReaderContext ctx = OpenReplayFile(filepath);
         if (!ctx) {
-            VtxDiagnostic diagnostic;
-            diagnostic.code = VtxErrorCode::ReplayOpenFailed;
-            diagnostic.severity = Severity::Error;
-            diagnostic.message = "failed to open replay '" + filepath + "': " + ctx.GetError();
-            diagnostic.source_api = "ValidateReplayFile";
-            report.Add(std::move(diagnostic));
+            VtxError error = ctx.GetError();
+            if (error.code == VtxErrorCode::None) {
+                error.code = VtxErrorCode::ReplayOpenFailed;
+                error.severity = Severity::Error;
+                error.message = "failed to open replay '" + filepath + "'";
+            }
+            error.source_api = "ValidateReplayFile";
+            report.Add(std::move(error));
             return report;
         }
 

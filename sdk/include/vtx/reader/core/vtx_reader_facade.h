@@ -59,7 +59,7 @@ namespace VTX {
 
         virtual bool IsReady() const = 0;
         virtual bool IsReadyFailed() const = 0;
-        virtual std::string GetReadyError() const = 0;
+        virtual VtxError GetReadyError() const = 0;
         virtual bool WaitUntilReady() = 0;
         virtual bool WaitUntilReady(std::chrono::milliseconds timeout) = 0;
 
@@ -75,12 +75,18 @@ namespace VTX {
         IVtxReaderFacade* operator->() const { return reader.get(); }
         bool Loaded() const { return reader != nullptr; }
         const VtxFormat& GetFormat() const { return format; }
-        const std::string& GetError() const { return error; }
-        void SetError(const std::string& err) { error = err; }
+        const VtxError& GetError() const { return error; }
+        void SetError(const std::string& err) {
+            error.code = VtxErrorCode::ReplayOpenFailed;
+            error.severity = Severity::Error;
+            error.message = err;
+            error.source_api = "OpenReplayFile";
+        }
+        void SetError(VtxError err) { error = std::move(err); }
 
         bool IsReady() const { return reader && reader->IsReady(); }
         bool IsReadyFailed() const { return reader && reader->IsReadyFailed(); }
-        std::string GetReadyError() const { return reader ? reader->GetReadyError() : std::string {}; }
+        VtxError GetReadyError() const { return reader ? reader->GetReadyError() : VtxError {}; }
         bool WaitUntilReady() { return reader ? reader->WaitUntilReady() : false; }
         bool WaitUntilReady(std::chrono::milliseconds timeout) {
             return reader ? reader->WaitUntilReady(timeout) : false;
@@ -90,7 +96,7 @@ namespace VTX {
             reader.reset();
             if (chunk_state)
                 chunk_state->Reset();
-            error.clear();
+            error = VtxError {};
             format = VtxFormat::Unknown;
             size_in_mb = 0.0f;
         }
@@ -98,7 +104,7 @@ namespace VTX {
         std::unique_ptr<ReaderChunkState> chunk_state;
         std::unique_ptr<IVtxReaderFacade> reader;
         VtxFormat format = VtxFormat::Unknown;
-        std::string error;
+        VtxError error;
         float size_in_mb = 0.0f;
     };
 

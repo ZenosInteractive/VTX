@@ -113,7 +113,7 @@ namespace VTX {
 
         bool IsReadyFailed() const override { return InternalReader.IsReadyFailed(); }
 
-        std::string GetReadyError() const override { return InternalReader.GetReadyError(); }
+        VtxError GetReadyError() const override { return InternalReader.GetReadyError(); }
 
         bool WaitUntilReady() override { return InternalReader.WaitUntilReady(); }
 
@@ -188,7 +188,7 @@ namespace VTX {
 
         bool IsReadyFailed() const override { return InternalReader.IsReadyFailed(); }
 
-        std::string GetReadyError() const override { return InternalReader.GetReadyError(); }
+        VtxError GetReadyError() const override { return InternalReader.GetReadyError(); }
 
         bool WaitUntilReady() override { return InternalReader.WaitUntilReady(); }
 

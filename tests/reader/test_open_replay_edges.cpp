@@ -62,7 +62,7 @@ TEST(OpenReplayEdges, OpenReplayFileWithDirectoryPath) {
 
     auto ctx = VTX::OpenReplayFile(dir);
     EXPECT_FALSE(ctx);
-    EXPECT_FALSE(ctx.error.empty());
+    EXPECT_FALSE(ctx.error.message.empty());
     EXPECT_EQ(ctx.format, VTX::VtxFormat::Unknown);
 }
 
@@ -125,6 +125,6 @@ TEST(OpenReplayEdges, UnicodeFilenameDoesNotCrash) {
     if (ctx) {
         EXPECT_EQ(ctx.reader->GetTotalFrames(), 1);
     } else {
-        EXPECT_FALSE(ctx.error.empty());
+        EXPECT_FALSE(ctx.error.message.empty());
     }
 }
