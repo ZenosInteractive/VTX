@@ -14,6 +14,7 @@ VTX is an open binary format for real-time per-frame state data, plus a C++20 SD
 - **Random access by frame or timestamp.** Footer-indexed seek, not a linear scan. O(log n) lookup plus one chunk decompress.
 - **Both Protobuf and FlatBuffers.** SDK supports both backends out of the box. The file announces which in its magic bytes; readers auto-detect.
 - **Live streaming transports.** Ingest frames live from an OS pipe (Windows named pipe, POSIX FIFO, stdin) or a WebSocket connection, and emit the `.vtx` byte stream over a TCP socket instead of writing to disk. Same writer API behind each transport -- file or network, sink-agnostic.
+- **Validation & structured diagnostics.** Validate a schema, entity, frame, or whole replay independently; strict recording rejects frames observably (bad game-time, unresolved entity type). Every failure is a structured `VtxError` -- code, severity, location, expected-vs-provided type -- so automation acts on data, not parsed log lines.
 - **Engine-independent C++20.** No engine dependency. Language bindings wherever Protobuf or FlatBuffers exist (Python, Go, Rust, Java, JS).
 - **Open.** Apache-2.0. Spec, reference reader, and tooling all in the repo.
 

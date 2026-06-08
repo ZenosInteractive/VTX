@@ -178,6 +178,45 @@ time_reg.utc_timestamp = /* unix timestamp */;
 writer->RecordFrame(frame, time_reg);
 ```
 
+### Strict recording, finalization & rejection
+
+`RecordFrame` is fire-and-forget. For an observable outcome use `TryRecordFrame`, which returns a `RecordResult`:
+
+```cpp
+VTX::RecordResult r = writer->TryRecordFrame(frame, time_reg);
+if (!r.IsWritten()) {
+    // r.error is a VtxError: code (e.g. GameTimeRejected / EntityTypeUnresolved),
+    // message, source_api. A bad game-time registry no longer rolls back silently.
+    VTX_WARN("frame rejected: {}", r.error.message);
+} else {
+    // r.frame_index is the writer-assigned, monotonic index.
+}
+```
+
+Before a frame enters the chunk pipeline the writer **finalizes** it: validates that every
+entity type resolves to a schema struct, recomputes each entity's `content_hash` after all
+schema fields and post-processor overrides, then **freezes** the frame (any mutation handle a
+post-processor stashed is revoked).
+
+Optionally retain the last finalized frame as a read-only snapshot (off by default -- it costs
+a full-frame copy per frame):
+
+```cpp
+config.retain_finalized_snapshot = true;
+// ...after a written TryRecordFrame:
+const VTX::PropertyContainer* e = writer->FindEntity("World", "player_001");
+const VTX::Frame* snap = writer->GetLastFinalizedFrame();
+```
+
+The one-call pipeline reports outcomes structurally:
+
+```cpp
+VTX::RecordPipeline pipeline(std::move(source), std::move(writer));
+VTX::PipelineReport report = pipeline.Run();
+// report.written / .rejected / .skipped, with rejections split into
+// .validation_errors vs .timer_errors, plus report.errors (one VtxError per rejected frame).
+```
+
 ### Finishing
 
 ```cpp
@@ -402,10 +441,76 @@ bucket.entities.push_back(VTX::PropertyContainer{});
 
 ## Error Handling
 
-- `OpenReplayFile()` returns a `ReaderContext`. Check with `if (!ctx)` and read `ctx.GetError()`.
-- Reader methods return `nullptr` or `false` on invalid frame indices.
-- Writer and differ factory functions return `nullptr` for unsupported formats.
-- Internal errors are logged via `VTX_ERROR(...)` to the thread-safe logger.
+The SDK uses one structured model (`vtx/common/vtx_diagnostics.h`) so failures can be handled
+programmatically instead of parsed out of logs:
+
+- **`VtxDiagnostic`** (aliases **`VtxError`** / **`VtxWarning`**) -- `code` (`VtxErrorCode`),
+  `severity` (`Severity`), `message`, plus location/context: `frame_index`, `bucket`,
+  `unique_id`, `entity_type`, `field_path`, `expected_type`/`expected_container`,
+  `provided_type`/`provided_container`, `source_api`. Has `ToString()` and `operator<<`.
+- **`VtxResult<T>`** -- `{ ok, value, error, warnings }`; `VtxStatus` = `VtxResult<Unit>`.
+  Build with `Success(...)` / `Failure(...)`.
+- **`ValidationReport`** -- aggregated diagnostics (`HasErrors` / `ok` / `ErrorCount` /
+  `WarningCount` / `Errors` / `Warnings` / `ToString`).
+
+Where it surfaces:
+
+- `OpenReplayFile()` -> `ReaderContext`; check `if (!ctx)` then `ctx.GetError()` (a `VtxError`).
+- Reader ready-state: `IsReadyFailed()` + `GetReadyError()` (a `VtxError`);
+  `ReplayReaderEvents::OnReadyFailed(const VtxError&)`.
+- Writer: `TryRecordFrame` -> `RecordResult` (carries a `VtxError`); `RecordPipeline::Run` ->
+  `PipelineReport`.
+- Strict accessors `TryResolve` / `TryGet` / `TrySet` -> `VtxResult`.
+- Validation passes (below) -> `ValidationReport`.
+
+Tolerant APIs are kept where useful: reader methods still return `nullptr`/`false` on invalid
+indices, factory functions return `nullptr` for unsupported formats, and `VTX_ERROR(...)`
+logging is unchanged.
+
+---
+
+## Validation
+
+Validation is split into composable passes (`vtx/common/vtx_validation.h`, plus
+`vtx/reader/core/vtx_replay_validation.h`), each returning a `ValidationReport`:
+
+```cpp
+#include "vtx/common/vtx_validation.h"
+#include "vtx/reader/core/vtx_replay_validation.h"
+
+// Schema document (raw JSON) -- wraps the rule-based SchemaValidator.
+VTX::ValidationReport r1 = VTX::ValidateSchema(json_string);
+
+// One entity / a whole frame against a loaded schema (SchemaRegistry or PropertyAddressCache).
+VTX::ValidationReport r2 = VTX::ValidateEntity(entity, registry);
+VTX::ValidationReport r3 = VTX::ValidateFrame(frame, registry, /*frame_index*/ 0);
+
+// A whole replay: reuse an already-open reader (no re-open) or open by path.
+VTX::ValidationReport r4 = VTX::ValidateReplay(*ctx.reader);
+VTX::ValidationReport r5 = VTX::ValidateReplayFile("replay.vtx");
+
+if (!r5.ok()) {
+    for (const auto& d : r5.Diagnostics())
+        VTX_ERROR("{}", d.ToString());
+}
+```
+
+`ValidateEntity` / `ValidateFrame` flag unresolved entity types (`EntityTypeUnresolved`),
+per-type arrays larger than the schema declares (`FieldIndexOutOfRange`), and duplicate
+`unique_id`s within a bucket (`DuplicateUniqueId`).
+
+### Strict accessors
+
+Type-safe reads/writes that report failures instead of returning a default or silently
+no-opping (the tolerant `Get` / `Set` stay unchanged):
+
+```cpp
+// Resolve a key strictly: TypeMismatch carries expected vs provided type, NotFound otherwise.
+VTX::VtxResult<VTX::PropertyKey<float>> k = accessor.TryResolve<float>("Player", "Health");
+
+VTX::VtxResult<float> v = entityView.TryGet(k.value);    // FieldIndexOutOfRange on a short entity
+VTX::VtxStatus s = entityMutator.TrySet(k.value, 50.0f); // refused if the frame is frozen
+```
 
 ---
 
@@ -588,6 +693,13 @@ source.Initialize();                   // TCP connect + WebSocket handshake; blo
 VTX acts as a WebSocket client.  Each incoming WebSocket message is one frame, handed to the `Adapter`.  Ping/pong, close, fragment reassembly are handled internally.  `wss://` verifies the server certificate against the OS trust store by default.  Auto-reconnect is disabled -- a dropped connection ends the stream so the writer finalises the `.vtx` instead of silently resuming mid-file.
 
 Backed by IXWebSocket + mbedTLS, both hidden behind a PIMPL boundary -- the public header carries no transitive dependency on either.
+
+> **Experimental / WIP -- not functional yet.** A third source,
+> `SharedMemoryFrameDataSource` (zero-copy SPSC ring over a shared-memory segment,
+> with a pluggable `ISharedMemoryTransport`), exists in-tree under
+> `sdk/include/vtx/writer/sources/shared_memory_frame_source.h` but **is work in
+> progress and not yet functional** -- it landed unintentionally and is not a
+> supported input path. Treat the headers as a preview; do not depend on them.
 
 ### IFramePayloadAdapter (shared concept)
 
