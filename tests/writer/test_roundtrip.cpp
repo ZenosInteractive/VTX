@@ -67,7 +67,7 @@ protected:
 
     std::unique_ptr<VTX::IVtxWriterFacade> CreateWriter(const VTX::WriterFacadeConfig& cfg) const {
         return GetParam() == VTX::VtxFormat::FlatBuffers ? VTX::CreateFlatBuffersWriterFacade(cfg)
-                                                         : VTX::CreateProtobuffWriterFacade(cfg);
+                                                         : VTX::CreateProtobufWriterFacade(cfg);
     }
 };
 

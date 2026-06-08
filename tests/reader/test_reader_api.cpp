@@ -40,7 +40,7 @@ namespace {
 
     std::unique_ptr<VTX::IVtxWriterFacade> CreateWriter(VTX::VtxFormat format, const VTX::WriterFacadeConfig& cfg) {
         return format == VTX::VtxFormat::FlatBuffers ? VTX::CreateFlatBuffersWriterFacade(cfg)
-                                                     : VTX::CreateProtobuffWriterFacade(cfg);
+                                                     : VTX::CreateProtobufWriterFacade(cfg);
     }
 
     VTX::Frame MakePlayerFrame(int frame_index) {

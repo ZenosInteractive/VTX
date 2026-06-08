@@ -128,9 +128,9 @@ namespace VTX {
     };
 
 
-    class ProtobuffFacadeImpl : public IVtxReaderFacade {
+    class ProtobufFacadeImpl : public IVtxReaderFacade {
     public:
-        ProtobuffFacadeImpl(const std::string& filepath)
+        ProtobufFacadeImpl(const std::string& filepath)
             : InternalReader(filepath) {}
 
         void SetEvents(const ReplayReaderEvents& events) override { InternalReader.SetEvents(events); }
@@ -207,10 +207,9 @@ namespace VTX {
         return std::make_unique<FlatBuffersFacadeImpl>(filepath);
     }
 
-    std::unique_ptr<IVtxReaderFacade> CreateProtobuffFacade(const std::string& filepath) {
-        return std::make_unique<ProtobuffFacadeImpl>(filepath);
+    std::unique_ptr<IVtxReaderFacade> CreateProtobufFacade(const std::string& filepath) {
+        return std::make_unique<ProtobufFacadeImpl>(filepath);
     }
-
 
     ReaderContext OpenReplayFile(const std::string& filepath) {
         ReaderContext result;
@@ -237,7 +236,7 @@ namespace VTX {
                 result.reader = std::make_unique<FlatBuffersFacadeImpl>(filepath);
             } else if (magic == "VTXP") {
                 result.format = VtxFormat::Protobuf;
-                result.reader = std::make_unique<ProtobuffFacadeImpl>(filepath);
+                result.reader = std::make_unique<ProtobufFacadeImpl>(filepath);
             } else {
                 result.SetError("Unknown file format. Magic: " + magic);
                 return result;

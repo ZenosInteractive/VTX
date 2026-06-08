@@ -55,12 +55,12 @@ namespace VTX {
     };
     enum class SerializationFormat : uint8_t {
         Flatbuffers,
-        Protobuffs,
+        Protobuf,
     };
 
     std::unique_ptr<IVtxWriterFacade> CreateFlatBuffersWriterFacade(const WriterFacadeConfig& config);
 
-    std::unique_ptr<IVtxWriterFacade> CreateProtobuffWriterFacade(const WriterFacadeConfig& config);
+    std::unique_ptr<IVtxWriterFacade> CreateProtobufWriterFacade(const WriterFacadeConfig& config);
 
     struct NetworkWriterFacadeConfig {
         std::string replay_name = "";
@@ -78,6 +78,6 @@ namespace VTX {
 
     std::unique_ptr<IVtxWriterFacade> CreateFlatBuffersNetworkWriterFacade(const NetworkWriterFacadeConfig& config);
 
-    std::unique_ptr<IVtxWriterFacade> CreateProtobuffNetworkWriterFacade(const NetworkWriterFacadeConfig& config);
+    std::unique_ptr<IVtxWriterFacade> CreateProtobufNetworkWriterFacade(const NetworkWriterFacadeConfig& config);
 
 } // namespace VTX

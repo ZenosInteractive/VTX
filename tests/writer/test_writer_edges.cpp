@@ -254,7 +254,7 @@ TEST(WriterSchemaGate, ReturnsNullForMissingSchemaFile) {
     cfg.schema_json_path = VtxTest::OutputPath("definitely_missing_schema_84213.json");
 
     EXPECT_FALSE(VTX::CreateFlatBuffersWriterFacade(cfg)) << "missing schema must yield no writer";
-    EXPECT_FALSE(VTX::CreateProtobuffWriterFacade(cfg)) << "missing schema must yield no writer";
+    EXPECT_FALSE(VTX::CreateProtobufWriterFacade(cfg)) << "missing schema must yield no writer";
 }
 
 TEST(WriterSchemaGate, ReturnsNullForInvalidSchema) {
@@ -271,7 +271,7 @@ TEST(WriterSchemaGate, ReturnsNullForInvalidSchema) {
     cfg.schema_json_path = bad_path;
 
     EXPECT_FALSE(VTX::CreateFlatBuffersWriterFacade(cfg)) << "invalid schema must yield no writer";
-    EXPECT_FALSE(VTX::CreateProtobuffWriterFacade(cfg)) << "invalid schema must yield no writer";
+    EXPECT_FALSE(VTX::CreateProtobufWriterFacade(cfg)) << "invalid schema must yield no writer";
 }
 
 TEST(WriterSchemaGate, SucceedsForValidSchema) {
