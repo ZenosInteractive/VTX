@@ -42,6 +42,8 @@ namespace VTX {
             bool is_increasing = true;
             ChunkingPolicy chunker_config;
             std::string schema_json_path;
+            std::string schema_json_content;                      // in-memory schema JSON (wins over schema_json_path)
+            std::shared_ptr<VTX::SchemaRegistry> schema_registry; // pre-built registry (wins over content/path)
             bool retain_finalized_snapshot = false;
         };
 
@@ -52,7 +54,14 @@ namespace VTX {
             , sanitizer_(nullptr) {
             retain_snapshot_ = config.retain_finalized_snapshot;
             timer_.Setup(config.default_fps, config.is_increasing);
-            registry_.LoadFromJson(config.schema_json_path);
+            // Schema source precedence: injected registry > in-memory JSON content > file path.
+            if (config.schema_registry) {
+                registry_ = *config.schema_registry;
+            } else if (!config.schema_json_content.empty()) {
+                registry_.LoadFromRawString(config.schema_json_content);
+            } else {
+                registry_.LoadFromJson(config.schema_json_path);
+            }
             auto schema = Serializer::CreateSchema(registry_);
             sink_.OnSessionStart(schema);
             frame_accessor_.InitializeFromCache(registry_.GetPropertyCache());
