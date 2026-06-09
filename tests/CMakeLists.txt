@@ -73,6 +73,7 @@ add_executable(vtx_tests
     writer/test_roundtrip.cpp
     writer/test_writer_advanced.cpp
     writer/test_write_replay.cpp
+    writer/test_schema_in_memory.cpp
     writer/test_frame_post_processor.cpp
     writer/test_frame_finalization.cpp
     writer/test_network_sink.cpp

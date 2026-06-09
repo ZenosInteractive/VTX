@@ -16,10 +16,29 @@
 namespace VTX {
 
     namespace {
-        bool WriterSchemaIsAcceptable(const std::string& schema_json_path) {
+        bool WriterSchemaIsAcceptable(const std::string& schema_json_path, const std::string& schema_json_content,
+                                      const std::shared_ptr<SchemaRegistry>& schema_registry) {
+            // registry > content > path.
+            if (schema_registry) {
+                if (!schema_registry->GetIsValid()) {
+                    VTX_ERROR("Refusing to create writer: injected schema registry is not valid.");
+                    return false;
+                }
+                return true;
+            }
+
+            if (!schema_json_content.empty()) {
+                SchemaRegistry probe;
+                if (!probe.LoadFromRawString(schema_json_content)) {
+                    VTX_ERROR("Refusing to create writer: in-memory schema content is missing or invalid.");
+                    return false;
+                }
+                return true;
+            }
             if (schema_json_path.empty()) {
                 return true;
             }
+
             SchemaRegistry probe;
             if (!probe.LoadFromJson(schema_json_path)) {
                 VTX_ERROR("Refusing to create writer: schema '{}' is missing or invalid.", schema_json_path);
@@ -102,7 +121,7 @@ namespace VTX {
 
 
     std::unique_ptr<IVtxWriterFacade> CreateFlatBuffersWriterFacade(const WriterFacadeConfig& config) {
-        if (!WriterSchemaIsAcceptable(config.schema_json_path)) {
+        if (!WriterSchemaIsAcceptable(config.schema_json_path, config.schema_json_content, config.schema_registry)) {
             return nullptr;
         }
         if (config.create_output_dirs) {
@@ -118,6 +137,8 @@ namespace VTX {
 
         internal_cfg.sink_config.filename = config.output_filepath;
         internal_cfg.schema_json_path = config.schema_json_path;
+        internal_cfg.schema_json_content = config.schema_json_content;
+        internal_cfg.schema_registry = config.schema_registry;
         internal_cfg.retain_finalized_snapshot = config.retain_finalized_snapshot;
         internal_cfg.sink_config.header_config.replay_name = config.replay_name;
         internal_cfg.sink_config.header_config.replay_uuid = config.replay_uuid;
@@ -127,7 +148,7 @@ namespace VTX {
     }
 
     std::unique_ptr<IVtxWriterFacade> CreateProtobufWriterFacade(const WriterFacadeConfig& config) {
-        if (!WriterSchemaIsAcceptable(config.schema_json_path)) {
+        if (!WriterSchemaIsAcceptable(config.schema_json_path, config.schema_json_content, config.schema_registry)) {
             return nullptr;
         }
         if (config.create_output_dirs) {
@@ -145,6 +166,8 @@ namespace VTX {
 
         internal_cfg.sink_config.filename = config.output_filepath;
         internal_cfg.schema_json_path = config.schema_json_path;
+        internal_cfg.schema_json_content = config.schema_json_content;
+        internal_cfg.schema_registry = config.schema_registry;
         internal_cfg.retain_finalized_snapshot = config.retain_finalized_snapshot;
 
         internal_cfg.sink_config.b_use_compression = config.use_compression;
@@ -152,7 +175,7 @@ namespace VTX {
     }
 
     std::unique_ptr<IVtxWriterFacade> CreateFlatBuffersNetworkWriterFacade(const NetworkWriterFacadeConfig& config) {
-        if (!WriterSchemaIsAcceptable(config.schema_json_path)) {
+        if (!WriterSchemaIsAcceptable(config.schema_json_path, config.schema_json_content, config.schema_registry)) {
             return nullptr;
         }
         using SinkType = ChunkedNetworkSink<VTX::FlatBuffersVtxPolicy>;
@@ -163,6 +186,8 @@ namespace VTX {
         internal_cfg.chunker_config.max_frames = config.chunk_max_frames;
         internal_cfg.chunker_config.max_bytes = config.chunk_max_bytes;
         internal_cfg.schema_json_path = config.schema_json_path;
+        internal_cfg.schema_json_content = config.schema_json_content;
+        internal_cfg.schema_registry = config.schema_registry;
         internal_cfg.retain_finalized_snapshot = config.retain_finalized_snapshot;
         internal_cfg.sink_config.host = config.host;
         internal_cfg.sink_config.port = config.port;
@@ -174,7 +199,7 @@ namespace VTX {
     }
 
     std::unique_ptr<IVtxWriterFacade> CreateProtobufNetworkWriterFacade(const NetworkWriterFacadeConfig& config) {
-        if (!WriterSchemaIsAcceptable(config.schema_json_path)) {
+        if (!WriterSchemaIsAcceptable(config.schema_json_path, config.schema_json_content, config.schema_registry)) {
             return nullptr;
         }
         using SinkType = ChunkedNetworkSink<VTX::ProtobufVtxPolicy>;
@@ -185,6 +210,8 @@ namespace VTX {
         internal_cfg.chunker_config.max_frames = config.chunk_max_frames;
         internal_cfg.chunker_config.max_bytes = config.chunk_max_bytes;
         internal_cfg.schema_json_path = config.schema_json_path;
+        internal_cfg.schema_json_content = config.schema_json_content;
+        internal_cfg.schema_registry = config.schema_registry;
         internal_cfg.retain_finalized_snapshot = config.retain_finalized_snapshot;
         internal_cfg.sink_config.host = config.host;
         internal_cfg.sink_config.port = config.port;
