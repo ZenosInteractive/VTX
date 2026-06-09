@@ -55,6 +55,10 @@ writer->Flush();
 writer->Stop();
 ```
 
+#### Optional: one call with `WriteReplay`
+
+If your frames come from an `IFrameDataSource`, `VTX::WriteReplay(config, source)` runs the whole pipeline -- create writer, drain the source, finalize -- and returns a `WriteReplayResult` (frames written / dropped, one warning per dropped frame, elapsed time). The schema can be supplied in memory too: set `config.schema_json_content` (raw JSON) or `config.schema_registry` (a pre-built `std::shared_ptr<VTX::SchemaRegistry>`) instead of `schema_json_path`.
+
 #### Optional: post-process every frame before it lands on disk
 
 `writer->SetPostProcessor(...)` installs a hook that runs after timer validation and before serialization. Whatever it mutates is what gets persisted. Use it to sanitize values, derive consistency state, filter or inject entities, accumulate cross-frame stats, or branch by schema version.
@@ -83,7 +87,7 @@ For string-free, schema-driven processors with type-safety in compile time, use 
 
 #### Optional: stream frames live instead of reading a file source
 
-The same writer API can ingest frames from an OS pipe (Windows named pipes, POSIX FIFOs, stdin) or a WebSocket -- use `PipeFrameDataSource` / `WebSocketFrameDataSource` (both implement `IFrameDataSource`) and feed each frame into `writer->RecordFrame`. To emit the `.vtx` byte stream over a TCP socket instead of writing to disk, swap the file facade for `CreateFlatBuffersNetworkWriterFacade` / `CreateProtobuffNetworkWriterFacade` -- same `IVtxWriterFacade` behind both.
+The same writer API can ingest frames from an OS pipe (Windows named pipes, POSIX FIFOs, stdin) or a WebSocket -- use `PipeFrameDataSource` / `WebSocketFrameDataSource` (both implement `IFrameDataSource`) and feed each frame into `writer->RecordFrame`. To emit the `.vtx` byte stream over a TCP socket instead of writing to disk, swap the file facade for `CreateFlatBuffersNetworkWriterFacade` / `CreateProtobufNetworkWriterFacade` -- same `IVtxWriterFacade` behind both.
 
 ```cpp
 // Ingest live frames from a Windows named pipe; record them into a .vtx
