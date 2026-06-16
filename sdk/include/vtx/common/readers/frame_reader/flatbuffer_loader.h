@@ -135,26 +135,34 @@ namespace VTX {
             using ElementT = typename std::iterator_traits<IteratorT>::value_type;
 
             if constexpr (std::is_pointer_v<ElementT>) {
-                for (auto it = src_array->begin(); it != src_array->end(); ++it) {
-                    const auto* item = *it;
-                    if (!item)
-                        continue;
+                if constexpr (requires(ElementT s) { s->str(); }) {
+                    // FlatBuffers Vector<String> -> scalar string array (str() identifies a flatbuffers::String).
+                    for (auto it = src_array->begin(); it != src_array->end(); ++it) {
+                        if (const auto* s = *it)
+                            dest.string_arrays.PushBack(idx, s->str());
+                    }
+                } else {
+                    for (auto it = src_array->begin(); it != src_array->end(); ++it) {
+                        const auto* item = *it;
+                        if (!item)
+                            continue;
 
-                    if (type_id == FieldType::Struct) {
-                        PropertyContainer nested_container;
-                        Load(item, nested_container, child_schema);
+                        if (type_id == FieldType::Struct) {
+                            PropertyContainer nested_container;
+                            Load(item, nested_container, child_schema);
 
-                        if (nested_container.entity_type_id != -1) {
-                            if (container == FieldContainerType::Map) {
-                                this->PushToMap(dest, idx, std::move(nested_container));
-                            } else {
-                                dest.any_struct_arrays.PushBack(idx, nested_container);
+                            if (nested_container.entity_type_id != -1) {
+                                if (container == FieldContainerType::Map) {
+                                    this->PushToMap(dest, idx, std::move(nested_container));
+                                } else {
+                                    dest.any_struct_arrays.PushBack(idx, nested_container);
+                                }
                             }
+                        } else {
+                            PropertyContainer temp;
+                            Load(item, temp, child_schema);
+                            this->PushToFlatArray(dest, type_id, idx, temp);
                         }
-                    } else {
-                        PropertyContainer temp;
-                        Load(item, temp, child_schema);
-                        this->PushToFlatArray(dest, type_id, idx, temp);
                     }
                 }
             } else {

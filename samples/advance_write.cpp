@@ -307,23 +307,10 @@ namespace VTX {
             loader.LoadField(dest, schema_name, ArenaSchema::Player::Score, src->score());
             loader.LoadField(dest, schema_name, ArenaSchema::Player::Deaths, src->deaths());
 
-            // Abilities [string]: the FlatBuffers loader's LoadArray covers
-            // numeric and struct vectors, but not vector<string>, so fill the
-            // string array directly (the proto path shows the auto LoadArray).
-            if (src->abilities()) {
-                const VTX::PropertyAddress* addr =
-                    loader.ResolveField(dest.entity_type_id, schema_name, ArenaSchema::Player::Abilities);
-                if (addr) {
-                    for (const auto* ability : *src->abilities()) {
-                        if (ability) {
-                            dest.string_arrays.PushBack(addr->index, ability->str());
-                        }
-                    }
-                }
-            }
-            // AbilityCooldowns [float], Inventory [struct] and AmmoByWeapon
-            // (map) all go through the loader: LoadArray fills the numeric array
-            // and the struct array, and recognises container == Map for ammo.
+            // Scalar arrays + nested struct + array-of-structs + map all go
+            // through the loader (LoadArray handles string/numeric/struct vectors
+            // and recognises container == Map).
+            loader.LoadArray(dest, schema_name, ArenaSchema::Player::Abilities, src->abilities());
             loader.LoadArray(dest, schema_name, ArenaSchema::Player::AbilityCooldowns, src->ability_cooldowns());
             if (src->loadout()) {
                 loader.LoadStruct(dest, schema_name, ArenaSchema::Player::Loadout, src->loadout());
