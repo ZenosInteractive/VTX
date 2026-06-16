@@ -146,8 +146,7 @@ namespace VTX {
             }
 
             if (proto.has_map_arrays()) {
-                FromProtoComplexVec(proto.map_arrays(), out.map_arrays,
-                                    [](auto& p, auto& n) { FromProto(p, n); });
+                FromProtoComplexVec(proto.map_arrays(), out.map_arrays, [](auto& p, auto& n) { FromProto(p, n); });
             }
         }
 

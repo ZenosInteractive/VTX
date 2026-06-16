@@ -172,18 +172,16 @@ struct VTX::JsonMapping<ArenaAmmoEntry> {
 template <>
 struct VTX::JsonMapping<ArenaPlayer> {
     static constexpr auto GetFields() {
-        return std::make_tuple(MakeField("unique_id", &ArenaPlayer::unique_id), MakeField("name", &ArenaPlayer::name),
-                               MakeField("team", &ArenaPlayer::team), MakeField("health", &ArenaPlayer::health),
-                               MakeField("armor", &ArenaPlayer::armor), MakeField("position", &ArenaPlayer::position),
-                               MakeField("rotation", &ArenaPlayer::rotation),
-                               MakeField("velocity", &ArenaPlayer::velocity),
-                               MakeField("is_alive", &ArenaPlayer::is_alive), MakeField("score", &ArenaPlayer::score),
-                               MakeField("deaths", &ArenaPlayer::deaths),
-                               MakeField("abilities", &ArenaPlayer::abilities),
-                               MakeField("ability_cooldowns", &ArenaPlayer::ability_cooldowns),
-                               MakeField("loadout", &ArenaPlayer::loadout),
-                               MakeField("inventory", &ArenaPlayer::inventory),
-                               MakeField("ammo_by_weapon", &ArenaPlayer::ammo_by_weapon));
+        return std::make_tuple(
+            MakeField("unique_id", &ArenaPlayer::unique_id), MakeField("name", &ArenaPlayer::name),
+            MakeField("team", &ArenaPlayer::team), MakeField("health", &ArenaPlayer::health),
+            MakeField("armor", &ArenaPlayer::armor), MakeField("position", &ArenaPlayer::position),
+            MakeField("rotation", &ArenaPlayer::rotation), MakeField("velocity", &ArenaPlayer::velocity),
+            MakeField("is_alive", &ArenaPlayer::is_alive), MakeField("score", &ArenaPlayer::score),
+            MakeField("deaths", &ArenaPlayer::deaths), MakeField("abilities", &ArenaPlayer::abilities),
+            MakeField("ability_cooldowns", &ArenaPlayer::ability_cooldowns),
+            MakeField("loadout", &ArenaPlayer::loadout), MakeField("inventory", &ArenaPlayer::inventory),
+            MakeField("ammo_by_weapon", &ArenaPlayer::ammo_by_weapon));
     }
 };
 
@@ -251,11 +249,12 @@ struct VTX::StructMapping<ArenaLoadout> {
 template <>
 struct VTX::StructMapping<ArenaInventoryItem> {
     static constexpr auto GetFields() {
-        return std::make_tuple(MakeStructField(ArenaSchema::InventoryItem::ItemID, &ArenaInventoryItem::item_id),
-                               MakeStructField(ArenaSchema::InventoryItem::DisplayName, &ArenaInventoryItem::display_name),
-                               MakeStructField(ArenaSchema::InventoryItem::Quantity, &ArenaInventoryItem::quantity),
-                               MakeStructField(ArenaSchema::InventoryItem::Durability, &ArenaInventoryItem::durability),
-                               MakeStructField(ArenaSchema::InventoryItem::Slot, &ArenaInventoryItem::slot));
+        return std::make_tuple(
+            MakeStructField(ArenaSchema::InventoryItem::ItemID, &ArenaInventoryItem::item_id),
+            MakeStructField(ArenaSchema::InventoryItem::DisplayName, &ArenaInventoryItem::display_name),
+            MakeStructField(ArenaSchema::InventoryItem::Quantity, &ArenaInventoryItem::quantity),
+            MakeStructField(ArenaSchema::InventoryItem::Durability, &ArenaInventoryItem::durability),
+            MakeStructField(ArenaSchema::InventoryItem::Slot, &ArenaInventoryItem::slot));
     }
 };
 

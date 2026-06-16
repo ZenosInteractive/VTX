@@ -126,7 +126,7 @@ struct PlayerSim {
     std::vector<float> ability_cooldowns;     // scalar float array (parallel to abilities)
     std::string primary_weapon;               // -> Loadout nested struct
     std::string secondary_weapon;             // -> Loadout nested struct
-    int grenades = 2;                          // -> Loadout nested struct
+    int grenades = 2;                         // -> Loadout nested struct
     std::vector<InventoryItemSim> inventory;  // array of nested structs
     std::vector<AmmoEntrySim> ammo_by_weapon; // map<weapon, AmmoEntry>
 };

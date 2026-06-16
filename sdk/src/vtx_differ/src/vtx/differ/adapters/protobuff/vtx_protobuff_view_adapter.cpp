@@ -1106,7 +1106,8 @@ namespace VtxDiff::Protobuf {
             if (Index >= static_cast<size_t>(MCR->FieldSize(*MC, ValuesField)))
                 return {};
 
-            const google::protobuf::Message& SubMsg = MCR->GetRepeatedMessage(*MC, ValuesField, static_cast<int>(Index));
+            const google::protobuf::Message& SubMsg =
+                MCR->GetRepeatedMessage(*MC, ValuesField, static_cast<int>(Index));
             return FProtobufViewAdapter(&SubMsg, false);
         }
         return {};

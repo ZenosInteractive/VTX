@@ -269,7 +269,8 @@ namespace VTX {
                 loader.LoadField(dest, schema_name, ArenaSchema::InventoryItem::ItemID, src->item_id()->str());
             }
             if (src->display_name()) {
-                loader.LoadField(dest, schema_name, ArenaSchema::InventoryItem::DisplayName, src->display_name()->str());
+                loader.LoadField(dest, schema_name, ArenaSchema::InventoryItem::DisplayName,
+                                 src->display_name()->str());
             }
             loader.LoadField(dest, schema_name, ArenaSchema::InventoryItem::Quantity, src->quantity());
             loader.LoadField(dest, schema_name, ArenaSchema::InventoryItem::Durability, src->durability());
