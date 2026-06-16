@@ -86,6 +86,25 @@ static constexpr int PROJ_LIFETIME = 90;
 //  SECTION 2 — Arena simulation types (the game's own data model)
 // ===================================================================
 
+// ---- Nested container element types (the "rich" data) ----
+
+// One row of a player's inventory -> mapped to an array of nested VTX structs.
+struct InventoryItemSim {
+    std::string item_id;
+    std::string display_name;
+    int quantity = 1;
+    float durability = 100.0f;
+    int slot = 0;
+};
+
+// One weapon's ammo -> mapped to a VTX Map<weapon, AmmoEntry> entry, keyed by
+// weapon_name (the entry's first string property, matching the loader convention).
+struct AmmoEntrySim {
+    std::string weapon_name;
+    int ammo = 0;
+    int reserve = 0;
+};
+
 struct PlayerSim {
     std::string unique_id;
     std::string name;
@@ -100,7 +119,72 @@ struct PlayerSim {
     double base_x = 0, base_z = 0;
     double freq_x = 0, freq_z = 0;
     double phase_x = 0, phase_z = 0;
+
+    // ---- Rich containers (exercise scalar arrays, a nested struct, an
+    //      array-of-structs and a map; all evolve over the match) ----
+    std::vector<std::string> abilities;       // scalar string array
+    std::vector<float> ability_cooldowns;     // scalar float array (parallel to abilities)
+    std::string primary_weapon;               // -> Loadout nested struct
+    std::string secondary_weapon;             // -> Loadout nested struct
+    int grenades = 2;                         // -> Loadout nested struct
+    std::vector<InventoryItemSim> inventory;  // array of nested structs
+    std::vector<AmmoEntrySim> ammo_by_weapon; // map<weapon, AmmoEntry>
 };
+
+// ---- Per-player container mutators (keep the sim loop readable) ----
+
+// The armor plate tracks the player's armor: its durability mirrors the scalar
+// Armor field while equipped, and the whole row drops out of the inventory when
+// the plate breaks (armor == 0), returning on respawn -- so the inventory
+// array-of-structs varies in length frame-to-frame, not just in content.
+static void SyncArmorPlate(PlayerSim& p) {
+    auto it = std::find_if(p.inventory.begin(), p.inventory.end(),
+                           [](const InventoryItemSim& i) { return i.item_id == "armor_plate"; });
+    if (p.armor > 0.0f) {
+        if (it == p.inventory.end()) {
+            p.inventory.push_back(InventoryItemSim {"armor_plate", "Armor Plate", 1, p.armor, 2});
+        } else {
+            it->durability = p.armor;
+            it->quantity = 1;
+        }
+    } else if (it != p.inventory.end()) {
+        p.inventory.erase(it);
+    }
+}
+
+// Spend one medkit on respawn; drop the row entirely once depleted so the
+// inventory array length varies frame-to-frame.
+static void ConsumeMedkit(PlayerSim& p) {
+    for (auto it = p.inventory.begin(); it != p.inventory.end(); ++it) {
+        if (it->item_id == "medkit") {
+            if (it->quantity > 0)
+                --it->quantity;
+            if (it->quantity == 0)
+                p.inventory.erase(it);
+            return;
+        }
+    }
+}
+
+static void RefillAmmo(PlayerSim& p) {
+    for (auto& a : p.ammo_by_weapon) {
+        if (a.weapon_name == "Pistol") {
+            a.ammo = 12;
+            a.reserve = 36;
+        } else {
+            a.ammo = 30;
+            a.reserve = 90;
+        }
+    }
+}
+
+static AmmoEntrySim* PrimaryAmmo(PlayerSim& p) {
+    for (auto& a : p.ammo_by_weapon) {
+        if (a.weapon_name != "Pistol")
+            return &a;
+    }
+    return nullptr;
+}
 
 struct ProjectileSim {
     std::string unique_id, owner_id;
@@ -161,6 +245,29 @@ static std::vector<FrameSnapshot> RunSimulation(int64_t base_utc) {
         p.freq_z = rand_d(0.3, 1.2);
         p.phase_x = rand_d(0.0, 6.28);
         p.phase_z = rand_d(0.0, 6.28);
+
+        // ---- Rich containers ----
+        p.primary_weapon = (p.team == 1) ? "Rifle" : "SMG";
+        p.secondary_weapon = "Pistol";
+        p.grenades = 2;
+
+        // Scalar arrays: a shared pair plus a team-specific ultimate, with a
+        // parallel cooldown array that starts ready (0).
+        p.abilities = {"Dash", "Shield", (p.team == 1) ? "Airstrike" : "Cloak"};
+        p.ability_cooldowns.assign(p.abilities.size(), 0.0f);
+
+        // Array of nested structs: medkit + ammo box + armor plate.
+        p.inventory = {
+            InventoryItemSim {"medkit", "Medkit", 2, 100.0f, 0},
+            InventoryItemSim {"ammo_box", "Ammo Box", 1, 100.0f, 1},
+            InventoryItemSim {"armor_plate", "Armor Plate", 1, p.armor, 2},
+        };
+
+        // Map<weapon, ammo>: primary weapon + sidearm.
+        p.ammo_by_weapon = {
+            AmmoEntrySim {p.primary_weapon, 30, 90},
+            AmmoEntrySim {"Pistol", 12, 36},
+        };
     }
 
     MatchSim match;
@@ -194,10 +301,20 @@ static std::vector<FrameSnapshot> RunSimulation(int64_t base_utc) {
                     p.armor = 50;
                     p.pos_x = p.base_x;
                     p.pos_z = p.base_z;
+                    // Respawn refit: heal from a medkit, top up ammo, reset cooldowns.
+                    ConsumeMedkit(p);
+                    RefillAmmo(p);
+                    std::fill(p.ability_cooldowns.begin(), p.ability_cooldowns.end(), 0.0f);
                 }
                 p.vel_x = p.vel_y = p.vel_z = 0;
+                SyncArmorPlate(p); // armor is 0 while dead
                 continue;
             }
+            // Tick ability cooldowns down toward ready.
+            for (auto& cd : p.ability_cooldowns)
+                cd = std::max(0.0f, cd - DT);
+            SyncArmorPlate(p);
+
             double px = p.pos_x, pz = p.pos_z;
             p.pos_x = std::clamp(p.base_x + 15.0 * std::sin(p.freq_x * t + p.phase_x), ARENA_MIN, ARENA_MAX);
             p.pos_z = std::clamp(p.base_z + 10.0 * std::sin(p.freq_z * t + p.phase_z), ARENA_MIN, ARENA_MAX);
@@ -225,6 +342,19 @@ static std::vector<FrameSnapshot> RunSimulation(int64_t base_utc) {
                     proj.pos_z = players[si].pos_z;
                     proj.vel_z = (players[si].team == 1) ? 30.0 : -30.0;
                     projectiles.push_back(std::move(proj));
+
+                    // Firing spends a round from the primary weapon (reloading
+                    // from reserve when the magazine runs dry) and puts Dash on
+                    // cooldown -- the map and cooldown array mutate together.
+                    if (AmmoEntrySim* a = PrimaryAmmo(players[si])) {
+                        if (--a->ammo <= 0) {
+                            const int reload = std::min(30, a->reserve);
+                            a->ammo = reload;
+                            a->reserve -= reload;
+                        }
+                    }
+                    if (!players[si].ability_cooldowns.empty())
+                        players[si].ability_cooldowns[0] = 4.0f;
                 }
             }
             if (f % KILL_INTERVAL == KILL_OFFSET && f >= KILL_MIN_FRAME) {
@@ -237,6 +367,9 @@ static std::vector<FrameSnapshot> RunSimulation(int64_t base_utc) {
                     players[vi].respawn_timer = RESPAWN_FRAMES;
                     players[vi].deaths++;
                     players[ki].score++;
+                    // The killer lobs a grenade (Loadout.grenades ticks down).
+                    if (players[ki].grenades > 0)
+                        --players[ki].grenades;
                     if (players[ki].team == 1)
                         match.score_team1++;
                     else
@@ -288,18 +421,41 @@ static void ExportJsonSource(const std::vector<FrameSnapshot>& frames, const std
         f["utc_ticks"] = s.utc_ticks;
 
         f["players"] = nlohmann::json::array();
-        for (const auto& p : s.players)
-            f["players"].push_back({{"unique_id", p.unique_id},
-                                    {"name", p.name},
-                                    {"team", p.team},
-                                    {"health", p.health},
-                                    {"armor", p.armor},
-                                    {"position", {{"x", p.pos_x}, {"y", p.pos_y}, {"z", p.pos_z}}},
-                                    {"rotation", {{"x", p.rot_x}, {"y", p.rot_y}, {"z", p.rot_z}, {"w", p.rot_w}}},
-                                    {"velocity", {{"x", p.vel_x}, {"y", p.vel_y}, {"z", p.vel_z}}},
-                                    {"is_alive", p.is_alive},
-                                    {"score", p.score},
-                                    {"deaths", p.deaths}});
+        for (const auto& p : s.players) {
+            nlohmann::json pj = {{"unique_id", p.unique_id},
+                                 {"name", p.name},
+                                 {"team", p.team},
+                                 {"health", p.health},
+                                 {"armor", p.armor},
+                                 {"position", {{"x", p.pos_x}, {"y", p.pos_y}, {"z", p.pos_z}}},
+                                 {"rotation", {{"x", p.rot_x}, {"y", p.rot_y}, {"z", p.rot_z}, {"w", p.rot_w}}},
+                                 {"velocity", {{"x", p.vel_x}, {"y", p.vel_y}, {"z", p.vel_z}}},
+                                 {"is_alive", p.is_alive},
+                                 {"score", p.score},
+                                 {"deaths", p.deaths},
+                                 {"abilities", p.abilities},
+                                 {"ability_cooldowns", p.ability_cooldowns},
+                                 {"loadout",
+                                  {{"primary_weapon", p.primary_weapon},
+                                   {"secondary_weapon", p.secondary_weapon},
+                                   {"grenades", p.grenades},
+                                   {"has_armor", p.armor > 0.0f}}}};
+
+            pj["inventory"] = nlohmann::json::array();
+            for (const auto& it : p.inventory)
+                pj["inventory"].push_back({{"item_id", it.item_id},
+                                           {"display_name", it.display_name},
+                                           {"quantity", it.quantity},
+                                           {"durability", it.durability},
+                                           {"slot", it.slot}});
+
+            pj["ammo_by_weapon"] = nlohmann::json::array();
+            for (const auto& a : p.ammo_by_weapon)
+                pj["ammo_by_weapon"].push_back(
+                    {{"weapon_name", a.weapon_name}, {"ammo", a.ammo}, {"reserve", a.reserve}});
+
+            f["players"].push_back(std::move(pj));
+        }
 
         f["projectiles"] = nlohmann::json::array();
         for (const auto& pr : s.projectiles)
@@ -358,6 +514,33 @@ static void ExportProtoSource(const std::vector<FrameSnapshot>& frames, const st
             pp->set_is_alive(p.is_alive);
             pp->set_score(p.score);
             pp->set_deaths(p.deaths);
+
+            // Rich containers.
+            for (const auto& ability : p.abilities)
+                pp->add_abilities(ability);
+            for (float cd : p.ability_cooldowns)
+                pp->add_ability_cooldowns(cd);
+
+            auto* lo = pp->mutable_loadout();
+            lo->set_primary_weapon(p.primary_weapon);
+            lo->set_secondary_weapon(p.secondary_weapon);
+            lo->set_grenades(p.grenades);
+            lo->set_has_armor(p.armor > 0.0f);
+
+            for (const auto& it : p.inventory) {
+                auto* iv = pp->add_inventory();
+                iv->set_item_id(it.item_id);
+                iv->set_display_name(it.display_name);
+                iv->set_quantity(it.quantity);
+                iv->set_durability(it.durability);
+                iv->set_slot(it.slot);
+            }
+            for (const auto& a : p.ammo_by_weapon) {
+                auto* ae = pp->add_ammo_by_weapon();
+                ae->set_weapon_name(a.weapon_name);
+                ae->set_ammo(a.ammo);
+                ae->set_reserve(a.reserve);
+            }
         }
         for (const auto& pr : s.projectiles) {
             auto* pp = fd->add_projectiles();
@@ -406,7 +589,15 @@ static void ExportProtoSource(const std::vector<FrameSnapshot>& frames, const st
 //       PLAYER_COUNT: u32
 //       per player: u16-len UniqueID, u16-len Name, i32 Team, f32 Health, f32 Armor,
 //                   3x f64 Position, 4x f32 Rotation, 3x f64 Velocity,
-//                   u8 IsAlive, i32 Score, i32 Deaths
+//                   u8 IsAlive, i32 Score, i32 Deaths,
+//                   -- rich containers --
+//                   ABILITY_COUNT: u32, per ability: u16-len Name
+//                   COOLDOWN_COUNT: u32, per cooldown: f32
+//                   Loadout: u16-len PrimaryWeapon, u16-len SecondaryWeapon,
+//                            i32 Grenades, u8 HasArmor
+//                   INVENTORY_COUNT: u32, per item: u16-len ItemID,
+//                            u16-len DisplayName, i32 Quantity, f32 Durability, i32 Slot
+//                   AMMO_COUNT: u32, per entry: u16-len WeaponName, i32 Ammo, i32 Reserve
 //       PROJ_COUNT: u32
 //       per projectile: u16-len UniqueID, u16-len OwnerID, 3x f64 Position,
 //                       3x f64 Velocity, f32 Damage, u16-len Type
@@ -488,6 +679,51 @@ static void ExportBinarySource(const std::vector<FrameSnapshot>& frames, const s
             append_bytes(&score, sizeof(score));
             const int32_t deaths = p.deaths;
             append_bytes(&deaths, sizeof(deaths));
+
+            // ---- Rich containers (order MUST match arena_binary_mappings.h) ----
+            // Abilities (scalar string array).
+            const uint32_t ability_count = static_cast<uint32_t>(p.abilities.size());
+            append_bytes(&ability_count, sizeof(ability_count));
+            for (const auto& ability : p.abilities)
+                append_lenstr(ability);
+
+            // Ability cooldowns (scalar float array).
+            const uint32_t cooldown_count = static_cast<uint32_t>(p.ability_cooldowns.size());
+            append_bytes(&cooldown_count, sizeof(cooldown_count));
+            for (float cd : p.ability_cooldowns)
+                append_bytes(&cd, sizeof(cd));
+
+            // Loadout (nested struct).
+            append_lenstr(p.primary_weapon);
+            append_lenstr(p.secondary_weapon);
+            const int32_t grenades = p.grenades;
+            append_bytes(&grenades, sizeof(grenades));
+            const uint8_t has_armor = (p.armor > 0.0f) ? 1 : 0;
+            append_bytes(&has_armor, sizeof(has_armor));
+
+            // Inventory (array of nested structs).
+            const uint32_t inventory_count = static_cast<uint32_t>(p.inventory.size());
+            append_bytes(&inventory_count, sizeof(inventory_count));
+            for (const auto& it : p.inventory) {
+                append_lenstr(it.item_id);
+                append_lenstr(it.display_name);
+                const int32_t quantity = it.quantity;
+                append_bytes(&quantity, sizeof(quantity));
+                append_bytes(&it.durability, sizeof(it.durability));
+                const int32_t slot = it.slot;
+                append_bytes(&slot, sizeof(slot));
+            }
+
+            // AmmoByWeapon (map<weapon, AmmoEntry>).
+            const uint32_t ammo_count = static_cast<uint32_t>(p.ammo_by_weapon.size());
+            append_bytes(&ammo_count, sizeof(ammo_count));
+            for (const auto& a : p.ammo_by_weapon) {
+                append_lenstr(a.weapon_name);
+                const int32_t ammo = a.ammo;
+                append_bytes(&ammo, sizeof(ammo));
+                const int32_t reserve = a.reserve;
+                append_bytes(&reserve, sizeof(reserve));
+            }
         }
 
         // Projectiles
@@ -552,6 +788,34 @@ static void ExportFbsSource(const std::vector<FrameSnapshot>& frames, const std:
             pp->is_alive = p.is_alive;
             pp->score = p.score;
             pp->deaths = p.deaths;
+
+            // Rich containers.
+            pp->abilities = p.abilities;
+            pp->ability_cooldowns = p.ability_cooldowns;
+
+            pp->loadout = std::make_unique<::arena_fb::LoadoutT>();
+            pp->loadout->primary_weapon = p.primary_weapon;
+            pp->loadout->secondary_weapon = p.secondary_weapon;
+            pp->loadout->grenades = p.grenades;
+            pp->loadout->has_armor = (p.armor > 0.0f);
+
+            for (const auto& it : p.inventory) {
+                auto iv = std::make_unique<::arena_fb::InventoryItemT>();
+                iv->item_id = it.item_id;
+                iv->display_name = it.display_name;
+                iv->quantity = it.quantity;
+                iv->durability = it.durability;
+                iv->slot = it.slot;
+                pp->inventory.push_back(std::move(iv));
+            }
+            for (const auto& a : p.ammo_by_weapon) {
+                auto ae = std::make_unique<::arena_fb::AmmoEntryT>();
+                ae->weapon_name = a.weapon_name;
+                ae->ammo = a.ammo;
+                ae->reserve = a.reserve;
+                pp->ammo_by_weapon.push_back(std::move(ae));
+            }
+
             fd->players.push_back(std::move(pp));
         }
         for (const auto& pr : s.projectiles) {

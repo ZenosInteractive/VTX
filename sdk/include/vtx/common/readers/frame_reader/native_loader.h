@@ -140,6 +140,7 @@ namespace VTX {
             using ElementT = std::ranges::range_value_t<Container>;
             const int32_t idx = addr->index;
             const FieldType type = addr->type_id;
+            const FieldContainerType container = addr->container_type;
 
             if constexpr (has_struct_mapping_v<ElementT>) {
                 const std::string& child_schema = addr->child_type_name;
@@ -147,7 +148,11 @@ namespace VTX {
                     if (type == FieldType::Struct) {
                         PropertyContainer child;
                         Load(item, child, child_schema);
-                        dest.any_struct_arrays.PushBack(idx, std::move(child));
+                        if (container == FieldContainerType::Map) {
+                            this->PushToMap(dest, idx, std::move(child));
+                        } else {
+                            dest.any_struct_arrays.PushBack(idx, std::move(child));
+                        }
                     } else {
                         PropertyContainer temp;
                         Load(item, temp, child_schema);

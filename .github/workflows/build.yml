@@ -100,20 +100,27 @@ jobs:
       matrix:
         include:
           # ---- Windows ------------------------------------------------------
+          # Pinned to windows-2022 (Visual Studio 17 2022) rather than
+          # windows-latest: the latter now defaults to a newer VS generator
+          # (e.g. "Visual Studio 18 2026"), which mismatches the generator
+          # baked into the cached build/_deps FetchContent subbuild trees and
+          # fails the flatbuffers populate step. Pinning keeps the default
+          # generator stable and matches the local dev toolchain; the
+          # windows-2022 cache-key prefix also discards any mismatched cache.
           - label: Windows / Release / static
-            os: windows-latest
+            os: windows-2022
             build_type: Release
             vtx_shared: "OFF"
             extra_cmake: -A x64
 
           - label: Windows / Release / shared
-            os: windows-latest
+            os: windows-2022
             build_type: Release
             vtx_shared: "ON"
             extra_cmake: -A x64
 
           - label: Windows / Debug / static
-            os: windows-latest
+            os: windows-2022
             build_type: Debug
             vtx_shared: "OFF"
             extra_cmake: -A x64

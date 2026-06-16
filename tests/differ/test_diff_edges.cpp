@@ -15,16 +15,21 @@
 #include "vtx/reader/core/vtx_reader_facade.h"
 #include "vtx/writer/core/vtx_writer_facade.h"
 #include "vtx/common/vtx_types.h"
+#include "vtx/common/vtx_types_helpers.h"
 
 #include "util/test_fixtures.h"
 
 namespace {
 
+    using WriterFactory = std::unique_ptr<VTX::IVtxWriterFacade> (*)(const VTX::WriterFacadeConfig&);
+
     template <typename F0, typename F1>
-    std::string WriteTwoFrameFile(const std::string& uuid, F0 build0, F1 build1) {
+    std::string WriteTwoFrameFile(const std::string& uuid, F0 build0, F1 build1,
+                                  const std::string& schema_fixture = "test_schema.json",
+                                  WriterFactory factory = &VTX::CreateFlatBuffersWriterFacade) {
         VTX::WriterFacadeConfig cfg;
         cfg.output_filepath = VtxTest::OutputPath("diffedge_" + uuid + ".vtx");
-        cfg.schema_json_path = VtxTest::FixturePath("test_schema.json");
+        cfg.schema_json_path = VtxTest::FixturePath(schema_fixture);
         cfg.replay_name = "DiffEdgeTest";
         cfg.replay_uuid = uuid;
         cfg.default_fps = 60.0f;
@@ -32,7 +37,7 @@ namespace {
         cfg.use_compression = true;
 
         {
-            auto writer = VTX::CreateFlatBuffersWriterFacade(cfg);
+            auto writer = factory(cfg);
             VTX::Frame f0 = build0();
             VTX::Frame f1 = build1();
             VTX::GameTime::GameTimeRegister t0;
@@ -208,17 +213,87 @@ TEST(DiffEdges, DiffWithNestedAnyStructProperties) {
 // Map properties
 // ---------------------------------------------------------------------------
 
+namespace {
+
+    // Player carrying an AmmoByWeapon map: always "Rifle", optionally "Pistol".
+    VTX::PropertyContainer MakeAmmoOwner(int rifle_ammo, bool with_pistol) {
+        VTX::PropertyContainer pc = MakeMinimalPlayer("ammo_owner");
+
+        VTX::MapContainer ammo;
+        ammo.keys.push_back("Rifle");
+        VTX::PropertyContainer rifle;
+        rifle.entity_type_id = 5; // AmmoEntry
+        rifle.string_properties = {"Rifle"};
+        rifle.int32_properties = {rifle_ammo, 90};
+        rifle.content_hash = VTX::Helpers::CalculateContainerHash(rifle);
+        ammo.values.push_back(std::move(rifle));
+
+        if (with_pistol) {
+            ammo.keys.push_back("Pistol");
+            VTX::PropertyContainer pistol;
+            pistol.entity_type_id = 5; // AmmoEntry
+            pistol.string_properties = {"Pistol"};
+            pistol.int32_properties = {12, 36};
+            pistol.content_hash = VTX::Helpers::CalculateContainerHash(pistol);
+            ammo.values.push_back(std::move(pistol));
+        }
+
+        pc.map_properties.push_back(std::move(ammo));
+        pc.content_hash = VTX::Helpers::CalculateContainerHash(pc);
+        return pc;
+    }
+
+    // Shared body for the map-diff tests: frame B changes a value under an
+    // existing key ("Rifle" ammo 30 -> 25) AND adds a new key ("Pistol"), so the
+    // patch must be non-empty regardless of whether the value-level or key-level
+    // path fires. Run against both serialization backends via @p factory.
+    void RunMapPropertiesDiff(const std::string& uuid, WriterFactory factory) {
+        const auto build0 = [] {
+            VTX::Frame f;
+            auto& b = f.CreateBucket("entity");
+            b.unique_ids.push_back("ammo_owner");
+            b.entities.push_back(MakeAmmoOwner(30, /*with_pistol=*/false));
+            return f;
+        };
+        const auto build1 = [] {
+            VTX::Frame f;
+            auto& b = f.CreateBucket("entity");
+            b.unique_ids.push_back("ammo_owner");
+            b.entities.push_back(MakeAmmoOwner(25, /*with_pistol=*/true));
+            return f;
+        };
+
+        const auto path = WriteTwoFrameFile(uuid, build0, build1, "test_schema_map.json", factory);
+        auto patch = DiffFile(path);
+        ASSERT_FALSE(patch.operations.empty());
+
+        // At least one operation must touch the map (a MapProperties op or an op
+        // carrying one of our map keys).
+        bool touched_map = false;
+        for (const auto& op : patch.operations) {
+            if (op.ContainerType == VtxDiff::EVTXContainerType::MapProperties || op.MapKey == "Rifle" ||
+                op.MapKey == "Pistol") {
+                touched_map = true;
+                break;
+            }
+        }
+        EXPECT_TRUE(touched_map);
+    }
+
+} // namespace
+
+// test_schema_map.json declares Player::AmmoByWeapon as a Map field
+// (containerType=Map, structType=AmmoEntry), so map_properties survive
+// serialisation and the differ exercises DiffMapContainers. AmmoByWeapon is the
+// only Map field on Player, so its slot index is 0. (A dedicated fixture keeps
+// the shared test_schema.json layout stable for the other tests.) Both
+// serialization backends are covered.
 TEST(DiffEdges, DiffWithMapProperties) {
-    // The test_schema.json fixture (copy of arena_schema.json) has no field
-    // declared with containerType=Map, so the writer drops any
-    // map_properties we attach to a PropertyContainer before serialising --
-    // frames A and B serialise to byte-identical payloads and the differ
-    // correctly reports zero ops.
-    //
-    // To actually exercise the map_properties diff path we'd need a fixture
-    // schema that declares at least one Map field.  That's a separate
-    // test-data change; skip until then.
-    GTEST_SKIP() << "Needs a schema fixture that declares a Map field";
+    RunMapPropertiesDiff("map_properties_fbs", &VTX::CreateFlatBuffersWriterFacade);
+}
+
+TEST(DiffEdges, DiffWithMapPropertiesProtobuf) {
+    RunMapPropertiesDiff("map_properties_proto", &VTX::CreateProtobufWriterFacade);
 }
 
 // ---------------------------------------------------------------------------

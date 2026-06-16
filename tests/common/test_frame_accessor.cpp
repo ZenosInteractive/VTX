@@ -39,7 +39,11 @@ namespace {
                                         .type_id = VTX::FieldType::Struct,
                                         .container_type = VTX::FieldContainerType::Array,
                                         .child_type_name = "Companion"};
-        player.property_order = {"Name", "Score", "Health", "IsAlive", "Inventory", "Companion", "History"};
+        player.properties["Stash"] = {.index = 0,
+                                      .type_id = VTX::FieldType::Struct,
+                                      .container_type = VTX::FieldContainerType::Map,
+                                      .child_type_name = "Companion"};
+        player.property_order = {"Name", "Score", "Health", "IsAlive", "Inventory", "Companion", "History", "Stash"};
 
         cache.name_to_id["Companion"] = 8;
         auto& companion = cache.structs[8];
@@ -60,6 +64,11 @@ namespace {
         pc.int32_arrays.AppendSubArray({10, 20, 30});
         pc.any_struct_properties = {MakeCompanion(42)};
         pc.any_struct_arrays.AppendSubArray({MakeCompanion(1), MakeCompanion(2)});
+
+        VTX::MapContainer stash;
+        stash.keys = {"slot_a", "slot_b"};
+        stash.values = {MakeCompanion(5), MakeCompanion(9)};
+        pc.map_properties = {std::move(stash)};
         return pc;
     }
 
@@ -74,6 +83,8 @@ TEST(FrameAccessor, ResolvesKeysAndReportsAvailableMetadata) {
     EXPECT_TRUE(accessor.GetArray<int32_t>("Player", "Inventory").IsValid());
     EXPECT_TRUE(accessor.GetViewKey("Player", "Companion").IsValid());
     EXPECT_TRUE(accessor.GetViewArrayKey("Player", "History").IsValid());
+    EXPECT_TRUE(accessor.GetMapKey("Player", "Stash").IsValid());
+    EXPECT_FALSE(accessor.GetMapKey("Player", "Companion").IsValid()); // not a Map field
 
     EXPECT_FALSE(accessor.Get<float>("Player", "Name").IsValid());
     EXPECT_FALSE(accessor.Get<std::string>("Ghost", "Name").IsValid());
@@ -87,7 +98,7 @@ TEST(FrameAccessor, ResolvesKeysAndReportsAvailableMetadata) {
     EXPECT_NE(std::find(names.begin(), names.end(), "Companion"), names.end());
 
     const auto props = accessor.GetPropertiesForStruct("Player");
-    EXPECT_EQ(props.size(), 7u);
+    EXPECT_EQ(props.size(), 8u);
     EXPECT_TRUE(accessor.GetPropertiesForStruct("Ghost").empty());
 }
 
@@ -126,6 +137,36 @@ TEST(FrameAccessor, EntityViewReadsScalarArrayAndNestedProperties) {
     EXPECT_EQ(VTX::EntityView(history[1]).Get(level_key), 2);
 }
 
+TEST(FrameAccessor, EntityViewReadsMapProperties) {
+    VTX::FrameAccessor accessor;
+    accessor.InitializeFromCache(BuildCache());
+
+    const VTX::PropertyContainer entity = BuildEntity();
+    const VTX::EntityView view(entity);
+
+    const auto stash_key = accessor.GetMapKey("Player", "Stash");
+    const auto level_key = accessor.Get<int32_t>("Companion", "Level");
+    ASSERT_TRUE(stash_key.IsValid());
+
+    const auto stash = view.GetMap(stash_key);
+    ASSERT_TRUE(stash.IsValid());
+    EXPECT_EQ(stash.Size(), 2u);
+    EXPECT_TRUE(stash.Contains("slot_a"));
+    EXPECT_TRUE(stash.Contains("slot_b"));
+    EXPECT_FALSE(stash.Contains("missing"));
+
+    // Typed value read through the value EntityView.
+    EXPECT_EQ(stash.At("slot_a").Get(level_key), 5);
+    EXPECT_EQ(stash.At("slot_b").Get(level_key), 9);
+    EXPECT_EQ(stash.At("missing").Get(level_key), 0); // empty view -> default
+
+    // Ordinal access mirrors the parallel keys[]/values[].
+    ASSERT_EQ(stash.Keys().size(), 2u);
+    EXPECT_EQ(stash.KeyAt(0), "slot_a");
+    EXPECT_EQ(stash.ValueAt(0).Get(level_key), 5);
+    EXPECT_EQ(stash.ValueAt(1).Get(level_key), 9);
+}
+
 TEST(FrameAccessor, InvalidKeysReturnDefaultsOrEmptyViews) {
     VTX::FrameAccessor accessor;
     accessor.InitializeFromCache(BuildCache());
@@ -135,10 +176,14 @@ TEST(FrameAccessor, InvalidKeysReturnDefaultsOrEmptyViews) {
     const auto bad_string_key = accessor.Get<std::string>("Ghost", "Name");
     const auto bad_array_key = accessor.GetArray<int32_t>("Ghost", "Inventory");
     const auto bad_view_key = accessor.GetViewKey("Ghost", "Companion");
+    const auto bad_map_key = accessor.GetMapKey("Ghost", "Stash");
     const auto level_key = accessor.Get<int32_t>("Companion", "Level");
 
     EXPECT_FALSE(bad_string_key.IsValid());
     EXPECT_TRUE(view.Get(bad_string_key).empty());
     EXPECT_TRUE(view.GetArray(bad_array_key).empty());
     EXPECT_EQ(view.GetView(bad_view_key).Get(level_key), 0);
+    EXPECT_FALSE(bad_map_key.IsValid());
+    EXPECT_FALSE(view.GetMap(bad_map_key).IsValid());
+    EXPECT_TRUE(view.GetMap(bad_map_key).Empty());
 }

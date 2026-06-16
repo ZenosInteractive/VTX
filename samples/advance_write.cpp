@@ -104,6 +104,42 @@ namespace VTX {
     //  VTX::PropertyContainer by delegating scalar/struct/array copies to the
     //  loader, which resolves field slots via SchemaRegistry.
 
+    // --- Nested element bindings (must precede ProtoBinding<Player>, whose
+    //     Transfer instantiates them via LoadStruct / LoadArray / Load) ---
+
+    template <>
+    struct ProtoBinding<::arena_pb::Loadout> {
+        static void Transfer(const ::arena_pb::Loadout& src, VTX::PropertyContainer& dest,
+                             VTX::GenericProtobufLoader& loader, const std::string& schema_name) {
+            loader.LoadField(dest, schema_name, ArenaSchema::Loadout::PrimaryWeapon, src.primary_weapon());
+            loader.LoadField(dest, schema_name, ArenaSchema::Loadout::SecondaryWeapon, src.secondary_weapon());
+            loader.LoadField(dest, schema_name, ArenaSchema::Loadout::Grenades, src.grenades());
+            loader.LoadField(dest, schema_name, ArenaSchema::Loadout::HasArmor, src.has_armor());
+        }
+    };
+
+    template <>
+    struct ProtoBinding<::arena_pb::InventoryItem> {
+        static void Transfer(const ::arena_pb::InventoryItem& src, VTX::PropertyContainer& dest,
+                             VTX::GenericProtobufLoader& loader, const std::string& schema_name) {
+            loader.LoadField(dest, schema_name, ArenaSchema::InventoryItem::ItemID, src.item_id());
+            loader.LoadField(dest, schema_name, ArenaSchema::InventoryItem::DisplayName, src.display_name());
+            loader.LoadField(dest, schema_name, ArenaSchema::InventoryItem::Quantity, src.quantity());
+            loader.LoadField(dest, schema_name, ArenaSchema::InventoryItem::Durability, src.durability());
+            loader.LoadField(dest, schema_name, ArenaSchema::InventoryItem::Slot, src.slot());
+        }
+    };
+
+    template <>
+    struct ProtoBinding<::arena_pb::AmmoEntry> {
+        static void Transfer(const ::arena_pb::AmmoEntry& src, VTX::PropertyContainer& dest,
+                             VTX::GenericProtobufLoader& loader, const std::string& schema_name) {
+            loader.LoadField(dest, schema_name, ArenaSchema::AmmoEntry::WeaponName, src.weapon_name());
+            loader.LoadField(dest, schema_name, ArenaSchema::AmmoEntry::Ammo, src.ammo());
+            loader.LoadField(dest, schema_name, ArenaSchema::AmmoEntry::Reserve, src.reserve());
+        }
+    };
+
     template <>
     struct ProtoBinding<::arena_pb::Player> {
         static void Transfer(const ::arena_pb::Player& src, VTX::PropertyContainer& dest,
@@ -125,6 +161,15 @@ namespace VTX {
             loader.LoadField(dest, schema_name, ArenaSchema::Player::IsAlive, src.is_alive());
             loader.LoadField(dest, schema_name, ArenaSchema::Player::Score, src.score());
             loader.LoadField(dest, schema_name, ArenaSchema::Player::Deaths, src.deaths());
+
+            // Scalar arrays + nested struct + array-of-structs (auto-handled).
+            loader.LoadArray(dest, schema_name, ArenaSchema::Player::Abilities, src.abilities());
+            loader.LoadArray(dest, schema_name, ArenaSchema::Player::AbilityCooldowns, src.ability_cooldowns());
+            if (src.has_loadout()) {
+                loader.LoadStruct(dest, schema_name, ArenaSchema::Player::Loadout, src.loadout());
+            }
+            loader.LoadArray(dest, schema_name, ArenaSchema::Player::Inventory, src.inventory());
+            loader.LoadArray(dest, schema_name, ArenaSchema::Player::AmmoByWeapon, src.ammo_by_weapon());
         }
     };
 
@@ -189,6 +234,53 @@ namespace VTX {
     //  access into the mapped buffer).  Field slots are resolved once via
     //  PropertyAddressCache -- subsequent frames hit the cached addresses.
 
+    // --- Nested element bindings (must precede FlatBufferBinding<Player>) ---
+
+    template <>
+    struct FlatBufferBinding<::arena_fb::Loadout> {
+        static void Transfer(const ::arena_fb::Loadout* src, VTX::PropertyContainer& dest,
+                             VTX::GenericFlatBufferLoader& loader, const std::string& schema_name) {
+            if (src->primary_weapon()) {
+                loader.LoadField(dest, schema_name, ArenaSchema::Loadout::PrimaryWeapon, src->primary_weapon()->str());
+            }
+            if (src->secondary_weapon()) {
+                loader.LoadField(dest, schema_name, ArenaSchema::Loadout::SecondaryWeapon,
+                                 src->secondary_weapon()->str());
+            }
+            loader.LoadField(dest, schema_name, ArenaSchema::Loadout::Grenades, src->grenades());
+            loader.LoadField(dest, schema_name, ArenaSchema::Loadout::HasArmor, src->has_armor());
+        }
+    };
+
+    template <>
+    struct FlatBufferBinding<::arena_fb::InventoryItem> {
+        static void Transfer(const ::arena_fb::InventoryItem* src, VTX::PropertyContainer& dest,
+                             VTX::GenericFlatBufferLoader& loader, const std::string& schema_name) {
+            if (src->item_id()) {
+                loader.LoadField(dest, schema_name, ArenaSchema::InventoryItem::ItemID, src->item_id()->str());
+            }
+            if (src->display_name()) {
+                loader.LoadField(dest, schema_name, ArenaSchema::InventoryItem::DisplayName,
+                                 src->display_name()->str());
+            }
+            loader.LoadField(dest, schema_name, ArenaSchema::InventoryItem::Quantity, src->quantity());
+            loader.LoadField(dest, schema_name, ArenaSchema::InventoryItem::Durability, src->durability());
+            loader.LoadField(dest, schema_name, ArenaSchema::InventoryItem::Slot, src->slot());
+        }
+    };
+
+    template <>
+    struct FlatBufferBinding<::arena_fb::AmmoEntry> {
+        static void Transfer(const ::arena_fb::AmmoEntry* src, VTX::PropertyContainer& dest,
+                             VTX::GenericFlatBufferLoader& loader, const std::string& schema_name) {
+            if (src->weapon_name()) {
+                loader.LoadField(dest, schema_name, ArenaSchema::AmmoEntry::WeaponName, src->weapon_name()->str());
+            }
+            loader.LoadField(dest, schema_name, ArenaSchema::AmmoEntry::Ammo, src->ammo());
+            loader.LoadField(dest, schema_name, ArenaSchema::AmmoEntry::Reserve, src->reserve());
+        }
+    };
+
     template <>
     struct FlatBufferBinding<::arena_fb::Player> {
         static void Transfer(const ::arena_fb::Player* src, VTX::PropertyContainer& dest,
@@ -214,6 +306,17 @@ namespace VTX {
             loader.LoadField(dest, schema_name, ArenaSchema::Player::IsAlive, src->is_alive());
             loader.LoadField(dest, schema_name, ArenaSchema::Player::Score, src->score());
             loader.LoadField(dest, schema_name, ArenaSchema::Player::Deaths, src->deaths());
+
+            // Scalar arrays + nested struct + array-of-structs + map all go
+            // through the loader (LoadArray handles string/numeric/struct vectors
+            // and recognises container == Map).
+            loader.LoadArray(dest, schema_name, ArenaSchema::Player::Abilities, src->abilities());
+            loader.LoadArray(dest, schema_name, ArenaSchema::Player::AbilityCooldowns, src->ability_cooldowns());
+            if (src->loadout()) {
+                loader.LoadStruct(dest, schema_name, ArenaSchema::Player::Loadout, src->loadout());
+            }
+            loader.LoadArray(dest, schema_name, ArenaSchema::Player::Inventory, src->inventory());
+            loader.LoadArray(dest, schema_name, ArenaSchema::Player::AmmoByWeapon, src->ammo_by_weapon());
         }
     };
 

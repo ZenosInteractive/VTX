@@ -449,23 +449,24 @@ namespace VtxDiff::Flatbuffers {
         if (!CF || !CF->MapValuesField || !CF->MapValuesObj)
             return {};
 
+        // map_properties holds one MapContainer per map-field slot; a struct's
+        // single map field lives at slot 0 and that MapContainer holds all the
+        // key/value entries. Index @p I addresses an entry WITHIN it.
         auto Vec = TablePtr->GetPointer<const flatbuffers::Vector<flatbuffers::Offset<flatbuffers::Table>>*>(
             CF->FbField->offset());
-        if (!Vec || I >= Vec->size())
+        if (!Vec || Vec->size() == 0)
             return {};
 
-        const flatbuffers::Table* MC = Vec->Get(I);
+        const flatbuffers::Table* MC = Vec->Get(0);
         if (!MC)
             return {};
 
         auto Values = MC->GetPointer<const flatbuffers::Vector<flatbuffers::Offset<flatbuffers::Table>>*>(
             CF->MapValuesField->offset());
-        if (!Values || Values->size() == 0)
+        if (!Values || I >= Values->size())
             return {};
 
-        size_t ValIndex = std::min<size_t>(I, Values->size() - 1);
-        return FlatbufferViewAdapter(Cache, CF->MapValuesObj,
-                                     Values->Get(static_cast<flatbuffers::uoffset_t>(ValIndex)));
+        return FlatbufferViewAdapter(Cache, CF->MapValuesObj, Values->Get(static_cast<flatbuffers::uoffset_t>(I)));
     }
 
     FlatbufferViewAdapter FlatbufferViewAdapter::GetFieldByName(const std::string& FieldName) const {
@@ -476,11 +477,19 @@ namespace VtxDiff::Flatbuffers {
 
     size_t FlatbufferViewAdapter::GetMapSize(const FieldDesc& Fd) const {
         const auto* CF = Cache->GetCachedField(Object, Fd.name);
-        if (!CF || !CF->FbField)
+        if (!CF || !CF->FbField || !CF->MapKeysField)
             return 0;
+        // Entry count = number of keys in the field's MapContainer (slot 0).
         auto Vec = TablePtr->GetPointer<const flatbuffers::Vector<flatbuffers::Offset<flatbuffers::Table>>*>(
             CF->FbField->offset());
-        return Vec ? Vec->size() : 0;
+        if (!Vec || Vec->size() == 0)
+            return 0;
+        const flatbuffers::Table* MC = Vec->Get(0);
+        if (!MC)
+            return 0;
+        auto Keys = MC->GetPointer<const flatbuffers::Vector<flatbuffers::Offset<flatbuffers::String>>*>(
+            CF->MapKeysField->offset());
+        return Keys ? Keys->size() : 0;
     }
 
     std::string FlatbufferViewAdapter::GetMapKey(const FieldDesc& Fd, size_t I) const {
@@ -490,20 +499,19 @@ namespace VtxDiff::Flatbuffers {
 
         auto Vec = TablePtr->GetPointer<const flatbuffers::Vector<flatbuffers::Offset<flatbuffers::Table>>*>(
             CF->FbField->offset());
-        if (!Vec || I >= Vec->size())
+        if (!Vec || Vec->size() == 0)
             return "";
 
-        const flatbuffers::Table* MC = Vec->Get(I);
+        const flatbuffers::Table* MC = Vec->Get(0);
         if (!MC)
             return "";
 
         auto Keys = MC->GetPointer<const flatbuffers::Vector<flatbuffers::Offset<flatbuffers::String>>*>(
             CF->MapKeysField->offset());
-        if (!Keys || Keys->size() == 0)
+        if (!Keys || I >= Keys->size())
             return "";
 
-        size_t KeyIndex = std::min<size_t>(I, Keys->size() - 1);
-        return Keys->Get(static_cast<flatbuffers::uoffset_t>(KeyIndex))->str();
+        return Keys->Get(static_cast<flatbuffers::uoffset_t>(I))->str();
     }
 
     std::string FlatbufferViewAdapter::GetScalarFieldString(const std::string& FieldName) const {

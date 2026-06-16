@@ -134,3 +134,86 @@ TEST(ContentHashEdges, HashIsStableAcrossMove) {
 
     EXPECT_EQ(before, after);
 }
+
+// ---------------------------------------------------------------------------
+// Recursion must not corrupt the parent hash
+// ---------------------------------------------------------------------------
+//
+// CalculateContainerHash recurses into nested structs / struct-arrays / maps.
+// The invariant: a field hashed BEFORE the recursion (e.g. a string) must still
+// change the result.  A shared hash state across the recursion would wipe those
+// pre-recursion fields, collapsing distinct containers to the same hash.
+
+namespace {
+
+    PropertyContainer WithNestedStruct(const std::string& leading_name) {
+        PropertyContainer pc;
+        pc.entity_type_id = 0;
+        pc.string_properties = {leading_name}; // hashed before the recursion
+        pc.vector_properties = {VTX::Vector {1.0, 2.0, 3.0}};
+
+        PropertyContainer nested;
+        nested.entity_type_id = 1;
+        nested.int32_properties = {42};
+        pc.any_struct_properties.push_back(std::move(nested));
+        return pc;
+    }
+
+    PropertyContainer WithMap(const std::string& leading_name) {
+        PropertyContainer pc;
+        pc.entity_type_id = 0;
+        pc.string_properties = {leading_name};
+
+        VTX::MapContainer map;
+        map.keys = {"weapon"};
+        PropertyContainer value;
+        value.entity_type_id = 1;
+        value.int32_properties = {7};
+        map.values.push_back(std::move(value));
+        pc.map_properties.push_back(std::move(map));
+        return pc;
+    }
+
+    PropertyContainer WithStructArray(const std::string& leading_name) {
+        PropertyContainer pc;
+        pc.entity_type_id = 0;
+        pc.string_properties = {leading_name};
+
+        PropertyContainer element;
+        element.entity_type_id = 1;
+        element.int32_properties = {9};
+        pc.any_struct_arrays.PushBack(0, element);
+        return pc;
+    }
+
+} // namespace
+
+TEST(ContentHashEdges, NestedStructDoesNotMaskPreRecursionFields) {
+    EXPECT_NE(CalculateContainerHash(WithNestedStruct("alpha")), CalculateContainerHash(WithNestedStruct("beta")));
+}
+
+TEST(ContentHashEdges, MapDoesNotMaskPreRecursionFields) {
+    EXPECT_NE(CalculateContainerHash(WithMap("alpha")), CalculateContainerHash(WithMap("beta")));
+}
+
+TEST(ContentHashEdges, StructArrayDoesNotMaskPreRecursionFields) {
+    EXPECT_NE(CalculateContainerHash(WithStructArray("alpha")), CalculateContainerHash(WithStructArray("beta")));
+}
+
+TEST(ContentHashEdges, NestedStructContentIsReflectedInParentHash) {
+    PropertyContainer a = WithNestedStruct("same");
+    PropertyContainer b = WithNestedStruct("same");
+    b.any_struct_properties[0].int32_properties = {43}; // change only the nested value
+    EXPECT_NE(CalculateContainerHash(a), CalculateContainerHash(b));
+}
+
+TEST(ContentHashEdges, NestedHashDoesNotLeakIntoNextCall) {
+    // Hashing a nested (recursive) container must not contaminate a later call.
+    PropertyContainer flat;
+    flat.string_properties = {"flat"};
+    const uint64_t flat_alone = CalculateContainerHash(flat);
+
+    (void)CalculateContainerHash(WithNestedStruct("x"));
+
+    EXPECT_EQ(flat_alone, CalculateContainerHash(flat));
+}

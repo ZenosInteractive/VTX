@@ -85,6 +85,7 @@ def resolve_property_types(val, struct_name, known_structs, type_map):
     struct_type = val.get("structType", "").lower()
     container = val.get("container", "").lower()
     is_array = val.get("array", False) or (container == "array")
+    is_map = (container == "map")
     b_is_enum = val.get("bIsEnum", False)
     b_is_actor = val.get("bIsActor", False)
 
@@ -115,6 +116,7 @@ def resolve_property_types(val, struct_name, known_structs, type_map):
 
     return {
         "is_array": is_array,
+        "is_map": is_map,
         "is_list_enum": is_list_enum,
         "accessor_type": accessor_type,
         "user_ret_type": user_ret_type,
@@ -126,6 +128,16 @@ def emit_getter(lines, val, struct_name, info, complex_types, source_member):
     accessor_type = info["accessor_type"]
     user_ret_type = info["user_ret_type"]
     is_array = info["is_array"]
+
+    if info.get("is_map"):
+        view_expr = "data_mut.AsView()" if source_member == "data_mut" else source_member
+        lines.append(f"        /** @brief Returns a read-only map view */")
+        lines.append(f"        inline VTX::MapView Get{prop_name}() const {{")
+        lines.append(f"            static VTX::PropertyKey<VTX::MapView> cached_key = accessor.GetMapKey(EntityType::{struct_name}, {struct_name}::{prop_name});")
+        lines.append(f"            return {view_expr}.GetMap(cached_key);")
+        lines.append("        }")
+        lines.append("")
+        return
 
     if accessor_type == "VTX::EntityView":
         if is_array:
@@ -167,6 +179,9 @@ def emit_setter(lines, val, struct_name, info, complex_types):
     accessor_type = info["accessor_type"]
     user_ret_type = info["user_ret_type"]
     is_array = info["is_array"]
+
+    if info.get("is_map"):
+        return  # read-only through the generated accessor
 
     if accessor_type == "VTX::EntityView":
         # Nested struct: writeable accessor returns a mutator.

@@ -56,12 +56,13 @@ namespace VTX {
         }
 
         inline uint64_t CalculateContainerHash(const PropertyContainer& container) {
-            thread_local XXH_INLINE_XXH3_state_t* state = XXH3_createState();
-            XXH3_64bits_reset(state);
+            // Per-call state: this function recurses (nested structs / maps); a shared state would be corrupted.
+            alignas(64) XXH_INLINE_XXH3_state_t state;
+            XXH3_64bits_reset(&state);
 
             auto hash_update = [&](const void* data, size_t size) {
                 if (size > 0 && data != nullptr) {
-                    XXH3_64bits_update(state, data, size);
+                    XXH3_64bits_update(&state, data, size);
                 }
             };
 
@@ -206,7 +207,7 @@ namespace VTX {
             }
 
 
-            return XXH3_64bits_digest(state);
+            return XXH3_64bits_digest(&state);
         }
     } // namespace Helpers
 

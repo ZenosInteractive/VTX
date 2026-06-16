@@ -106,6 +106,7 @@ namespace VTX {
             using ElementT = typename RepeatedProtoType::value_type;
             const int32_t idx = addr->index;
             const FieldType type_id = addr->type_id;
+            const FieldContainerType container = addr->container_type;
 
             if constexpr (std::is_base_of_v<google::protobuf::Message, ElementT>) {
                 const std::string& child_schema = addr->child_type_name;
@@ -113,7 +114,11 @@ namespace VTX {
                     if (type_id == FieldType::Struct) {
                         PropertyContainer child_container;
                         Load(item, child_container, child_schema);
-                        dest.any_struct_arrays.PushBack(idx, child_container);
+                        if (container == FieldContainerType::Map) {
+                            this->PushToMap(dest, idx, std::move(child_container));
+                        } else {
+                            dest.any_struct_arrays.PushBack(idx, child_container);
+                        }
                     } else {
                         PropertyContainer temp;
                         Load(item, temp, child_schema);
