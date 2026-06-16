@@ -16,6 +16,9 @@ namespace VTX::ArenaSchema {
         Player = 0,
         Projectile = 1,
         MatchState = 2,
+        Loadout = 3,
+        InventoryItem = 4,
+        AmmoEntry = 5,
         Unknown = -1
     };
 
@@ -32,6 +35,11 @@ namespace VTX::ArenaSchema {
         constexpr const char* IsAlive = "IsAlive";
         constexpr const char* Score = "Score";
         constexpr const char* Deaths = "Deaths";
+        constexpr const char* Abilities = "Abilities";
+        constexpr const char* AbilityCooldowns = "AbilityCooldowns";
+        constexpr const char* Loadout = "Loadout";
+        constexpr const char* Inventory = "Inventory";
+        constexpr const char* AmmoByWeapon = "AmmoByWeapon";
     }
 
     class PlayerView {
@@ -99,6 +107,36 @@ namespace VTX::ArenaSchema {
         inline int32_t GetDeaths() const {
             static VTX::PropertyKey<int32_t> cached_key = accessor.Get<int32_t>(EntityType::Player, Player::Deaths);
             return data_view.Get<int32_t>(cached_key);
+        }
+
+        /** @brief Returns a span of std::string */
+        inline std::span<const std::string> GetAbilities() const {
+            static VTX::PropertyKey<std::string> cached_key = accessor.GetArray<std::string>(EntityType::Player, Player::Abilities);
+            return data_view.GetArray<std::string>(cached_key);
+        }
+
+        /** @brief Returns a span of float */
+        inline std::span<const float> GetAbilityCooldowns() const {
+            static VTX::PropertyKey<float> cached_key = accessor.GetArray<float>(EntityType::Player, Player::AbilityCooldowns);
+            return data_view.GetArray<float>(cached_key);
+        }
+
+        /** @brief Returns a nested view */
+        inline VTX::EntityView GetLoadout() const {
+            static VTX::PropertyKey<VTX::EntityView> cached_key = accessor.GetViewKey(EntityType::Player, Player::Loadout);
+            return data_view.GetView(cached_key);
+        }
+
+        /** @brief Returns a span of nested structures */
+        inline std::span<const VTX::PropertyContainer> GetInventory() const {
+            static VTX::PropertyKey<std::span<const VTX::PropertyContainer>> cached_key = accessor.GetViewArrayKey(EntityType::Player, Player::Inventory);
+            return data_view.GetViewArray(cached_key);
+        }
+
+        /** @brief Returns a nested view */
+        inline VTX::EntityView GetAmmoByWeapon() const {
+            static VTX::PropertyKey<VTX::EntityView> cached_key = accessor.GetViewKey(EntityType::Player, Player::AmmoByWeapon);
+            return data_view.GetView(cached_key);
         }
 
     };
@@ -223,6 +261,66 @@ namespace VTX::ArenaSchema {
         inline void SetDeaths(int32_t value) {
             static VTX::PropertyKey<int32_t> cached_key = accessor.Get<int32_t>(EntityType::Player, Player::Deaths);
             data_mut.Set<int32_t>(cached_key, value);
+        }
+
+        /** @brief Returns a span of std::string */
+        inline std::span<const std::string> GetAbilities() const {
+            static VTX::PropertyKey<std::string> cached_key = accessor.GetArray<std::string>(EntityType::Player, Player::Abilities);
+            return data_mut.AsView().GetArray<std::string>(cached_key);
+        }
+
+        /** @brief Returns a mutable span of std::string */
+        inline std::span<std::string> GetMutableAbilities() {
+            static VTX::PropertyKey<std::string> cached_key = accessor.GetArray<std::string>(EntityType::Player, Player::Abilities);
+            return data_mut.GetMutableArray<std::string>(cached_key);
+        }
+
+        /** @brief Returns a span of float */
+        inline std::span<const float> GetAbilityCooldowns() const {
+            static VTX::PropertyKey<float> cached_key = accessor.GetArray<float>(EntityType::Player, Player::AbilityCooldowns);
+            return data_mut.AsView().GetArray<float>(cached_key);
+        }
+
+        /** @brief Returns a mutable span of float */
+        inline std::span<float> GetMutableAbilityCooldowns() {
+            static VTX::PropertyKey<float> cached_key = accessor.GetArray<float>(EntityType::Player, Player::AbilityCooldowns);
+            return data_mut.GetMutableArray<float>(cached_key);
+        }
+
+        /** @brief Returns a nested view */
+        inline VTX::EntityView GetLoadout() const {
+            static VTX::PropertyKey<VTX::EntityView> cached_key = accessor.GetViewKey(EntityType::Player, Player::Loadout);
+            return data_mut.AsView().GetView(cached_key);
+        }
+
+        /** @brief Returns a mutator over the nested struct */
+        inline VTX::EntityMutator GetMutableLoadout() {
+            static VTX::PropertyKey<VTX::EntityView> cached_key = accessor.GetViewKey(EntityType::Player, Player::Loadout);
+            return data_mut.GetMutableView(cached_key);
+        }
+
+        /** @brief Returns a span of nested structures */
+        inline std::span<const VTX::PropertyContainer> GetInventory() const {
+            static VTX::PropertyKey<std::span<const VTX::PropertyContainer>> cached_key = accessor.GetViewArrayKey(EntityType::Player, Player::Inventory);
+            return data_mut.AsView().GetViewArray(cached_key);
+        }
+
+        /** @brief Returns a mutable span of nested PropertyContainers */
+        inline std::span<VTX::PropertyContainer> GetMutableInventory() {
+            static VTX::PropertyKey<std::span<const VTX::PropertyContainer>> cached_key = accessor.GetViewArrayKey(EntityType::Player, Player::Inventory);
+            return data_mut.GetMutableViewArray(cached_key);
+        }
+
+        /** @brief Returns a nested view */
+        inline VTX::EntityView GetAmmoByWeapon() const {
+            static VTX::PropertyKey<VTX::EntityView> cached_key = accessor.GetViewKey(EntityType::Player, Player::AmmoByWeapon);
+            return data_mut.AsView().GetView(cached_key);
+        }
+
+        /** @brief Returns a mutator over the nested struct */
+        inline VTX::EntityMutator GetMutableAmmoByWeapon() {
+            static VTX::PropertyKey<VTX::EntityView> cached_key = accessor.GetViewKey(EntityType::Player, Player::AmmoByWeapon);
+            return data_mut.GetMutableView(cached_key);
         }
 
     };
@@ -483,6 +581,294 @@ namespace VTX::ArenaSchema {
 
     };
 
+    namespace Loadout {
+        constexpr const char* StructName = "Loadout";
+        constexpr const char* PrimaryWeapon = "PrimaryWeapon";
+        constexpr const char* SecondaryWeapon = "SecondaryWeapon";
+        constexpr const char* Grenades = "Grenades";
+        constexpr const char* HasArmor = "HasArmor";
+    }
+
+    class LoadoutView {
+    private:
+        VTX::EntityView data_view;
+        const VTX::FrameAccessor& accessor;
+
+    public:
+        LoadoutView(VTX::EntityView view, const VTX::FrameAccessor& acc) 
+            : data_view(view), accessor(acc) {}
+
+        LoadoutView(const VTX::PropertyContainer& container, const VTX::FrameAccessor& acc) 
+            : data_view(container), accessor(acc) {}
+
+        inline const std::string& GetPrimaryWeapon() const {
+            static VTX::PropertyKey<std::string> cached_key = accessor.Get<std::string>(EntityType::Loadout, Loadout::PrimaryWeapon);
+            return data_view.Get<std::string>(cached_key);
+        }
+
+        inline const std::string& GetSecondaryWeapon() const {
+            static VTX::PropertyKey<std::string> cached_key = accessor.Get<std::string>(EntityType::Loadout, Loadout::SecondaryWeapon);
+            return data_view.Get<std::string>(cached_key);
+        }
+
+        inline int32_t GetGrenades() const {
+            static VTX::PropertyKey<int32_t> cached_key = accessor.Get<int32_t>(EntityType::Loadout, Loadout::Grenades);
+            return data_view.Get<int32_t>(cached_key);
+        }
+
+        inline bool GetHasArmor() const {
+            static VTX::PropertyKey<bool> cached_key = accessor.Get<bool>(EntityType::Loadout, Loadout::HasArmor);
+            return data_view.Get<bool>(cached_key);
+        }
+
+    };
+
+    class LoadoutMutator {
+    private:
+        VTX::EntityMutator data_mut;
+        const VTX::FrameAccessor& accessor;
+
+    public:
+        LoadoutMutator(VTX::EntityMutator m, const VTX::FrameAccessor& acc) 
+            : data_mut(m), accessor(acc) {}
+
+        LoadoutMutator(VTX::PropertyContainer& container, const VTX::FrameAccessor& acc) 
+            : data_mut(container), accessor(acc) {}
+
+        inline const std::string& GetPrimaryWeapon() const {
+            static VTX::PropertyKey<std::string> cached_key = accessor.Get<std::string>(EntityType::Loadout, Loadout::PrimaryWeapon);
+            return data_mut.Get<std::string>(cached_key);
+        }
+
+        inline void SetPrimaryWeapon(const std::string& value) {
+            static VTX::PropertyKey<std::string> cached_key = accessor.Get<std::string>(EntityType::Loadout, Loadout::PrimaryWeapon);
+            data_mut.Set<std::string>(cached_key, value);
+        }
+
+        inline const std::string& GetSecondaryWeapon() const {
+            static VTX::PropertyKey<std::string> cached_key = accessor.Get<std::string>(EntityType::Loadout, Loadout::SecondaryWeapon);
+            return data_mut.Get<std::string>(cached_key);
+        }
+
+        inline void SetSecondaryWeapon(const std::string& value) {
+            static VTX::PropertyKey<std::string> cached_key = accessor.Get<std::string>(EntityType::Loadout, Loadout::SecondaryWeapon);
+            data_mut.Set<std::string>(cached_key, value);
+        }
+
+        inline int32_t GetGrenades() const {
+            static VTX::PropertyKey<int32_t> cached_key = accessor.Get<int32_t>(EntityType::Loadout, Loadout::Grenades);
+            return data_mut.Get<int32_t>(cached_key);
+        }
+
+        inline void SetGrenades(int32_t value) {
+            static VTX::PropertyKey<int32_t> cached_key = accessor.Get<int32_t>(EntityType::Loadout, Loadout::Grenades);
+            data_mut.Set<int32_t>(cached_key, value);
+        }
+
+        inline bool GetHasArmor() const {
+            static VTX::PropertyKey<bool> cached_key = accessor.Get<bool>(EntityType::Loadout, Loadout::HasArmor);
+            return data_mut.Get<bool>(cached_key);
+        }
+
+        inline void SetHasArmor(bool value) {
+            static VTX::PropertyKey<bool> cached_key = accessor.Get<bool>(EntityType::Loadout, Loadout::HasArmor);
+            data_mut.Set<bool>(cached_key, value);
+        }
+
+    };
+
+    namespace InventoryItem {
+        constexpr const char* StructName = "InventoryItem";
+        constexpr const char* ItemID = "ItemID";
+        constexpr const char* DisplayName = "DisplayName";
+        constexpr const char* Quantity = "Quantity";
+        constexpr const char* Durability = "Durability";
+        constexpr const char* Slot = "Slot";
+    }
+
+    class InventoryItemView {
+    private:
+        VTX::EntityView data_view;
+        const VTX::FrameAccessor& accessor;
+
+    public:
+        InventoryItemView(VTX::EntityView view, const VTX::FrameAccessor& acc) 
+            : data_view(view), accessor(acc) {}
+
+        InventoryItemView(const VTX::PropertyContainer& container, const VTX::FrameAccessor& acc) 
+            : data_view(container), accessor(acc) {}
+
+        inline const std::string& GetItemID() const {
+            static VTX::PropertyKey<std::string> cached_key = accessor.Get<std::string>(EntityType::InventoryItem, InventoryItem::ItemID);
+            return data_view.Get<std::string>(cached_key);
+        }
+
+        inline const std::string& GetDisplayName() const {
+            static VTX::PropertyKey<std::string> cached_key = accessor.Get<std::string>(EntityType::InventoryItem, InventoryItem::DisplayName);
+            return data_view.Get<std::string>(cached_key);
+        }
+
+        inline int32_t GetQuantity() const {
+            static VTX::PropertyKey<int32_t> cached_key = accessor.Get<int32_t>(EntityType::InventoryItem, InventoryItem::Quantity);
+            return data_view.Get<int32_t>(cached_key);
+        }
+
+        inline float GetDurability() const {
+            static VTX::PropertyKey<float> cached_key = accessor.Get<float>(EntityType::InventoryItem, InventoryItem::Durability);
+            return data_view.Get<float>(cached_key);
+        }
+
+        inline int32_t GetSlot() const {
+            static VTX::PropertyKey<int32_t> cached_key = accessor.Get<int32_t>(EntityType::InventoryItem, InventoryItem::Slot);
+            return data_view.Get<int32_t>(cached_key);
+        }
+
+    };
+
+    class InventoryItemMutator {
+    private:
+        VTX::EntityMutator data_mut;
+        const VTX::FrameAccessor& accessor;
+
+    public:
+        InventoryItemMutator(VTX::EntityMutator m, const VTX::FrameAccessor& acc) 
+            : data_mut(m), accessor(acc) {}
+
+        InventoryItemMutator(VTX::PropertyContainer& container, const VTX::FrameAccessor& acc) 
+            : data_mut(container), accessor(acc) {}
+
+        inline const std::string& GetItemID() const {
+            static VTX::PropertyKey<std::string> cached_key = accessor.Get<std::string>(EntityType::InventoryItem, InventoryItem::ItemID);
+            return data_mut.Get<std::string>(cached_key);
+        }
+
+        inline void SetItemID(const std::string& value) {
+            static VTX::PropertyKey<std::string> cached_key = accessor.Get<std::string>(EntityType::InventoryItem, InventoryItem::ItemID);
+            data_mut.Set<std::string>(cached_key, value);
+        }
+
+        inline const std::string& GetDisplayName() const {
+            static VTX::PropertyKey<std::string> cached_key = accessor.Get<std::string>(EntityType::InventoryItem, InventoryItem::DisplayName);
+            return data_mut.Get<std::string>(cached_key);
+        }
+
+        inline void SetDisplayName(const std::string& value) {
+            static VTX::PropertyKey<std::string> cached_key = accessor.Get<std::string>(EntityType::InventoryItem, InventoryItem::DisplayName);
+            data_mut.Set<std::string>(cached_key, value);
+        }
+
+        inline int32_t GetQuantity() const {
+            static VTX::PropertyKey<int32_t> cached_key = accessor.Get<int32_t>(EntityType::InventoryItem, InventoryItem::Quantity);
+            return data_mut.Get<int32_t>(cached_key);
+        }
+
+        inline void SetQuantity(int32_t value) {
+            static VTX::PropertyKey<int32_t> cached_key = accessor.Get<int32_t>(EntityType::InventoryItem, InventoryItem::Quantity);
+            data_mut.Set<int32_t>(cached_key, value);
+        }
+
+        inline float GetDurability() const {
+            static VTX::PropertyKey<float> cached_key = accessor.Get<float>(EntityType::InventoryItem, InventoryItem::Durability);
+            return data_mut.Get<float>(cached_key);
+        }
+
+        inline void SetDurability(float value) {
+            static VTX::PropertyKey<float> cached_key = accessor.Get<float>(EntityType::InventoryItem, InventoryItem::Durability);
+            data_mut.Set<float>(cached_key, value);
+        }
+
+        inline int32_t GetSlot() const {
+            static VTX::PropertyKey<int32_t> cached_key = accessor.Get<int32_t>(EntityType::InventoryItem, InventoryItem::Slot);
+            return data_mut.Get<int32_t>(cached_key);
+        }
+
+        inline void SetSlot(int32_t value) {
+            static VTX::PropertyKey<int32_t> cached_key = accessor.Get<int32_t>(EntityType::InventoryItem, InventoryItem::Slot);
+            data_mut.Set<int32_t>(cached_key, value);
+        }
+
+    };
+
+    namespace AmmoEntry {
+        constexpr const char* StructName = "AmmoEntry";
+        constexpr const char* WeaponName = "WeaponName";
+        constexpr const char* Ammo = "Ammo";
+        constexpr const char* Reserve = "Reserve";
+    }
+
+    class AmmoEntryView {
+    private:
+        VTX::EntityView data_view;
+        const VTX::FrameAccessor& accessor;
+
+    public:
+        AmmoEntryView(VTX::EntityView view, const VTX::FrameAccessor& acc) 
+            : data_view(view), accessor(acc) {}
+
+        AmmoEntryView(const VTX::PropertyContainer& container, const VTX::FrameAccessor& acc) 
+            : data_view(container), accessor(acc) {}
+
+        inline const std::string& GetWeaponName() const {
+            static VTX::PropertyKey<std::string> cached_key = accessor.Get<std::string>(EntityType::AmmoEntry, AmmoEntry::WeaponName);
+            return data_view.Get<std::string>(cached_key);
+        }
+
+        inline int32_t GetAmmo() const {
+            static VTX::PropertyKey<int32_t> cached_key = accessor.Get<int32_t>(EntityType::AmmoEntry, AmmoEntry::Ammo);
+            return data_view.Get<int32_t>(cached_key);
+        }
+
+        inline int32_t GetReserve() const {
+            static VTX::PropertyKey<int32_t> cached_key = accessor.Get<int32_t>(EntityType::AmmoEntry, AmmoEntry::Reserve);
+            return data_view.Get<int32_t>(cached_key);
+        }
+
+    };
+
+    class AmmoEntryMutator {
+    private:
+        VTX::EntityMutator data_mut;
+        const VTX::FrameAccessor& accessor;
+
+    public:
+        AmmoEntryMutator(VTX::EntityMutator m, const VTX::FrameAccessor& acc) 
+            : data_mut(m), accessor(acc) {}
+
+        AmmoEntryMutator(VTX::PropertyContainer& container, const VTX::FrameAccessor& acc) 
+            : data_mut(container), accessor(acc) {}
+
+        inline const std::string& GetWeaponName() const {
+            static VTX::PropertyKey<std::string> cached_key = accessor.Get<std::string>(EntityType::AmmoEntry, AmmoEntry::WeaponName);
+            return data_mut.Get<std::string>(cached_key);
+        }
+
+        inline void SetWeaponName(const std::string& value) {
+            static VTX::PropertyKey<std::string> cached_key = accessor.Get<std::string>(EntityType::AmmoEntry, AmmoEntry::WeaponName);
+            data_mut.Set<std::string>(cached_key, value);
+        }
+
+        inline int32_t GetAmmo() const {
+            static VTX::PropertyKey<int32_t> cached_key = accessor.Get<int32_t>(EntityType::AmmoEntry, AmmoEntry::Ammo);
+            return data_mut.Get<int32_t>(cached_key);
+        }
+
+        inline void SetAmmo(int32_t value) {
+            static VTX::PropertyKey<int32_t> cached_key = accessor.Get<int32_t>(EntityType::AmmoEntry, AmmoEntry::Ammo);
+            data_mut.Set<int32_t>(cached_key, value);
+        }
+
+        inline int32_t GetReserve() const {
+            static VTX::PropertyKey<int32_t> cached_key = accessor.Get<int32_t>(EntityType::AmmoEntry, AmmoEntry::Reserve);
+            return data_mut.Get<int32_t>(cached_key);
+        }
+
+        inline void SetReserve(int32_t value) {
+            static VTX::PropertyKey<int32_t> cached_key = accessor.Get<int32_t>(EntityType::AmmoEntry, AmmoEntry::Reserve);
+            data_mut.Set<int32_t>(cached_key, value);
+        }
+
+    };
+
     // ----------------------------------------------------------------
     //  Strongly-typed iteration helpers
     // ----------------------------------------------------------------
@@ -555,6 +941,75 @@ namespace VTX::ArenaSchema {
         for (const auto& container : bucket.entities) {
             if (container.entity_type_id == kTypeId) {
                 MatchStateView obj(container, accessor);
+                fn(obj);
+            }
+        }
+    }
+
+    template <class Fn>
+    void ForEachLoadout(VTX::BucketMutator& bucket, const VTX::FrameAccessor& accessor, Fn fn) {
+        constexpr int32_t kTypeId = static_cast<int32_t>(EntityType::Loadout);
+        for (auto entity : bucket) {
+            const auto* raw = entity.raw();
+            if (raw && raw->entity_type_id == kTypeId) {
+                LoadoutMutator obj(entity, accessor);
+                fn(obj);
+            }
+        }
+    }
+
+    template <class Fn>
+    void ForEachLoadoutView(const VTX::Bucket& bucket, const VTX::FrameAccessor& accessor, Fn fn) {
+        constexpr int32_t kTypeId = static_cast<int32_t>(EntityType::Loadout);
+        for (const auto& container : bucket.entities) {
+            if (container.entity_type_id == kTypeId) {
+                LoadoutView obj(container, accessor);
+                fn(obj);
+            }
+        }
+    }
+
+    template <class Fn>
+    void ForEachInventoryItem(VTX::BucketMutator& bucket, const VTX::FrameAccessor& accessor, Fn fn) {
+        constexpr int32_t kTypeId = static_cast<int32_t>(EntityType::InventoryItem);
+        for (auto entity : bucket) {
+            const auto* raw = entity.raw();
+            if (raw && raw->entity_type_id == kTypeId) {
+                InventoryItemMutator obj(entity, accessor);
+                fn(obj);
+            }
+        }
+    }
+
+    template <class Fn>
+    void ForEachInventoryItemView(const VTX::Bucket& bucket, const VTX::FrameAccessor& accessor, Fn fn) {
+        constexpr int32_t kTypeId = static_cast<int32_t>(EntityType::InventoryItem);
+        for (const auto& container : bucket.entities) {
+            if (container.entity_type_id == kTypeId) {
+                InventoryItemView obj(container, accessor);
+                fn(obj);
+            }
+        }
+    }
+
+    template <class Fn>
+    void ForEachAmmoEntry(VTX::BucketMutator& bucket, const VTX::FrameAccessor& accessor, Fn fn) {
+        constexpr int32_t kTypeId = static_cast<int32_t>(EntityType::AmmoEntry);
+        for (auto entity : bucket) {
+            const auto* raw = entity.raw();
+            if (raw && raw->entity_type_id == kTypeId) {
+                AmmoEntryMutator obj(entity, accessor);
+                fn(obj);
+            }
+        }
+    }
+
+    template <class Fn>
+    void ForEachAmmoEntryView(const VTX::Bucket& bucket, const VTX::FrameAccessor& accessor, Fn fn) {
+        constexpr int32_t kTypeId = static_cast<int32_t>(EntityType::AmmoEntry);
+        for (const auto& container : bucket.entities) {
+            if (container.entity_type_id == kTypeId) {
+                AmmoEntryView obj(container, accessor);
                 fn(obj);
             }
         }

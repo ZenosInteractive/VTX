@@ -917,12 +917,58 @@ namespace VtxDiff::Protobuf {
         return Publish(Scratch);
     }
 
+    namespace {
+        // VTX stores a map field as `map_properties`: a `repeated MapContainer`,
+        // one MapContainer per map-field slot, each holding parallel `keys` /
+        // `values` arrays. A struct's single map field lives at slot 0 (matching
+        // the FlatBuffers adapter and the writer/loader convention). This helper
+        // resolves that inner MapContainer plus its keys/values field descriptors.
+        const google::protobuf::Message* GetVtxMapContainer(const google::protobuf::Message& Owner,
+                                                            const google::protobuf::FieldDescriptor* MapField,
+                                                            const google::protobuf::FieldDescriptor** OutKeys,
+                                                            const google::protobuf::FieldDescriptor** OutValues) {
+            *OutKeys = nullptr;
+            *OutValues = nullptr;
+            if (!MapField->is_repeated() ||
+                MapField->cpp_type() != google::protobuf::FieldDescriptor::CPPTYPE_MESSAGE) {
+                return nullptr;
+            }
+            const auto* R = Owner.GetReflection();
+            if (R->FieldSize(Owner, MapField) == 0) {
+                return nullptr;
+            }
+            const google::protobuf::Message& MC = R->GetRepeatedMessage(Owner, MapField, 0);
+            const auto* MCD = MC.GetDescriptor();
+            *OutKeys = MCD->FindFieldByName("keys");
+            *OutValues = MCD->FindFieldByName("values");
+            return &MC;
+        }
+
+        std::string RepeatedScalarAsString(const google::protobuf::Reflection* R, const google::protobuf::Message& Msg,
+                                           const google::protobuf::FieldDescriptor* F, int Index) {
+            switch (F->cpp_type()) {
+            case google::protobuf::FieldDescriptor::CPPTYPE_STRING:
+                return R->GetRepeatedString(Msg, F, Index);
+            case google::protobuf::FieldDescriptor::CPPTYPE_INT32:
+                return std::to_string(R->GetRepeatedInt32(Msg, F, Index));
+            case google::protobuf::FieldDescriptor::CPPTYPE_UINT32:
+                return std::to_string(R->GetRepeatedUInt32(Msg, F, Index));
+            case google::protobuf::FieldDescriptor::CPPTYPE_INT64:
+                return std::to_string(R->GetRepeatedInt64(Msg, F, Index));
+            case google::protobuf::FieldDescriptor::CPPTYPE_UINT64:
+                return std::to_string(R->GetRepeatedUInt64(Msg, F, Index));
+            default:
+                return {};
+            }
+        }
+    } // namespace
+
     // ============================================================
     // GetMapSize
     // ------------------------------------------------------------
-    // Returns the number of key-value pairs in a map field.
-    // Supports both native protobuf map<K,V> and Unreal-style
-    // FVTXMapContainer (Keys + Values arrays).
+    // Returns the number of key-value entries in a map field.
+    // Supports native protobuf map<K,V> and the VTX map_properties
+    // (repeated MapContainer) layout.
     // ============================================================
     size_t FProtobufViewAdapter::GetMapSize(const VtxDiff::FieldDesc& Field) const {
         const auto* M = GetMsg();
@@ -940,15 +986,17 @@ namespace VtxDiff::Protobuf {
         if (F->is_map())
             return static_cast<size_t>(R->FieldSize(*M, F));
 
-        // Case 2: Unreal-style "FVTXMapContainer" (Keys + Values arrays)
+        // Case 2: VTX map_properties (repeated MapContainer -> keys/values).
         if (Field.type == EVTXContainerType::MapProperties) {
-            const auto* KeysField = D->FindFieldByName("Keys");
-            const auto* ValuesField = D->FindFieldByName("Values");
-            if (!KeysField || !ValuesField)
+            const google::protobuf::FieldDescriptor* KeysField = nullptr;
+            const google::protobuf::FieldDescriptor* ValuesField = nullptr;
+            const google::protobuf::Message* MC = GetVtxMapContainer(*M, F, &KeysField, &ValuesField);
+            if (!MC || !KeysField || !ValuesField)
                 return 0;
 
-            const int KeyCount = R->FieldSize(*M, KeysField);
-            const int ValueCount = R->FieldSize(*M, ValuesField);
+            const auto* MCR = MC->GetReflection();
+            const int KeyCount = MCR->FieldSize(*MC, KeysField);
+            const int ValueCount = MCR->FieldSize(*MC, ValuesField);
             return static_cast<size_t>(std::min(KeyCount, ValueCount));
         }
 
@@ -999,22 +1047,19 @@ namespace VtxDiff::Protobuf {
             }
         }
 
-        // --- Case 2: FVTXMapContainer (Keys + Values arrays) ---
+        // --- Case 2: VTX map_properties (repeated MapContainer -> keys/values) ---
         if (Field.type == EVTXContainerType::MapProperties) {
-            const auto* KeysField = D->FindFieldByName("Keys");
-            if (!KeysField || !KeysField->is_repeated())
+            const google::protobuf::FieldDescriptor* KeysField = nullptr;
+            const google::protobuf::FieldDescriptor* ValuesField = nullptr;
+            const google::protobuf::Message* MC = GetVtxMapContainer(*M, F, &KeysField, &ValuesField);
+            if (!MC || !KeysField || !KeysField->is_repeated())
                 return {};
 
-            if (Index >= static_cast<size_t>(R->FieldSize(*M, KeysField)))
+            const auto* MCR = MC->GetReflection();
+            if (Index >= static_cast<size_t>(MCR->FieldSize(*MC, KeysField)))
                 return {};
 
-            if (KeysField->cpp_type() == google::protobuf::FieldDescriptor::CPPTYPE_STRING)
-                return R->GetRepeatedString(*M, KeysField, static_cast<int>(Index));
-
-            if (KeysField->cpp_type() == google::protobuf::FieldDescriptor::CPPTYPE_INT32)
-                return std::to_string(R->GetRepeatedInt32(*M, KeysField, static_cast<int>(Index)));
-
-            return {};
+            return RepeatedScalarAsString(MCR, *MC, KeysField, static_cast<int>(Index));
         }
 
         return {};
@@ -1051,12 +1096,17 @@ namespace VtxDiff::Protobuf {
         }
 
         if (Field.type == EVTXContainerType::MapProperties) {
-            const auto* ValuesField = D->FindFieldByName("Values");
-            if (!ValuesField || !ValuesField->is_repeated() ||
-                Index >= static_cast<size_t>(R->FieldSize(*M, ValuesField)))
+            const google::protobuf::FieldDescriptor* KeysField = nullptr;
+            const google::protobuf::FieldDescriptor* ValuesField = nullptr;
+            const google::protobuf::Message* MC = GetVtxMapContainer(*M, F, &KeysField, &ValuesField);
+            if (!MC || !ValuesField || !ValuesField->is_repeated())
                 return {};
 
-            const google::protobuf::Message& SubMsg = R->GetRepeatedMessage(*M, ValuesField, static_cast<int>(Index));
+            const auto* MCR = MC->GetReflection();
+            if (Index >= static_cast<size_t>(MCR->FieldSize(*MC, ValuesField)))
+                return {};
+
+            const google::protobuf::Message& SubMsg = MCR->GetRepeatedMessage(*MC, ValuesField, static_cast<int>(Index));
             return FProtobufViewAdapter(&SubMsg, false);
         }
         return {};

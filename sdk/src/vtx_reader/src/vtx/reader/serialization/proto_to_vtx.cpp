@@ -54,6 +54,14 @@ namespace VTX {
             dst.value_normalized = src.value_normalized();
         }
 
+        void FromProto(const cppvtx::MapContainer& src, VTX::MapContainer& dst) {
+            dst.keys.assign(src.keys().begin(), src.keys().end());
+            dst.values.resize(src.values_size());
+            for (int i = 0; i < src.values_size(); ++i) {
+                FromProto(src.values(i), dst.values[i]);
+            }
+        }
+
         void FromProto(const cppvtx::PropertyContainer& proto, VTX::PropertyContainer& out) {
             auto Copy = [](auto& dest, const auto& src) {
                 dest.assign(src.begin(), src.end());
@@ -129,6 +137,16 @@ namespace VTX {
 
             if (proto.has_any_struct_arrays()) {
                 FromProtoComplexVec(proto.any_struct_arrays(), out.any_struct_arrays,
+                                    [](auto& p, auto& n) { FromProto(p, n); });
+            }
+
+            out.map_properties.resize(proto.map_properties_size());
+            for (int i = 0; i < proto.map_properties_size(); ++i) {
+                FromProto(proto.map_properties(i), out.map_properties[i]);
+            }
+
+            if (proto.has_map_arrays()) {
+                FromProtoComplexVec(proto.map_arrays(), out.map_arrays,
                                     [](auto& p, auto& n) { FromProto(p, n); });
             }
         }

@@ -21,6 +21,29 @@ struct Rotation {
     w: float;
 }
 
+// ---- Loadout / inventory / ammo (nested structs, arrays, map) ----
+
+table Loadout {
+    primary_weapon:   string;
+    secondary_weapon: string;
+    grenades:         int = 2;
+    has_armor:        bool = true;
+}
+
+table InventoryItem {
+    item_id:      string;
+    display_name: string;
+    quantity:     int = 1;
+    durability:   float = 100.0;
+    slot:         int;
+}
+
+table AmmoEntry {
+    weapon_name: string; // doubles as the VTX map key
+    ammo:        int;
+    reserve:     int;
+}
+
 // ---- Game entities ----
 
 table Player {
@@ -35,6 +58,13 @@ table Player {
     is_alive:  bool = true;
     score:     int;
     deaths:    int;
+
+    // Rich containers:
+    abilities:         [string];        // scalar array
+    ability_cooldowns: [float];         // scalar array (parallel)
+    loadout:           Loadout;         // nested struct
+    inventory:         [InventoryItem]; // array of nested structs
+    ammo_by_weapon:    [AmmoEntry];     // map<weapon, AmmoEntry>
 }
 
 table Projectile {

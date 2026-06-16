@@ -24,6 +24,29 @@ message Rotation {
     float w = 4;
 }
 
+// ---- Loadout / inventory / ammo (nested structs, arrays, map) ----
+
+message Loadout {
+    string primary_weapon   = 1;
+    string secondary_weapon = 2;
+    int32  grenades         = 3;
+    bool   has_armor        = 4;
+}
+
+message InventoryItem {
+    string item_id      = 1;
+    string display_name = 2;
+    int32  quantity     = 3;
+    float  durability   = 4;
+    int32  slot         = 5;
+}
+
+message AmmoEntry {
+    string weapon_name = 1; // doubles as the VTX map key
+    int32  ammo        = 2;
+    int32  reserve     = 3;
+}
+
 // ---- Game entities ----
 
 message Player {
@@ -38,6 +61,13 @@ message Player {
     bool   is_alive  = 9;
     int32  score     = 10;
     int32  deaths    = 11;
+
+    // Rich containers:
+    repeated string        abilities         = 12; // scalar array
+    repeated float         ability_cooldowns = 13; // scalar array (parallel)
+    Loadout                loadout           = 14; // nested struct
+    repeated InventoryItem inventory         = 15; // array of nested structs
+    repeated AmmoEntry     ammo_by_weapon    = 16; // map<weapon, AmmoEntry>
 }
 
 message Projectile {

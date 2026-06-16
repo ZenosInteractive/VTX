@@ -92,6 +92,46 @@
           "keyId": "None",
           "containerType": "None",
           "meta": { "type": "int32", "keyType": "", "category": "Player", "displayName": "Deaths", "tooltip": "Death count", "defaultValue": "0", "version": 1, "fixedArrayDim": 1 }
+        },
+        {
+          "name": "Abilities",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "Array",
+          "meta": { "type": "string", "keyType": "", "category": "Loadout", "displayName": "Abilities", "tooltip": "Equipped ability names (variable-length string array)", "defaultValue": "", "version": 1, "fixedArrayDim": 4 }
+        },
+        {
+          "name": "AbilityCooldowns",
+          "structType": "",
+          "typeId": "Float",
+          "keyId": "None",
+          "containerType": "Array",
+          "meta": { "type": "float", "keyType": "", "category": "Loadout", "displayName": "Ability Cooldowns", "tooltip": "Seconds left on each ability, parallel to Abilities", "defaultValue": "", "version": 1, "fixedArrayDim": 4 }
+        },
+        {
+          "name": "Loadout",
+          "structType": "Loadout",
+          "typeId": "Struct",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": { "type": "struct", "keyType": "", "category": "Loadout", "displayName": "Loadout", "tooltip": "Nested struct: weapons + grenade count", "defaultValue": "", "version": 1, "fixedArrayDim": 1 }
+        },
+        {
+          "name": "Inventory",
+          "structType": "InventoryItem",
+          "typeId": "Struct",
+          "keyId": "None",
+          "containerType": "Array",
+          "meta": { "type": "struct", "keyType": "", "category": "Loadout", "displayName": "Inventory", "tooltip": "Array of nested InventoryItem structs", "defaultValue": "", "version": 1, "fixedArrayDim": 8 }
+        },
+        {
+          "name": "AmmoByWeapon",
+          "structType": "AmmoEntry",
+          "typeId": "Struct",
+          "keyId": "String",
+          "containerType": "Map",
+          "meta": { "type": "struct", "keyType": "string", "category": "Loadout", "displayName": "Ammo By Weapon", "tooltip": "Map<weapon name, AmmoEntry>; the entry's WeaponName is the key", "defaultValue": "", "version": 1, "fixedArrayDim": 1 }
         }
       ]
     },
@@ -198,6 +238,117 @@
           "keyId": "None",
           "containerType": "None",
           "meta": { "type": "float", "keyType": "", "category": "MatchState", "displayName": "Time Remaining", "tooltip": "Seconds left in current phase", "defaultValue": "0", "version": 1, "fixedArrayDim": 1 }
+        }
+      ]
+    },
+    {
+      "struct": "Loadout",
+      "values": [
+        {
+          "name": "PrimaryWeapon",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": { "type": "string", "keyType": "", "category": "Loadout", "displayName": "Primary Weapon", "tooltip": "Main weapon name", "defaultValue": "", "version": 1, "fixedArrayDim": 1 }
+        },
+        {
+          "name": "SecondaryWeapon",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": { "type": "string", "keyType": "", "category": "Loadout", "displayName": "Secondary Weapon", "tooltip": "Sidearm name", "defaultValue": "", "version": 1, "fixedArrayDim": 1 }
+        },
+        {
+          "name": "Grenades",
+          "structType": "",
+          "typeId": "Int32",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": { "type": "int32", "keyType": "", "category": "Loadout", "displayName": "Grenades", "tooltip": "Grenades remaining", "defaultValue": "2", "version": 1, "fixedArrayDim": 1 }
+        },
+        {
+          "name": "HasArmor",
+          "structType": "",
+          "typeId": "Bool",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": { "type": "bool", "keyType": "", "category": "Loadout", "displayName": "Has Armor", "tooltip": "Whether an armor plate is equipped", "defaultValue": "true", "version": 1, "fixedArrayDim": 1 }
+        }
+      ]
+    },
+    {
+      "struct": "InventoryItem",
+      "values": [
+        {
+          "name": "ItemID",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": { "type": "string", "keyType": "", "category": "Inventory", "displayName": "Item ID", "tooltip": "Stable item identifier", "defaultValue": "", "version": 1, "fixedArrayDim": 1 }
+        },
+        {
+          "name": "DisplayName",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": { "type": "string", "keyType": "", "category": "Inventory", "displayName": "Display Name", "tooltip": "Human-readable item name", "defaultValue": "", "version": 1, "fixedArrayDim": 1 }
+        },
+        {
+          "name": "Quantity",
+          "structType": "",
+          "typeId": "Int32",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": { "type": "int32", "keyType": "", "category": "Inventory", "displayName": "Quantity", "tooltip": "Stack size", "defaultValue": "1", "version": 1, "fixedArrayDim": 1 }
+        },
+        {
+          "name": "Durability",
+          "structType": "",
+          "typeId": "Float",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": { "type": "float", "keyType": "", "category": "Inventory", "displayName": "Durability", "tooltip": "Remaining durability (0-100)", "defaultValue": "100", "version": 1, "fixedArrayDim": 1 }
+        },
+        {
+          "name": "Slot",
+          "structType": "",
+          "typeId": "Int32",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": { "type": "int32", "keyType": "", "category": "Inventory", "displayName": "Slot", "tooltip": "Inventory slot index", "defaultValue": "0", "version": 1, "fixedArrayDim": 1 }
+        }
+      ]
+    },
+    {
+      "struct": "AmmoEntry",
+      "values": [
+        {
+          "name": "WeaponName",
+          "structType": "",
+          "typeId": "String",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": { "type": "string", "keyType": "", "category": "Ammo", "displayName": "Weapon Name", "tooltip": "Weapon this ammo belongs to (also the map key)", "defaultValue": "", "version": 1, "fixedArrayDim": 1 }
+        },
+        {
+          "name": "Ammo",
+          "structType": "",
+          "typeId": "Int32",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": { "type": "int32", "keyType": "", "category": "Ammo", "displayName": "Ammo", "tooltip": "Rounds in the magazine", "defaultValue": "0", "version": 1, "fixedArrayDim": 1 }
+        },
+        {
+          "name": "Reserve",
+          "structType": "",
+          "typeId": "Int32",
+          "keyId": "None",
+          "containerType": "None",
+          "meta": { "type": "int32", "keyType": "", "category": "Ammo", "displayName": "Reserve", "tooltip": "Rounds in reserve", "defaultValue": "0", "version": 1, "fixedArrayDim": 1 }
         }
       ]
     }

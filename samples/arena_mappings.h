@@ -26,12 +26,38 @@
 #include "vtx/common/readers/frame_reader/native_loader.h"
 #include "vtx/common/readers/frame_reader/type_traits.h"
 #include "vtx/common/vtx_types.h"
+#include "vtx/common/vtx_types_helpers.h"
 
+#include "arena_container_helpers.h"
 #include "arena_generated.h"
 
 // ===================================================================
 //  Arena game data model (matches the JSON data source structure)
 // ===================================================================
+
+// Nested struct (Player::Loadout).
+struct ArenaLoadout {
+    std::string primary_weapon;
+    std::string secondary_weapon;
+    int grenades = 0;
+    bool has_armor = true;
+};
+
+// Element of the Player::Inventory array-of-structs.
+struct ArenaInventoryItem {
+    std::string item_id;
+    std::string display_name;
+    int quantity = 0;
+    float durability = 0.0f;
+    int slot = 0;
+};
+
+// Entry of the Player::AmmoByWeapon map (weapon_name doubles as the key).
+struct ArenaAmmoEntry {
+    std::string weapon_name;
+    int ammo = 0;
+    int reserve = 0;
+};
 
 struct ArenaPlayer {
     std::string unique_id;
@@ -45,6 +71,13 @@ struct ArenaPlayer {
     bool is_alive = true;
     int score = 0;
     int deaths = 0;
+
+    // Rich containers.
+    std::vector<std::string> abilities;
+    std::vector<float> ability_cooldowns;
+    ArenaLoadout loadout;
+    std::vector<ArenaInventoryItem> inventory;
+    std::vector<ArenaAmmoEntry> ammo_by_weapon;
 };
 
 struct ArenaProjectile {
@@ -107,6 +140,36 @@ struct VTX::JsonMapping<VTX::Quat> {
 };
 
 template <>
+struct VTX::JsonMapping<ArenaLoadout> {
+    static constexpr auto GetFields() {
+        return std::make_tuple(MakeField("primary_weapon", &ArenaLoadout::primary_weapon),
+                               MakeField("secondary_weapon", &ArenaLoadout::secondary_weapon),
+                               MakeField("grenades", &ArenaLoadout::grenades),
+                               MakeField("has_armor", &ArenaLoadout::has_armor));
+    }
+};
+
+template <>
+struct VTX::JsonMapping<ArenaInventoryItem> {
+    static constexpr auto GetFields() {
+        return std::make_tuple(MakeField("item_id", &ArenaInventoryItem::item_id),
+                               MakeField("display_name", &ArenaInventoryItem::display_name),
+                               MakeField("quantity", &ArenaInventoryItem::quantity),
+                               MakeField("durability", &ArenaInventoryItem::durability),
+                               MakeField("slot", &ArenaInventoryItem::slot));
+    }
+};
+
+template <>
+struct VTX::JsonMapping<ArenaAmmoEntry> {
+    static constexpr auto GetFields() {
+        return std::make_tuple(MakeField("weapon_name", &ArenaAmmoEntry::weapon_name),
+                               MakeField("ammo", &ArenaAmmoEntry::ammo),
+                               MakeField("reserve", &ArenaAmmoEntry::reserve));
+    }
+};
+
+template <>
 struct VTX::JsonMapping<ArenaPlayer> {
     static constexpr auto GetFields() {
         return std::make_tuple(MakeField("unique_id", &ArenaPlayer::unique_id), MakeField("name", &ArenaPlayer::name),
@@ -115,7 +178,12 @@ struct VTX::JsonMapping<ArenaPlayer> {
                                MakeField("rotation", &ArenaPlayer::rotation),
                                MakeField("velocity", &ArenaPlayer::velocity),
                                MakeField("is_alive", &ArenaPlayer::is_alive), MakeField("score", &ArenaPlayer::score),
-                               MakeField("deaths", &ArenaPlayer::deaths));
+                               MakeField("deaths", &ArenaPlayer::deaths),
+                               MakeField("abilities", &ArenaPlayer::abilities),
+                               MakeField("ability_cooldowns", &ArenaPlayer::ability_cooldowns),
+                               MakeField("loadout", &ArenaPlayer::loadout),
+                               MakeField("inventory", &ArenaPlayer::inventory),
+                               MakeField("ammo_by_weapon", &ArenaPlayer::ammo_by_weapon));
     }
 };
 
@@ -171,7 +239,41 @@ struct VTX::JsonMapping<ArenaReplayJson> {
 //  walks these tuples automatically.
 
 template <>
+struct VTX::StructMapping<ArenaLoadout> {
+    static constexpr auto GetFields() {
+        return std::make_tuple(MakeStructField(ArenaSchema::Loadout::PrimaryWeapon, &ArenaLoadout::primary_weapon),
+                               MakeStructField(ArenaSchema::Loadout::SecondaryWeapon, &ArenaLoadout::secondary_weapon),
+                               MakeStructField(ArenaSchema::Loadout::Grenades, &ArenaLoadout::grenades),
+                               MakeStructField(ArenaSchema::Loadout::HasArmor, &ArenaLoadout::has_armor));
+    }
+};
+
+template <>
+struct VTX::StructMapping<ArenaInventoryItem> {
+    static constexpr auto GetFields() {
+        return std::make_tuple(MakeStructField(ArenaSchema::InventoryItem::ItemID, &ArenaInventoryItem::item_id),
+                               MakeStructField(ArenaSchema::InventoryItem::DisplayName, &ArenaInventoryItem::display_name),
+                               MakeStructField(ArenaSchema::InventoryItem::Quantity, &ArenaInventoryItem::quantity),
+                               MakeStructField(ArenaSchema::InventoryItem::Durability, &ArenaInventoryItem::durability),
+                               MakeStructField(ArenaSchema::InventoryItem::Slot, &ArenaInventoryItem::slot));
+    }
+};
+
+template <>
+struct VTX::StructMapping<ArenaAmmoEntry> {
+    static constexpr auto GetFields() {
+        return std::make_tuple(MakeStructField(ArenaSchema::AmmoEntry::WeaponName, &ArenaAmmoEntry::weapon_name),
+                               MakeStructField(ArenaSchema::AmmoEntry::Ammo, &ArenaAmmoEntry::ammo),
+                               MakeStructField(ArenaSchema::AmmoEntry::Reserve, &ArenaAmmoEntry::reserve));
+    }
+};
+
+template <>
 struct VTX::StructMapping<ArenaPlayer> {
+    // AmmoByWeapon is intentionally NOT listed here: it is a Map, which the
+    // native loader's automatic walk doesn't build (it would land in
+    // any_struct_arrays). StructFrameBinding<ArenaFrame> below populates it
+    // explicitly via ArenaHelpers::AppendMapEntry.
     static constexpr auto GetFields() {
         return std::make_tuple(MakeStructField(ArenaSchema::Player::UniqueID, &ArenaPlayer::unique_id),
                                MakeStructField(ArenaSchema::Player::Name, &ArenaPlayer::name),
@@ -183,7 +285,11 @@ struct VTX::StructMapping<ArenaPlayer> {
                                MakeStructField(ArenaSchema::Player::Velocity, &ArenaPlayer::velocity),
                                MakeStructField(ArenaSchema::Player::IsAlive, &ArenaPlayer::is_alive),
                                MakeStructField(ArenaSchema::Player::Score, &ArenaPlayer::score),
-                               MakeStructField(ArenaSchema::Player::Deaths, &ArenaPlayer::deaths));
+                               MakeStructField(ArenaSchema::Player::Deaths, &ArenaPlayer::deaths),
+                               MakeStructField(ArenaSchema::Player::Abilities, &ArenaPlayer::abilities),
+                               MakeStructField(ArenaSchema::Player::AbilityCooldowns, &ArenaPlayer::ability_cooldowns),
+                               MakeStructField(ArenaSchema::Player::Loadout, &ArenaPlayer::loadout),
+                               MakeStructField(ArenaSchema::Player::Inventory, &ArenaPlayer::inventory));
     }
 };
 
@@ -229,8 +335,26 @@ struct VTX::StructFrameBinding<ArenaFrame> {
         bucket.entities.clear();
         bucket.unique_ids.clear();
 
-        loader.AppendActorList(bucket, VTX::ArenaSchema::Player::StructName, src.players,
-                               [](const ArenaPlayer& p) { return p.unique_id; });
+        // Players: load each via StructMapping<ArenaPlayer>, then attach the
+        // AmmoByWeapon map by hand (the native loader builds scalar arrays and
+        // nested structs automatically, but not Maps) and refresh the content
+        // hash so frame-to-frame diffing still sees map-only changes.
+        for (const auto& p : src.players) {
+            if (p.unique_id.empty() || bucket.HasUniqueId(p.unique_id)) {
+                continue;
+            }
+            VTX::PropertyContainer entity;
+            loader.Load(p, entity, VTX::ArenaSchema::Player::StructName);
+            for (const auto& a : p.ammo_by_weapon) {
+                VTX::PropertyContainer entry;
+                loader.Load(a, entry, VTX::ArenaSchema::AmmoEntry::StructName);
+                ArenaHelpers::AppendMapEntry(loader, entity, VTX::ArenaSchema::Player::StructName,
+                                             VTX::ArenaSchema::Player::AmmoByWeapon, std::move(entry));
+            }
+            entity.content_hash = VTX::Helpers::CalculateContainerHash(entity);
+            bucket.unique_ids.push_back(p.unique_id);
+            bucket.entities.push_back(std::move(entity));
+        }
 
         loader.AppendActorList(bucket, VTX::ArenaSchema::Projectile::StructName, src.projectiles,
                                [](const ArenaProjectile& p) { return p.unique_id; });

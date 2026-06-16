@@ -19,6 +19,7 @@
 #include "vtx/common/readers/frame_reader/binary_loader.h"
 #include "vtx/common/vtx_types.h"
 
+#include "arena_container_helpers.h"
 #include "arena_generated.h"
 
 // ===================================================================
@@ -29,6 +30,11 @@ struct BinPlayer {};
 struct BinProjectile {};
 struct BinMatchState {};
 struct BinArenaFrame {};
+
+// Tags for the nested element structs (Loadout / Inventory item / Ammo entry).
+struct BinLoadout {};
+struct BinInventoryItem {};
+struct BinAmmoEntry {};
 
 // ===================================================================
 //  Per-entity bindings
@@ -62,6 +68,100 @@ struct VTX::BinaryBinding<BinPlayer> {
         loader.LoadField(dest, schema, P::IsAlive, cur.Read<uint8_t>() != 0);
         loader.LoadField(dest, schema, P::Score, cur.Read<int32_t>());
         loader.LoadField(dest, schema, P::Deaths, cur.Read<int32_t>());
+
+        // ---- Rich containers (order MUST match ExportBinarySource) ----
+        // Abilities (scalar string array). Always consume the bytes so the
+        // cursor stays aligned even if the field is missing from the schema.
+        {
+            const VTX::PropertyAddress* addr = loader.ResolveField(dest.entity_type_id, schema, P::Abilities);
+            const uint32_t count = cur.Read<uint32_t>();
+            for (uint32_t i = 0; i < count; ++i) {
+                std::string ability = cur.ReadLenString<uint16_t>();
+                if (addr) {
+                    dest.string_arrays.PushBack(addr->index, ability);
+                }
+            }
+        }
+        // Ability cooldowns (scalar float array).
+        {
+            const VTX::PropertyAddress* addr = loader.ResolveField(dest.entity_type_id, schema, P::AbilityCooldowns);
+            const uint32_t count = cur.Read<uint32_t>();
+            for (uint32_t i = 0; i < count; ++i) {
+                const float cooldown = cur.Read<float>();
+                if (addr) {
+                    dest.float_arrays.PushBack(addr->index, cooldown);
+                }
+            }
+        }
+        // Loadout (nested struct).
+        {
+            VTX::PropertyContainer loadout;
+            loader.Load<BinLoadout>(cur, loadout, VTX::ArenaSchema::Loadout::StructName);
+            const VTX::PropertyAddress* addr = loader.ResolveField(dest.entity_type_id, schema, P::Loadout);
+            if (addr) {
+                if (dest.any_struct_properties.size() <= static_cast<size_t>(addr->index)) {
+                    dest.any_struct_properties.resize(static_cast<size_t>(addr->index) + 1);
+                }
+                dest.any_struct_properties[addr->index] = std::move(loadout);
+            }
+        }
+        // Inventory (array of nested structs).
+        {
+            const VTX::PropertyAddress* addr = loader.ResolveField(dest.entity_type_id, schema, P::Inventory);
+            const uint32_t count = cur.Read<uint32_t>();
+            for (uint32_t i = 0; i < count; ++i) {
+                VTX::PropertyContainer item;
+                loader.Load<BinInventoryItem>(cur, item, VTX::ArenaSchema::InventoryItem::StructName);
+                if (addr) {
+                    dest.any_struct_arrays.PushBack(addr->index, item);
+                }
+            }
+        }
+        // AmmoByWeapon (map<weapon, AmmoEntry>).
+        {
+            const uint32_t count = cur.Read<uint32_t>();
+            for (uint32_t i = 0; i < count; ++i) {
+                VTX::PropertyContainer entry;
+                loader.Load<BinAmmoEntry>(cur, entry, VTX::ArenaSchema::AmmoEntry::StructName);
+                ArenaHelpers::AppendMapEntry(loader, dest, schema, P::AmmoByWeapon, std::move(entry));
+            }
+        }
+    }
+};
+
+template <>
+struct VTX::BinaryBinding<BinLoadout> {
+    static void Transfer(VTX::BinaryCursor& cur, VTX::PropertyContainer& dest, VTX::GenericBinaryLoader& loader,
+                         const std::string& schema) {
+        namespace L = VTX::ArenaSchema::Loadout;
+        loader.LoadField(dest, schema, L::PrimaryWeapon, cur.ReadLenString<uint16_t>());
+        loader.LoadField(dest, schema, L::SecondaryWeapon, cur.ReadLenString<uint16_t>());
+        loader.LoadField(dest, schema, L::Grenades, cur.Read<int32_t>());
+        loader.LoadField(dest, schema, L::HasArmor, cur.Read<uint8_t>() != 0);
+    }
+};
+
+template <>
+struct VTX::BinaryBinding<BinInventoryItem> {
+    static void Transfer(VTX::BinaryCursor& cur, VTX::PropertyContainer& dest, VTX::GenericBinaryLoader& loader,
+                         const std::string& schema) {
+        namespace I = VTX::ArenaSchema::InventoryItem;
+        loader.LoadField(dest, schema, I::ItemID, cur.ReadLenString<uint16_t>());
+        loader.LoadField(dest, schema, I::DisplayName, cur.ReadLenString<uint16_t>());
+        loader.LoadField(dest, schema, I::Quantity, cur.Read<int32_t>());
+        loader.LoadField(dest, schema, I::Durability, cur.Read<float>());
+        loader.LoadField(dest, schema, I::Slot, cur.Read<int32_t>());
+    }
+};
+
+template <>
+struct VTX::BinaryBinding<BinAmmoEntry> {
+    static void Transfer(VTX::BinaryCursor& cur, VTX::PropertyContainer& dest, VTX::GenericBinaryLoader& loader,
+                         const std::string& schema) {
+        namespace A = VTX::ArenaSchema::AmmoEntry;
+        loader.LoadField(dest, schema, A::WeaponName, cur.ReadLenString<uint16_t>());
+        loader.LoadField(dest, schema, A::Ammo, cur.Read<int32_t>());
+        loader.LoadField(dest, schema, A::Reserve, cur.Read<int32_t>());
     }
 };
 
