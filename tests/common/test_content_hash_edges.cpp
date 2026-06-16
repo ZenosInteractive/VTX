@@ -149,7 +149,7 @@ namespace {
     PropertyContainer WithNestedStruct(const std::string& leading_name) {
         PropertyContainer pc;
         pc.entity_type_id = 0;
-        pc.string_properties = {leading_name};          // hashed before the recursion
+        pc.string_properties = {leading_name}; // hashed before the recursion
         pc.vector_properties = {VTX::Vector {1.0, 2.0, 3.0}};
 
         PropertyContainer nested;

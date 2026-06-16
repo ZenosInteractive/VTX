@@ -133,10 +133,10 @@ namespace VTX::ArenaSchema {
             return data_view.GetViewArray(cached_key);
         }
 
-        /** @brief Returns a nested view */
-        inline VTX::EntityView GetAmmoByWeapon() const {
-            static VTX::PropertyKey<VTX::EntityView> cached_key = accessor.GetViewKey(EntityType::Player, Player::AmmoByWeapon);
-            return data_view.GetView(cached_key);
+        /** @brief Returns a read-only map view */
+        inline VTX::MapView GetAmmoByWeapon() const {
+            static VTX::PropertyKey<VTX::MapView> cached_key = accessor.GetMapKey(EntityType::Player, Player::AmmoByWeapon);
+            return data_view.GetMap(cached_key);
         }
 
     };
@@ -311,16 +311,10 @@ namespace VTX::ArenaSchema {
             return data_mut.GetMutableViewArray(cached_key);
         }
 
-        /** @brief Returns a nested view */
-        inline VTX::EntityView GetAmmoByWeapon() const {
-            static VTX::PropertyKey<VTX::EntityView> cached_key = accessor.GetViewKey(EntityType::Player, Player::AmmoByWeapon);
-            return data_mut.AsView().GetView(cached_key);
-        }
-
-        /** @brief Returns a mutator over the nested struct */
-        inline VTX::EntityMutator GetMutableAmmoByWeapon() {
-            static VTX::PropertyKey<VTX::EntityView> cached_key = accessor.GetViewKey(EntityType::Player, Player::AmmoByWeapon);
-            return data_mut.GetMutableView(cached_key);
+        /** @brief Returns a read-only map view */
+        inline VTX::MapView GetAmmoByWeapon() const {
+            static VTX::PropertyKey<VTX::MapView> cached_key = accessor.GetMapKey(EntityType::Player, Player::AmmoByWeapon);
+            return data_mut.AsView().GetMap(cached_key);
         }
 
     };

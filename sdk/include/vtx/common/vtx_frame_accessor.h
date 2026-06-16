@@ -13,6 +13,8 @@ namespace VTX {
         VTX::FieldType type;
     };
 
+    class MapView;
+
     class EntityView {
     private:
         const PropertyContainer* data_ = nullptr;
@@ -123,6 +125,8 @@ namespace VTX {
             return data_->any_struct_arrays.GetSubArray(key.index);
         }
 
+        MapView GetMap(PropertyKey<MapView> key) const;
+
         template <typename T>
         static constexpr auto GetArrayContainerMember() {
             if constexpr (std::is_same_v<T, int32_t>)
@@ -153,6 +157,63 @@ namespace VTX {
                 static_assert(std::same_as<T, void>, "type not supported in EntityView");
         }
     };
+
+    // Read-only view over a Map property (parallel keys[] + value containers).
+    class MapView {
+    private:
+        const MapContainer* data_ = nullptr;
+
+    public:
+        MapView() = default;
+        explicit MapView(const MapContainer& data)
+            : data_(&data) {}
+
+        bool IsValid() const { return data_ != nullptr; }
+        size_t Size() const { return data_ ? data_->keys.size() : 0; }
+        bool Empty() const { return Size() == 0; }
+
+        const std::vector<std::string>& Keys() const {
+            static const std::vector<std::string> kEmpty;
+            return data_ ? data_->keys : kEmpty;
+        }
+
+        bool Contains(std::string_view key) const {
+            if (data_) {
+                for (const auto& k : data_->keys) {
+                    if (k == key)
+                        return true;
+                }
+            }
+            return false;
+        }
+
+        EntityView At(std::string_view key) const {
+            if (data_) {
+                for (size_t i = 0; i < data_->keys.size() && i < data_->values.size(); ++i) {
+                    if (data_->keys[i] == key)
+                        return EntityView(data_->values[i]);
+                }
+            }
+            return EntityView {};
+        }
+
+        const std::string& KeyAt(size_t index) const {
+            static const std::string kEmpty;
+            return (data_ && index < data_->keys.size()) ? data_->keys[index] : kEmpty;
+        }
+
+        EntityView ValueAt(size_t index) const {
+            if (data_ && index < data_->values.size())
+                return EntityView(data_->values[index]);
+            return EntityView {};
+        }
+    };
+
+    inline MapView EntityView::GetMap(PropertyKey<MapView> key) const {
+        if (!data_ || !key.IsValid() || static_cast<size_t>(key.index) >= data_->map_properties.size())
+            return MapView {};
+        return MapView(data_->map_properties[key.index]);
+    }
 
     class FrameAccessor {
     private:
@@ -381,6 +442,36 @@ namespace VTX {
                 return GetViewArrayKey(structId, propName);
             }
             return PropertyKey<std::span<const VTX::PropertyContainer>> {-1};
+        }
+
+
+        PropertyKey<VTX::MapView> GetMapKey(int32_t structId, const std::string& propName) const {
+            auto structIt = cache_.structs.find(structId);
+            if (structIt != cache_.structs.end()) {
+                auto propIt = structIt->second.properties.find(propName);
+                if (propIt != structIt->second.properties.end()) {
+                    const PropertyAddress& addr = propIt->second;
+                    if (addr.type_id == VTX::FieldType::Struct && addr.container_type == VTX::FieldContainerType::Map) {
+                        return PropertyKey<VTX::MapView> {static_cast<int32_t>(addr.index)};
+                    } else {
+                        VTX_ERROR("Type mismatch for struct ID {}. Property: {}", structId, propName);
+                    }
+                }
+            }
+            return PropertyKey<VTX::MapView> {-1};
+        }
+
+        template <typename EnumType, typename std::enable_if_t<std::is_enum_v<EnumType>, int> = 0>
+        PropertyKey<VTX::MapView> GetMapKey(EnumType structEnum, const std::string& propName) const {
+            return GetMapKey(static_cast<int32_t>(structEnum), propName);
+        }
+
+        PropertyKey<VTX::MapView> GetMapKey(const std::string& structName, const std::string& propName) const {
+            const int32_t structId = FindStructId(structName);
+            if (structId != -1) {
+                return GetMapKey(structId, propName);
+            }
+            return PropertyKey<VTX::MapView> {-1};
         }
 
 
