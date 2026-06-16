@@ -105,8 +105,7 @@ namespace VtxCli {
         if (span_b.empty())
             return {};
 
-        differ_->DiffRawFrames(span_a, span_b, opts);
-        return {};
+        return differ_->DiffRawFrames(bytes_a, span_b, opts);
     }
 
 } // namespace VtxCli
