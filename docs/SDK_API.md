@@ -84,6 +84,22 @@ auto schema = reader->GetContextualSchema();
 // Use cache to resolve "Health" -> (float_properties, index 3)
 ```
 
+A `VTX::FrameAccessor` (from `reader->CreateAccessor()`) turns names into cached `PropertyKey`s, and `VTX::EntityView` reads each container kind by key:
+
+```cpp
+VTX::FrameAccessor acc = reader->CreateAccessor();
+VTX::EntityView    e(bucket.entities[i]);
+
+float        hp    = e.Get(acc.Get<float>("Player", "Health"));         // scalar
+auto         inv   = e.GetArray(acc.GetArray<int32_t>("Player", "Inventory"));   // scalar array
+VTX::EntityView loadout = e.GetView(acc.GetViewKey("Player", "Loadout"));        // nested struct
+auto         items = e.GetViewArray(acc.GetViewArrayKey("Player", "Inventory")); // array of structs
+VTX::MapView ammo  = e.GetMap(acc.GetMapKey("Player", "AmmoByWeapon"));          // map
+int rifle = VTX::EntityView(ammo.At("Rifle")).Get(acc.Get<int32_t>("AmmoEntry", "Ammo"));
+```
+
+The codegen (`scripts/vtx_codegen.py`) wraps these into typed `XView`/`XMutator` accessors so call sites use `player.GetHealth()` / `player.GetAmmoByWeapon()` with no keys or schema strings.
+
 ### Chunk State Monitoring
 
 ```cpp

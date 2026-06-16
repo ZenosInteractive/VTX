@@ -237,6 +237,7 @@ Both codegen steps are declared in `samples/CMakeLists.txt` as `add_custom_comma
 - **`EntityType` enum**: `ArenaSchema::EntityType::Player = 0`, `Projectile = 1`, `MatchState = 2`, plus the nested element structs `Loadout = 3`, `InventoryItem = 4`, `AmmoEntry = 5`.
 - **Read-only views**: `PlayerView`, `ProjectileView`, `MatchStateView`, `LoadoutView`, `InventoryItemView`, `AmmoEntryView` -- wrap `EntityView`, cache `PropertyKey<T>` in `static` locals.
 - **Mutators**: `PlayerMutator`, ... , `AmmoEntryMutator` -- wrap `EntityMutator`, expose `Get*` (same as Views) **plus** `Set*` for scalars and `GetMutable*` for arrays / nested structs.
+- **Map accessors**: a `Map` field (e.g. `Player::AmmoByWeapon`) emits `VTX::MapView GetX() const` on both the View and Mutator (read-only) -- `GetAmmoByWeapon().At("Rifle")` returns the value `EntityView` (wrap it in `AmmoEntryView` for typed reads).
 - **Iteration helpers**: `ForEachPlayer(bucket, accessor, fn)` / `ForEachPlayerView(bucket, accessor, fn)` -- filter a `BucketMutator` (or `const Bucket&`) by `entity_type_id` and invoke `fn` with the strongly-typed mutator/view.
 
 Produced by:
