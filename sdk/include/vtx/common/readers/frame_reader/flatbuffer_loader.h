@@ -146,20 +146,7 @@ namespace VTX {
 
                         if (nested_container.entity_type_id != -1) {
                             if (container == FieldContainerType::Map) {
-                                this->EnsureSize(dest.map_properties, idx);
-
-                                std::string map_key;
-                                if (!nested_container.string_properties.empty() &&
-                                    !nested_container.string_properties[0].empty()) {
-                                    map_key = nested_container.string_properties[0];
-                                } else if (!nested_container.int32_properties.empty()) {
-                                    map_key = std::to_string(nested_container.int32_properties[0]);
-                                } else {
-                                    map_key = "Key_" + std::to_string(dest.map_properties[idx].keys.size());
-                                }
-
-                                dest.map_properties[idx].keys.push_back(map_key);
-                                dest.map_properties[idx].values.push_back(nested_container);
+                                this->PushToMap(dest, idx, std::move(nested_container));
                             } else {
                                 dest.any_struct_arrays.PushBack(idx, nested_container);
                             }

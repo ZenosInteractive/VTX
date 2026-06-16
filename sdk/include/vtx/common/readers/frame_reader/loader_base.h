@@ -248,6 +248,21 @@ namespace VTX {
             }
         }
 
+        // One entry of a Map field; key = first non-empty string property, else first int32, else Key_N.
+        void PushToMap(PropertyContainer& dest, int32_t idx, PropertyContainer&& value) const {
+            EnsureSize(dest.map_properties, static_cast<size_t>(idx));
+            std::string key;
+            if (!value.string_properties.empty() && !value.string_properties.front().empty()) {
+                key = value.string_properties.front();
+            } else if (!value.int32_properties.empty()) {
+                key = std::to_string(value.int32_properties.front());
+            } else {
+                key = "Key_" + std::to_string(dest.map_properties[idx].keys.size());
+            }
+            dest.map_properties[idx].keys.push_back(std::move(key));
+            dest.map_properties[idx].values.push_back(std::move(value));
+        }
+
         template <typename Vec>
         static void EnsureSize(Vec& v, size_t index) {
             if (v.size() <= index)

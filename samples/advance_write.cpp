@@ -60,7 +60,6 @@
 #include "vtx/common/vtx_types.h"
 
 #include "arena_generated.h"
-#include "arena_container_helpers.h"
 #include "arena_mappings.h"
 #include "arena_binary_mappings.h"
 #include "arena_data.pb.h"
@@ -170,15 +169,7 @@ namespace VTX {
                 loader.LoadStruct(dest, schema_name, ArenaSchema::Player::Loadout, src.loadout());
             }
             loader.LoadArray(dest, schema_name, ArenaSchema::Player::Inventory, src.inventory());
-
-            // Map: the proto loader has no automatic Map path, so build it by
-            // hand from the repeated AmmoEntry messages.
-            for (const auto& entry : src.ammo_by_weapon()) {
-                VTX::PropertyContainer value;
-                loader.Load(entry, value, ArenaSchema::AmmoEntry::StructName);
-                ArenaHelpers::AppendMapEntry(loader, dest, schema_name, ArenaSchema::Player::AmmoByWeapon,
-                                             std::move(value));
-            }
+            loader.LoadArray(dest, schema_name, ArenaSchema::Player::AmmoByWeapon, src.ammo_by_weapon());
         }
     };
 
