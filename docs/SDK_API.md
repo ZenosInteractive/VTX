@@ -154,8 +154,18 @@ config.use_compression  = true;
 config.default_fps      = 60.0f;
 
 auto writer = VTX::CreateFlatBuffersWriterFacade(config);
-// or: VTX::CreateProtobuffWriterFacade(config);
+// or: VTX::CreateProtobufWriterFacade(config);
 ```
+
+The schema can be supplied three ways (precedence: **registry > content > path**):
+
+```cpp
+config.schema_json_path    = "schema.json";        // load from a file (default)
+config.schema_json_content = json_string;          // OR a raw in-memory JSON string
+config.schema_registry     = my_shared_registry;   // OR a pre-built std::shared_ptr<VTX::SchemaRegistry> (copied in, no re-parse)
+```
+
+Missing parent directories of `output_filepath` are created automatically (`config.create_output_dirs`, default `true`; set it `false` to require the directory to pre-exist).
 
 ### Recording Frames
 
@@ -224,9 +234,40 @@ writer->Flush();  // Force-write any buffered chunk
 writer->Stop();   // Write footer and close file
 ```
 
+If the facade is destroyed without an explicit `Stop()`, its destructor finalizes the replay as a best-effort fallback, so a dropped writer still yields a readable `.vtx`.
+
+### One call: `WriteReplay`
+
+When you already have an `IFrameDataSource` and just want a finished `.vtx`, `WriteReplay` runs the whole pipeline in one call -- create the writer, initialize the source, drain every frame through `TryRecordFrame`, finalize, and report:
+
+```cpp
+#include "vtx/writer/core/vtx_write_replay.h"
+
+VTX::WriterFacadeConfig config;
+config.output_filepath  = "output.vtx";
+config.schema_json_path = "schema.json";   // or schema_json_content / schema_registry
+
+MyFrameDataSource source;   // implements VTX::IFrameDataSource
+
+VTX::WriteReplayResult result =
+    VTX::WriteReplay(config, source, VTX::SerializationFormat::Flatbuffers);
+
+if (!result.ok) {
+    VTX_ERROR("write failed: {}", result.error.message);   // e.g. SchemaInvalid / source-init failure
+} else {
+    // result.frames_written / .frames_dropped / .total_frames
+    // result.output_path / .elapsed_seconds
+}
+// Frames rejected by finalization/timer are counted in frames_dropped and
+// surfaced one-per-warning in result.warnings; the call still produces a
+// valid replay of the accepted frames.
+```
+
+`SerializationFormat` picks the backend (`Flatbuffers` default, or `Protobuf`).
+
 ### Streaming sinks
 
-Same writer API, different transport.  Instead of writing the `.vtx` byte stream to a file, push it over a TCP socket to a remote ingestion server.  Use `CreateFlatBuffersNetworkWriterFacade` / `CreateProtobuffNetworkWriterFacade` and pass a `NetworkWriterFacadeConfig`:
+Same writer API, different transport.  Instead of writing the `.vtx` byte stream to a file, push it over a TCP socket to a remote ingestion server.  Use `CreateFlatBuffersNetworkWriterFacade` / `CreateProtobufNetworkWriterFacade` and pass a `NetworkWriterFacadeConfig`:
 
 ```cpp
 #include "vtx/writer/core/vtx_writer_facade.h"

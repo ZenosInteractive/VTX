@@ -50,6 +50,8 @@ namespace VTX {
         size_t chunk_max_bytes = 10 * 1024 * 1024; // 10 MB
         bool use_compression = true;
         std::string schema_json_path = "";
+        std::string schema_json_content = "";                      // in-memory schema JSON (wins over schema_json_path)
+        std::shared_ptr<SchemaRegistry> schema_registry = nullptr; // pre-built registry (wins over content/path)
         bool retain_finalized_snapshot = false;
         bool create_output_dirs = true;
     };
@@ -74,6 +76,8 @@ namespace VTX {
         size_t chunk_max_bytes = 10 * 1024 * 1024; // 10 MB
         bool use_compression = true;
         std::string schema_json_path = "";
+        std::string schema_json_content = "";                      // in-memory schema JSON (wins over schema_json_path)
+        std::shared_ptr<SchemaRegistry> schema_registry = nullptr; // pre-built registry (wins over content/path)
         bool retain_finalized_snapshot = false;
     };
 
