@@ -107,6 +107,8 @@ namespace VTX {
                 return {};
             const size_t Start = offsets[Index];
             const size_t End = (Index + 1 < offsets.size()) ? offsets[Index + 1] : data.size();
+            if (Start >= End) // empty or inconsistent subarray: avoid &data[Start] when Start == data.size()
+                return {};
             return std::span<const T>(&data[Start], End - Start);
         }
 
@@ -116,6 +118,8 @@ namespace VTX {
                 return {};
             const size_t Start = offsets[Index];
             const size_t End = (Index + 1 < offsets.size()) ? offsets[Index + 1] : data.size();
+            if (Start >= End) // empty or inconsistent subarray: avoid &data[Start] when Start == data.size()
+                return {};
             return std::span<T>(&data[Start], End - Start);
         }
 
