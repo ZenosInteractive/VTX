@@ -6,6 +6,7 @@
 #include "vtx/common/vtx_types.h"
 #include "vtx/common/readers/schema_reader/schema_registry.h"
 #include "vtx/writer/serialization/vtx_to_flatbuffer.h"
+#include "vtx/writer/policies/formatters/bucket_type_sort.h"
 #include "vtx/writer/policies/formatters/flatbuffers_vtx_policy.h"
 
 std::string VTX::FlatBuffersVtxPolicy::GetMagicBytes() {
@@ -16,62 +17,18 @@ std::unique_ptr<VTX::FlatBuffersVtxPolicy::FrameType> VTX::FlatBuffersVtxPolicy:
     auto sorted_frame = std::make_unique<VTX::Frame>();
 
     const auto& native_buckets = native.GetBuckets();
-    if (native_buckets.empty())
-        return sorted_frame;
+    sorted_frame->bucket_map = native.bucket_map;
+    sorted_frame->GetMutableBuckets().resize(native_buckets.size());
 
-    const auto& native_data = native_buckets[0];
-    auto& sorted_data = sorted_frame->GetBucket("data");
+    for (size_t b_idx = 0; b_idx < native_buckets.size(); ++b_idx) {
+        const auto& src_bucket = native_buckets[b_idx];
+        auto& dst_bucket = sorted_frame->GetBucket(static_cast<int32_t>(b_idx));
 
-    const auto& entities = native_data.entities;
-    const auto& ids = native_data.unique_ids;
-
-    if (entities.empty()) {
-        sorted_data = native_data;
-        return sorted_frame;
-    }
-
-    int32_t max_type = -1;
-    for (const auto& ent : entities) {
-        max_type = std::max(ent.entity_type_id, max_type);
-    }
-
-    if (max_type < 0) {
-        sorted_data = native_data;
-        return sorted_frame;
-    }
-
-    std::vector<std::vector<size_t>> indices_by_type(max_type + 1);
-    for (size_t i = 0; i < entities.size(); ++i) {
-        int32_t t_id = entities[i].entity_type_id;
-        if (t_id >= 0 && t_id <= max_type) {
-            indices_by_type[t_id].push_back(i);
+        if (b_idx == 0) {
+            Serialization::SortBucketByTypeId(src_bucket, dst_bucket);
+        } else {
+            dst_bucket = src_bucket;
         }
-    }
-
-    sorted_data.type_ranges.resize(max_type + 1, {0, 0});
-    sorted_data.entities.reserve(entities.size());
-    sorted_data.unique_ids.reserve(ids.size());
-
-    int32_t current_index = 0;
-
-    for (int32_t type_id = 0; type_id <= max_type; ++type_id) {
-        const auto& indices = indices_by_type[type_id];
-
-        sorted_data.type_ranges[type_id].start_index = current_index;
-        sorted_data.type_ranges[type_id].count = static_cast<int32_t>(indices.size());
-
-        for (size_t orig_idx : indices) {
-            sorted_data.entities.push_back(entities[orig_idx]);
-            if (orig_idx < ids.size()) {
-                sorted_data.unique_ids.push_back(ids[orig_idx]);
-            }
-            current_index++;
-        }
-    }
-
-    if (native_buckets.size() > 1) {
-        auto& sorted_bones = sorted_frame->GetBucket("bone_data");
-        sorted_bones = native_buckets[1];
     }
 
     return sorted_frame;

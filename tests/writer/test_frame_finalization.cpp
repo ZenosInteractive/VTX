@@ -396,3 +396,73 @@ TEST(FrameFinalization, PipelineReportSeparatesOutcomes) {
     EXPECT_EQ(report.skipped, 0u);
     EXPECT_EQ(report.Total(), 5u);
 }
+
+// ---------------------------------------------------------------------------
+// Schema-driven buckets -- the frame's bucket layout must match the schema's
+// "buckets" array (test_schema.json declares ["entity"]).
+// ---------------------------------------------------------------------------
+
+TEST(FrameFinalization, RejectsBucketNotDeclaredInSchema) {
+    auto writer = VTX::CreateFlatBuffersWriterFacade(MakeConfig(TestUuid()));
+    ASSERT_NE(writer, nullptr);
+
+    VTX::Frame frame;
+    auto& bucket = frame.CreateBucket("not_in_schema");
+    auto player = MakePlayer("a", 1, 100.0f);
+    bucket.unique_ids.push_back("a");
+    bucket.entities.push_back(std::move(player));
+
+    const auto r = writer->TryRecordFrame(frame, Increasing(0.0f));
+    EXPECT_FALSE(r.IsWritten());
+    EXPECT_EQ(r.error.code, VTX::VtxErrorCode::BucketUnresolved);
+    EXPECT_NE(r.error.message.find("not_in_schema"), std::string::npos);
+
+    // The rejected frame did not consume an index.
+    auto good = MakeFrameWith({MakePlayer("b", 1, 100.0f)});
+    const auto r1 = writer->TryRecordFrame(good, Increasing(1.0f));
+    EXPECT_TRUE(r1.IsWritten());
+    EXPECT_EQ(r1.frame_index, 0);
+
+    writer->Stop();
+}
+
+TEST(FrameFinalization, CreatesDeclaredBucketsMissingFromFrame) {
+    auto writer = VTX::CreateFlatBuffersWriterFacade(MakeConfig(TestUuid(), /*retain_snapshot=*/true));
+    ASSERT_NE(writer, nullptr);
+
+    VTX::Frame empty_frame; // no buckets at all
+    ASSERT_TRUE(writer->TryRecordFrame(empty_frame, Increasing(0.0f)).IsWritten());
+
+    // Normalization created the declared "entity" bucket at index 0.
+    const VTX::Frame* snap = writer->GetLastFinalizedFrame();
+    ASSERT_NE(snap, nullptr);
+    ASSERT_EQ(snap->GetBuckets().size(), 1u);
+    ASSERT_EQ(snap->bucket_map.size(), 1u);
+    EXPECT_EQ(snap->bucket_map.at("entity"), 0u);
+    EXPECT_TRUE(snap->GetBuckets()[0].entities.empty());
+
+    writer->Stop();
+}
+
+TEST(FrameFinalization, LegacySchemaWithoutBucketsSkipsEnforcement) {
+    // A schema that declares no "buckets" array keeps the historical behavior:
+    // any bucket name is accepted untouched.
+    auto cfg = MakeConfig(TestUuid());
+    cfg.schema_json_path.clear();
+    cfg.schema_json_content =
+        R"({"version":"1.0.0","property_mapping":[{"struct":"Player","values":[)"
+        R"({"name":"Score","typeId":"Int32","containerType":"None","keyId":"None","structType":"","meta":{"defaultValue":"0","fixedArrayDim":1}})"
+        R"(]}]})";
+
+    auto writer = VTX::CreateFlatBuffersWriterFacade(cfg);
+    ASSERT_NE(writer, nullptr);
+
+    VTX::Frame frame;
+    auto& bucket = frame.CreateBucket("anything_goes");
+    auto player = MakePlayer("a", 1, 100.0f);
+    bucket.unique_ids.push_back("a");
+    bucket.entities.push_back(std::move(player));
+
+    EXPECT_TRUE(writer->TryRecordFrame(frame, Increasing(0.0f)).IsWritten());
+    writer->Stop();
+}

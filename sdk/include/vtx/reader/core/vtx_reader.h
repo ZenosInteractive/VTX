@@ -665,6 +665,7 @@ namespace VTX {
                 cc.index = idx;
                 SerializerPolicy::ProcessChunkData(idx, compressed_blob, stop_token, cc.native_frames,
                                                    cc.decompressed_blob, cc.raw_frames_spans);
+                RestoreBucketNames(cc.native_frames);
                 return cc;
             } catch (const std::exception& e) {
                 VTX_ERROR("[READER] Chunk {} deserialization failed: {}", idx, e.what());
@@ -672,6 +673,25 @@ namespace VTX {
             } catch (...) {
                 VTX_ERROR("[READER] Chunk {} deserialization failed: unknown exception", idx);
                 return {};
+            }
+        }
+
+        // Bucket names never hit the wire (buckets serialize positionally), so
+        // freshly deserialized frames carry an empty bucket_map. The schema's
+        // "buckets" array names bucket index i with its i-th entry; stamp that
+        // back so by-name lookups and per-bucket validation work on read frames.
+        // property_address_cache_ is built once in the constructor (ReadHeader)
+        // before any chunk load starts, so reading it here is thread-safe.
+        void RestoreBucketNames(std::vector<VTX::Frame>& frames) const {
+            const auto& bucket_names = property_address_cache_.bucket_names;
+            if (bucket_names.empty())
+                return;
+
+            for (auto& frame : frames) {
+                const size_t count = std::min(bucket_names.size(), frame.GetBuckets().size());
+                for (size_t i = 0; i < count; ++i) {
+                    frame.bucket_map[bucket_names[i]] = i;
+                }
             }
         }
 

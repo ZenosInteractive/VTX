@@ -109,6 +109,12 @@ namespace VTX {
                 view.Freeze();
             }
 
+            std::string bucket_detail;
+            if (!NormalizeBucketsToSchema(native_frame, bucket_detail)) {
+                timer_.Rollback();
+                return RecordResult::MadeRejected(VtxErrorCode::BucketUnresolved, std::move(bucket_detail));
+            }
+
             std::string validation_detail;
             if (!FinalizeFrame(native_frame, validation_detail)) {
                 timer_.Rollback();
@@ -220,6 +226,60 @@ namespace VTX {
         }
 
     private:
+        // Rearranges the frame's buckets into the schema-declared layout so that
+        // bucket index i always holds the bucket named by the schema's "buckets"[i].
+        // Declared buckets missing from the frame are created empty; a bucket the
+        // schema does not declare rejects the frame. Schemas without a "buckets"
+        // array leave the frame untouched (legacy behavior).
+        bool NormalizeBucketsToSchema(VTX::Frame& frame, std::string& out_detail) {
+            const std::vector<std::string>& schema_buckets = registry_.GetBucketNames();
+            if (schema_buckets.empty()) {
+                return true;
+            }
+
+            auto& buckets = frame.GetMutableBuckets();
+
+            if (frame.bucket_map.empty() && !buckets.empty()) {
+                // Positionally built frame (no names): adopt the schema layout as-is.
+                if (buckets.size() > schema_buckets.size()) {
+                    out_detail = "frame has " + std::to_string(buckets.size()) +
+                                 " unnamed buckets but the schema declares only " +
+                                 std::to_string(schema_buckets.size());
+                    return false;
+                }
+                buckets.resize(schema_buckets.size());
+                for (size_t i = 0; i < schema_buckets.size(); ++i) {
+                    frame.bucket_map[schema_buckets[i]] = i;
+                }
+                return true;
+            }
+
+            if (frame.bucket_map.size() != buckets.size()) {
+                out_detail = "frame contains buckets with no name; cannot map them onto the schema 'buckets' layout";
+                return false;
+            }
+
+            for (const auto& [name, idx] : frame.bucket_map) {
+                if (std::find(schema_buckets.begin(), schema_buckets.end(), name) == schema_buckets.end()) {
+                    out_detail = "bucket '" + name + "' is not declared in the schema 'buckets' array";
+                    return false;
+                }
+            }
+
+            std::vector<VTX::Bucket> ordered(schema_buckets.size());
+            std::map<std::string, size_t> ordered_map;
+            for (size_t i = 0; i < schema_buckets.size(); ++i) {
+                auto it = frame.bucket_map.find(schema_buckets[i]);
+                if (it != frame.bucket_map.end()) {
+                    ordered[i] = std::move(buckets[it->second]);
+                }
+                ordered_map[schema_buckets[i]] = i;
+            }
+            buckets = std::move(ordered);
+            frame.bucket_map = std::move(ordered_map);
+            return true;
+        }
+
         bool FinalizeFrame(VTX::Frame& frame, std::string& out_detail) {
             for (auto& bucket : frame.GetMutableBuckets()) {
                 for (auto& entity : bucket.entities) {

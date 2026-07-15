@@ -51,6 +51,11 @@ namespace VTX {
      */
     struct RawSchema {
         std::vector<RawSchemaStruct> structs;
+
+        bool has_buckets = false;          ///< Document has a top-level "buckets" key.
+        bool buckets_is_array = false;     ///< That key is an array (valid shape).
+        std::vector<std::string> buckets;  ///< String entries of "buckets", in order.
+        int non_string_bucket_entries = 0; ///< Entries of "buckets" that were not strings.
     };
 
     /**

@@ -300,7 +300,7 @@ Gotchas worth knowing:
 
 - **`RemoveIf` invalidates `type_ranges`**: the bucket's typed-range index is wiped to zero after a bulk filter. The serializer rebuilds them from `entity_type_id`, so on-disk output is correct; in-memory tooling that reads `type_ranges` after the processor runs must recompute them or rely on `entity_type_id` directly.
 
-- **Writer bucket limits**: the FlatBuffers serializer only persists `buckets[0]` (renamed to `"data"` on disk) and `buckets[1]` (renamed to `"bone_data"`). Additional buckets created by a processor via `view.raw()->CreateBucket(...)` are **silently dropped**. The Protobuf serializer preserves all buckets but applies the type-id reordering only to bucket 0.
+- **Buckets come from the schema**: when the schema declares a top-level `"buckets"` array, the writer normalizes every frame to that layout before serialization -- buckets are reordered to schema order, declared buckets missing from the frame are created empty, and a bucket **not** declared in the schema rejects the whole frame with `VtxErrorCode::BucketUnresolved`. A bucket created by a processor via `view.raw()->CreateBucket(...)` must therefore be declared in the schema. Both serializers persist all buckets positionally and apply the type-id reordering only to bucket 0. Schemas without a `"buckets"` array skip the normalization entirely (legacy behavior).
 
 ## Error handling
 

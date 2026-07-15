@@ -122,9 +122,12 @@ namespace VTX {
         // Value: The schema cache containing its specific properties
         std::unordered_map<int32_t, StructSchemaCache> structs;
         std::unordered_map<std::string, int32_t> name_to_id;
+        // Bucket names from the schema's "buckets" array; position i names Frame bucket index i.
+        std::vector<std::string> bucket_names;
         void Clear() {
             structs.clear();
             name_to_id.clear();
+            bucket_names.clear();
         }
     };
 } // namespace VTX

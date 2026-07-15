@@ -1,5 +1,6 @@
 #include <algorithm>
 
+#include "vtx/writer/policies/formatters/bucket_type_sort.h"
 #include "vtx/writer/policies/formatters/protobuff_vtx_policy.h"
 #include "vtx/writer/serialization/vtx_to_proto.h"
 #include "vtx_schema.pb.h"
@@ -11,51 +12,15 @@ std::string VTX::ProtobufVtxPolicy::GetMagicBytes() {
 std::unique_ptr<VTX::ProtobufVtxPolicy::FrameType> VTX::ProtobufVtxPolicy::FromNative(VTX::Frame&& native) {
     const auto& native_buckets = native.GetBuckets();
     VTX::Frame sorted_native;
+    sorted_native.bucket_map = native.bucket_map;
     sorted_native.GetMutableBuckets().resize(native_buckets.size());
 
     for (size_t b_idx = 0; b_idx < native_buckets.size(); ++b_idx) {
         const auto& src_bucket = native_buckets[b_idx];
         auto& dst_bucket = sorted_native.GetBucket(static_cast<int>(b_idx));
 
-        if (b_idx == 0 && !src_bucket.entities.empty()) {
-            const auto& entities = src_bucket.entities;
-            const auto& ids = src_bucket.unique_ids;
-            int32_t max_type = -1;
-            for (const auto& ent : entities) {
-                max_type = std::max(ent.entity_type_id, max_type);
-            }
-
-            if (max_type >= 0 && !entities.empty()) {
-                std::vector<std::vector<size_t>> indices_by_type(max_type + 1);
-                for (size_t i = 0; i < entities.size(); ++i) {
-                    int32_t t_id = entities[i].entity_type_id;
-                    if (t_id >= 0 && t_id <= max_type) {
-                        indices_by_type[t_id].push_back(i);
-                    }
-                }
-
-                dst_bucket.type_ranges.assign(max_type + 1, {0, 0});
-                dst_bucket.entities.reserve(entities.size());
-                dst_bucket.unique_ids.reserve(ids.size());
-
-                int32_t current_index = 0;
-
-                for (int32_t type_id = 0; type_id <= max_type; ++type_id) {
-                    const auto& indices = indices_by_type[type_id];
-                    dst_bucket.type_ranges[type_id].start_index = current_index;
-                    dst_bucket.type_ranges[type_id].count = static_cast<int32_t>(indices.size());
-
-                    for (size_t orig_idx : indices) {
-                        dst_bucket.entities.push_back(entities[orig_idx]);
-                        if (orig_idx < ids.size()) {
-                            dst_bucket.unique_ids.push_back(ids[orig_idx]);
-                        }
-                        current_index++;
-                    }
-                }
-            } else {
-                dst_bucket = src_bucket;
-            }
+        if (b_idx == 0) {
+            Serialization::SortBucketByTypeId(src_bucket, dst_bucket);
         } else {
             dst_bucket = src_bucket;
         }

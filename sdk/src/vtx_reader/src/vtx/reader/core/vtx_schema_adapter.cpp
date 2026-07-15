@@ -20,30 +20,9 @@ namespace VTX {
             return;
         }
 
-        for (const auto& [struct_name, struct_def] : temp_registry.GetDefinitions()) {
-            int32_t type_id = temp_registry.GetStructTypeId(struct_name);
-            if (type_id == -1) {
-                VTX_WARN("Struct '{}' does not have a TypeID registered in the enum.", struct_name);
-                continue;
-            }
-            cache.name_to_id[struct_name] = type_id;
-
-            auto& struct_cache = cache.structs[type_id];
-            struct_cache.name = struct_name;
-            for (const auto& field : struct_def.fields) {
-                if (field.type_id != VTX::FieldType::None) {
-                    VTX::PropertyAddress addr;
-                    addr.index = field.index;
-                    addr.type_id = field.type_id;
-                    addr.container_type = field.container_type;
-                    addr.child_type_name = field.struct_type;
-                    struct_cache.properties[field.name] = addr;
-                    struct_cache.names_by_lookup_key[VTX::MakePropertyLookupKey(field.index, field.type_id,
-                                                                                field.container_type)] = field.name;
-                    struct_cache.property_order.push_back(field.name);
-                }
-            }
-        }
+        // The registry already builds the full cache while loading (including
+        // type_max_indices and the schema's bucket names) -- reuse it verbatim.
+        cache = temp_registry.GetPropertyCache();
     }
     // =========================================================================================
     // PROTOBUF (cppvtx::PropertySchema)

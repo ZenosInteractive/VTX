@@ -48,6 +48,7 @@ namespace VTX {
         SchemaMissing,
 
         EntityTypeUnresolved,
+        BucketUnresolved,
         FieldIndexOutOfRange,
         TypeMismatch,
         ContainerMismatch,
@@ -80,6 +81,8 @@ namespace VTX {
             return "SchemaMissing";
         case VtxErrorCode::EntityTypeUnresolved:
             return "EntityTypeUnresolved";
+        case VtxErrorCode::BucketUnresolved:
+            return "BucketUnresolved";
         case VtxErrorCode::FieldIndexOutOfRange:
             return "FieldIndexOutOfRange";
         case VtxErrorCode::TypeMismatch:

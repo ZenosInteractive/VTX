@@ -183,11 +183,13 @@ config.schema_registry     = my_shared_registry;   // OR a pre-built std::shared
 
 Missing parent directories of `output_filepath` are created automatically (`config.create_output_dirs`, default `true`; set it `false` to require the directory to pre-exist).
 
+The schema's top-level `"buckets"` array declares the frame bucket layout (`SchemaRegistry::GetBucketNames()`), e.g. `"buckets": ["World"]`. When declared, every recorded frame is normalized to that layout: buckets are reordered to schema order, declared buckets missing from the frame are created empty, and a bucket the schema does not declare rejects the frame (`VtxErrorCode::BucketUnresolved`). The reader uses the same array to restore bucket names on deserialized frames. Schemas without a `"buckets"` array skip the normalization (legacy behavior).
+
 ### Recording Frames
 
 ```cpp
 VTX::Frame frame;
-auto& bucket = frame.CreateBucket("World");
+auto& bucket = frame.CreateBucket("World"); // must be declared in the schema's "buckets" array
 
 // Add entities
 bucket.unique_ids.push_back("player_001");
@@ -219,7 +221,8 @@ if (!r.IsWritten()) {
 }
 ```
 
-Before a frame enters the chunk pipeline the writer **finalizes** it: validates that every
+Before a frame enters the chunk pipeline the writer **finalizes** it: normalizes the bucket
+layout to the schema's `"buckets"` array (rejecting undeclared buckets), validates that every
 entity type resolves to a schema struct, recomputes each entity's `content_hash` after all
 schema fields and post-processor overrides, then **freezes** the frame (any mutation handle a
 post-processor stashed is revoked).

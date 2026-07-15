@@ -62,7 +62,7 @@ static void BM_WriterThroughput(benchmark::State& state) {
 
         for (int i = 0; i < kFramesPerIteration; ++i) {
             VTX::Frame frame;
-            auto& bucket = frame.CreateBucket("Players");
+            auto& bucket = frame.CreateBucket("entity");
 
             VTX::PropertyContainer entity;
             entity.entity_type_id = 0;

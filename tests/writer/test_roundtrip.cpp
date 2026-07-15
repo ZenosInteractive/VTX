@@ -157,6 +157,140 @@ TEST_P(RoundtripTest, AcceptsHistoricalUtc) {
 }
 
 // ---------------------------------------------------------------------------
+// Multi-bucket frames survive the round-trip on both backends, and bucket
+// names come back from the schema's "buckets" array (they are not stored on
+// the wire). Regression: the FlatBuffers writer used to hardcode two bucket
+// slots ("data"/"bone_data") and silently drop buckets at index >= 2.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+    constexpr const char* kMultiBucketSchema = R"({
+        "version": "1.0.0",
+        "buckets": ["entity", "bone_data", "economy"],
+        "property_mapping": [
+            {
+                "struct": "Tiny",
+                "values": [
+                    {
+                        "name": "Score",
+                        "structType": "",
+                        "typeId": "Int32",
+                        "keyId": "None",
+                        "containerType": "None",
+                        "meta": { "type": "int32", "keyType": "", "category": "Tiny",
+                                  "displayName": "Score", "tooltip": "",
+                                  "defaultValue": "0", "version": 1, "fixedArrayDim": 1 }
+                    }
+                ]
+            }
+        ]
+    })";
+
+    // Buckets are deliberately created in a different order than the schema
+    // declares them: the writer must normalize the layout to schema order.
+    VTX::Frame BuildMultiBucketFrame(int frame_index) {
+        VTX::Frame f;
+        int bucket_ordinal = 0;
+        for (const char* name : {"bone_data", "entity", "economy"}) {
+            auto& bucket = f.CreateBucket(name);
+
+            VTX::PropertyContainer pc;
+            pc.entity_type_id = 0;
+            pc.int32_properties = {frame_index, bucket_ordinal};
+
+            bucket.unique_ids.push_back(std::string(name) + "_0");
+            bucket.entities.push_back(std::move(pc));
+            ++bucket_ordinal;
+        }
+        return f;
+    }
+
+} // namespace
+
+TEST_P(RoundtripTest, MultiBucketFramesSurviveRoundtrip) {
+    auto cfg = MakeConfig("multibucket", "uuid-rt-multibucket");
+    cfg.schema_json_path.clear();
+    cfg.schema_json_content = kMultiBucketSchema;
+    {
+        auto writer = CreateWriter(cfg);
+        ASSERT_TRUE(writer);
+        for (int i = 0; i < 10; ++i) {
+            auto frame = BuildMultiBucketFrame(i);
+            VTX::GameTime::GameTimeRegister t;
+            t.game_time = float(i) / kFps;
+            writer->RecordFrame(frame, t);
+        }
+        writer->Flush();
+        writer->Stop();
+    }
+
+    auto ctx = VTX::OpenReplayFile(cfg.output_filepath);
+    ASSERT_TRUE(ctx) << ctx.error;
+    ASSERT_EQ(ctx.reader->GetTotalFrames(), 10);
+
+    for (int frame_index : {0, 9}) {
+        const VTX::Frame* f = ctx.reader->GetFrameSync(frame_index);
+        ASSERT_NE(f, nullptr) << "frame " << frame_index;
+
+        // All three buckets survive (no silent dropping), in schema order.
+        ASSERT_EQ(f->GetBuckets().size(), 3u);
+        ASSERT_EQ(f->bucket_map.size(), 3u);
+        ASSERT_EQ(f->bucket_map.at("entity"), 0u);
+        ASSERT_EQ(f->bucket_map.at("bone_data"), 1u);
+        ASSERT_EQ(f->bucket_map.at("economy"), 2u);
+
+        // Content ends up under the schema-declared position regardless of the
+        // creation order inside the frame ("bone_data" was created first).
+        // int32[1] carries the creation ordinal: entity=1, bone_data=0, economy=2.
+        const auto& buckets = f->GetBuckets();
+        ASSERT_EQ(buckets[0].entities.size(), 1u);
+        EXPECT_EQ(buckets[0].unique_ids[0], "entity_0");
+        EXPECT_EQ(buckets[0].entities[0].int32_properties[0], frame_index);
+        EXPECT_EQ(buckets[0].entities[0].int32_properties[1], 1);
+
+        ASSERT_EQ(buckets[1].entities.size(), 1u);
+        EXPECT_EQ(buckets[1].unique_ids[0], "bone_data_0");
+        EXPECT_EQ(buckets[1].entities[0].int32_properties[1], 0);
+
+        ASSERT_EQ(buckets[2].entities.size(), 1u);
+        EXPECT_EQ(buckets[2].unique_ids[0], "economy_0");
+        EXPECT_EQ(buckets[2].entities[0].int32_properties[1], 2);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Bucket names restored on read for the single-bucket fixture schema too.
+// ---------------------------------------------------------------------------
+
+TEST_P(RoundtripTest, RestoresBucketNamesFromSchemaOnRead) {
+    auto cfg = MakeConfig("bucket_names", "uuid-rt-bucketnames");
+    {
+        auto writer = CreateWriter(cfg);
+        ASSERT_TRUE(writer);
+        for (int i = 0; i < 5; ++i) {
+            auto frame = BuildFrame(i);
+            VTX::GameTime::GameTimeRegister t;
+            t.game_time = float(i) / kFps;
+            writer->RecordFrame(frame, t);
+        }
+        writer->Stop();
+    }
+
+    auto ctx = VTX::OpenReplayFile(cfg.output_filepath);
+    ASSERT_TRUE(ctx) << ctx.error;
+
+    const VTX::Frame* f = ctx.reader->GetFrameSync(0);
+    ASSERT_NE(f, nullptr);
+    ASSERT_EQ(f->bucket_map.size(), 1u); // test_schema.json declares ["entity"]
+    EXPECT_EQ(f->bucket_map.at("entity"), 0u);
+
+    // By-name const lookup works on read frames now.
+    const VTX::Frame& frame_ref = *f;
+    EXPECT_EQ(frame_ref.GetBucket("entity").entities.size(), 1u);
+}
+
+// ---------------------------------------------------------------------------
 // Backend instantiation -- produces:
 //   BothBackends/RoundtripTest.PreservesFrameData/FlatBuffers
 //   BothBackends/RoundtripTest.PreservesFrameData/Protobuf
