@@ -244,6 +244,52 @@ TEST(SchemaValidator, AcceptsFixedArrayDimOnArrayField) {
 }
 
 // ===================================================================
+//  #11  Top-level "buckets" array
+// ===================================================================
+
+namespace {
+    // Same single-struct document as SchemaWithFields, but with a custom
+    // raw JSON value for the "buckets" key.
+    std::string SchemaWithBuckets(const std::string& buckets_json) {
+        return R"({"version":"1.0.0","buckets":)" + buckets_json + R"(,"property_mapping":[{"struct":"S","values":[)" +
+               std::string(kValidField) + R"(]}]})";
+    }
+} // namespace
+
+TEST(SchemaValidator, AcceptsSchemaWithoutBucketsKey) {
+    // Legacy schemas may not declare buckets; that is not an issue.
+    const std::string raw =
+        R"({"version":"1.0.0","property_mapping":[{"struct":"S","values":[)" + std::string(kValidField) + R"(]}]})";
+    EXPECT_TRUE(Validate(raw).IsValid());
+}
+
+TEST(SchemaValidator, AcceptsWellFormedBuckets) {
+    EXPECT_TRUE(Validate(SchemaWithBuckets(R"(["entity","bone_data"])")).IsValid());
+}
+
+TEST(SchemaValidator, RejectsNonArrayBuckets) {
+    EXPECT_TRUE(HasRuleError(Validate(SchemaWithBuckets(R"("entity")")), "Buckets"));
+}
+
+TEST(SchemaValidator, RejectsNonStringBucketEntry) {
+    EXPECT_TRUE(HasRuleError(Validate(SchemaWithBuckets(R"(["entity", 5])")), "Buckets"));
+}
+
+TEST(SchemaValidator, RejectsEmptyBucketName) {
+    EXPECT_TRUE(HasRuleError(Validate(SchemaWithBuckets(R"(["entity", ""])")), "Buckets"));
+}
+
+TEST(SchemaValidator, RejectsDuplicateBucketName) {
+    EXPECT_TRUE(HasRuleError(Validate(SchemaWithBuckets(R"(["entity", "entity"])")), "Buckets"));
+}
+
+TEST(SchemaRegistryValidation, LoadRejectsMalformedBuckets) {
+    VTX::SchemaRegistry registry;
+    EXPECT_FALSE(registry.LoadFromRawString(SchemaWithBuckets(R"(["entity", "entity"])")));
+    EXPECT_FALSE(registry.GetIsValid());
+}
+
+// ===================================================================
 //  SchemaRegistry integration -- strict rejection
 // ===================================================================
 

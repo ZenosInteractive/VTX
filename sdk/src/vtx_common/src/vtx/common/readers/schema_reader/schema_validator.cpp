@@ -46,6 +46,22 @@ namespace VTX {
 
         RawSchema ExtractRawSchema(const json& root, SchemaValidationResult& out) {
             RawSchema schema;
+
+            if (root.contains("buckets")) {
+                schema.has_buckets = true;
+                const auto& buckets_json = root["buckets"];
+                schema.buckets_is_array = buckets_json.is_array();
+                if (schema.buckets_is_array) {
+                    for (const auto& bucket_json : buckets_json) {
+                        if (bucket_json.is_string()) {
+                            schema.buckets.push_back(bucket_json.get<std::string>());
+                        } else {
+                            ++schema.non_string_bucket_entries;
+                        }
+                    }
+                }
+            }
+
             const auto& mapping = root["property_mapping"];
 
             int struct_index = 0;
@@ -270,6 +286,40 @@ namespace VTX {
             }
         };
 
+        /// Top-level "buckets" array (when present) must be a well-formed list of
+        /// unique, non-empty strings. A schema without the key is legal (legacy);
+        /// the writer simply cannot enforce a bucket layout for it.
+        class BucketsRule final : public ISchemaValidationRule {
+        public:
+            std::string Name() const override { return "Buckets"; }
+            void Validate(const RawSchema& schema, SchemaValidationResult& out) const override {
+                if (!schema.has_buckets) {
+                    return;
+                }
+                if (!schema.buckets_is_array) {
+                    out.AddError(Name(), "", "", "'buckets' must be an array of strings.");
+                    return;
+                }
+                if (schema.non_string_bucket_entries > 0) {
+                    out.AddError(Name(), "", "",
+                                 "'buckets' contains " + std::to_string(schema.non_string_bucket_entries) +
+                                     " non-string entr(ies).");
+                }
+
+                std::unordered_set<std::string> seen;
+                for (size_t i = 0; i < schema.buckets.size(); ++i) {
+                    const std::string& name = schema.buckets[i];
+                    if (name.empty()) {
+                        out.AddError(Name(), "", "", "'buckets' entry #" + std::to_string(i) + " is an empty string.");
+                        continue;
+                    }
+                    if (!seen.insert(name).second) {
+                        out.AddError(Name(), "", "", "duplicate bucket name '" + name + "' in 'buckets'.");
+                    }
+                }
+            }
+        };
+
     } // namespace
 
     // ---------------------------------------------------------------------
@@ -286,6 +336,7 @@ namespace VTX {
         rules.push_back(std::make_unique<MapKeyRule>());
         rules.push_back(std::make_unique<DefaultValueRule>());
         rules.push_back(std::make_unique<FixedArrayDimRule>());
+        rules.push_back(std::make_unique<BucketsRule>());
         return rules;
     }
 

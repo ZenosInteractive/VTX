@@ -145,6 +145,8 @@ Frame
 
 Bucket names are user-defined and typically represent logical categories in the game world (e.g., `"Players"`, `"Vehicles"`, `"World"`, `"Projectiles"`). A frame can have any number of buckets.
 
+Bucket names never hit the wire: both formats serialize buckets as an ordered, nameless list. The schema's top-level `"buckets"` array is the source of truth for the layout -- `"buckets"[i]` names the bucket stored at index `i`. The writer normalizes every frame to that layout before serialization (rejecting buckets the schema does not declare), and the reader stamps the names back onto `bucket_map` when frames are deserialized. Schemas without a `"buckets"` array skip both steps; their frames are purely positional.
+
 ### Bucket
 
 A `Bucket` groups entities of related types. It stores two parallel arrays:

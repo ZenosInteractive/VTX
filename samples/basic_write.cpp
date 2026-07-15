@@ -45,8 +45,9 @@ int main(int argc, char* argv[]) {
     for (int i = 0; i < frame_count; ++i) {
         VTX::Frame frame;
 
-        // Create a bucket and add one entity per frame.
-        VTX::Bucket& bucket = frame.CreateBucket("Players");
+        // Create the bucket declared by the schema's "buckets" array and add
+        // one entity per frame. Buckets not declared there reject the frame.
+        VTX::Bucket& bucket = frame.CreateBucket("entity");
 
         VTX::PropertyContainer entity;
         entity.entity_type_id = 0;

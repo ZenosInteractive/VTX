@@ -70,7 +70,16 @@ bool VTX::SchemaRegistry::LoadFromRawString(const std::string& raw_json) {
 
     structs_.clear();
     struct_type_ids_.clear();
+    bucket_names_.clear();
     current_type_id_ = 0;
+
+    if (j.contains("buckets") && j["buckets"].is_array()) {
+        for (const auto& bucket_json : j["buckets"]) {
+            if (bucket_json.is_string()) {
+                bucket_names_.push_back(bucket_json.get<std::string>());
+            }
+        }
+    }
 
     for (const auto& struct_json : j["property_mapping"]) {
         std::string struct_name = struct_json.value("struct", "");
@@ -143,6 +152,7 @@ bool VTX::SchemaRegistry::LoadFromRawString(const std::string& raw_json) {
     }
 
     property_cache_.Clear();
+    property_cache_.bucket_names = bucket_names_;
     for (const auto& [struct_name, struct_def] : GetDefinitions()) {
         int32_t type_id = GetStructTypeId(struct_name);
         if (type_id == -1) {

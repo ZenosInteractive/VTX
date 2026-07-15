@@ -91,6 +91,13 @@ namespace VTX {
         const VTX::PropertyAddressCache& GetPropertyCache() const { return property_cache_; }
 
         /**
+         * @brief Bucket names declared by the schema's top-level "buckets" array.
+         * @details Order matters: name at position i corresponds to Frame bucket index i.
+         * Empty if the schema declares no buckets (legacy schemas).
+         */
+        const std::vector<std::string>& GetBucketNames() const { return bucket_names_; }
+
+        /**
          * @brief Validate a schema document without loading it.
          * @details Runs the full SchemaValidator rule set over @p raw_json and
          * returns the collected issues. Useful for tooling and pre-flight checks.
@@ -106,6 +113,7 @@ namespace VTX {
         std::string json_content_;
         std::unordered_map<std::string, SchemaStruct> structs_; ///< Storage map: Struct Name -> Definition.
         std::unordered_map<std::string, int32_t> struct_type_ids_;
+        std::vector<std::string> bucket_names_; ///< Declared bucket layout, in schema order.
         VTX::PropertyAddressCache property_cache_;
         int32_t current_type_id_ = 0;
         bool b_is_valid_;                        ///< Internal validity flag.

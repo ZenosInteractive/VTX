@@ -113,3 +113,72 @@ TEST(SchemaRegistry, GetIndexReturnsNonNegativeForKnownField) {
     ASSERT_TRUE(schema.LoadFromJson(SchemaPath()));
     EXPECT_GE(schema.GetIndex("Player", "UniqueID"), 0);
 }
+
+// ---------------------------------------------------------------------------
+// Bucket names ("buckets" array)
+// ---------------------------------------------------------------------------
+
+namespace {
+    // Minimal valid property_mapping to append after a custom "buckets" value.
+    constexpr const char* kTinyMapping = R"("property_mapping": [
+        {
+            "struct": "Tiny",
+            "values": [
+                {
+                    "name": "Score",
+                    "structType": "",
+                    "typeId": "Int32",
+                    "keyId": "None",
+                    "containerType": "None",
+                    "meta": { "type": "int32", "keyType": "", "category": "Tiny",
+                              "displayName": "Score", "tooltip": "",
+                              "defaultValue": "0", "version": 1, "fixedArrayDim": 1 }
+                }
+            ]
+        }
+    ])";
+} // namespace
+
+TEST(SchemaRegistry, GetBucketNamesParsesDeclaredBuckets) {
+    VTX::SchemaRegistry schema;
+    ASSERT_TRUE(schema.LoadFromJson(SchemaPath()));
+
+    ASSERT_EQ(schema.GetBucketNames().size(), 1u);
+    EXPECT_EQ(schema.GetBucketNames()[0], "entity");
+
+    // The property cache carries the same names (used by the reader).
+    EXPECT_EQ(schema.GetPropertyCache().bucket_names, schema.GetBucketNames());
+}
+
+TEST(SchemaRegistry, GetBucketNamesPreservesDeclarationOrder) {
+    const std::string raw =
+        std::string(R"({ "version": "1.0.0", "buckets": ["entity", "bone_data", "economy"], )") + kTinyMapping + "}";
+
+    VTX::SchemaRegistry schema;
+    ASSERT_TRUE(schema.LoadFromRawString(raw));
+
+    const auto& names = schema.GetBucketNames();
+    ASSERT_EQ(names.size(), 3u);
+    EXPECT_EQ(names[0], "entity");
+    EXPECT_EQ(names[1], "bone_data");
+    EXPECT_EQ(names[2], "economy");
+}
+
+TEST(SchemaRegistry, GetBucketNamesEmptyWhenKeyMissing) {
+    const std::string raw = std::string(R"({ "version": "1.0.0", )") + kTinyMapping + "}";
+
+    VTX::SchemaRegistry schema;
+    ASSERT_TRUE(schema.LoadFromRawString(raw));
+    EXPECT_TRUE(schema.GetBucketNames().empty());
+    EXPECT_TRUE(schema.GetPropertyCache().bucket_names.empty());
+}
+
+TEST(SchemaRegistry, ReloadReplacesBucketNames) {
+    VTX::SchemaRegistry schema;
+    ASSERT_TRUE(schema.LoadFromJson(SchemaPath()));
+    ASSERT_FALSE(schema.GetBucketNames().empty());
+
+    const std::string raw = std::string(R"({ "version": "1.0.0", )") + kTinyMapping + "}";
+    ASSERT_TRUE(schema.LoadFromRawString(raw));
+    EXPECT_TRUE(schema.GetBucketNames().empty());
+}
