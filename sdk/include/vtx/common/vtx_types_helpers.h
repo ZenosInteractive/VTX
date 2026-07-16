@@ -19,40 +19,74 @@ namespace VTX {
     namespace Helpers {
 
         inline void ResizeContainerToMaxIndices(PropertyContainer& container,
-                                                const std::vector<int32_t>& type_max_indices) {
-            auto GetNeeded = [&](FieldType type) -> int32_t {
+                                                const std::vector<int32_t>& type_max_indices,
+                                                const std::vector<int32_t>& array_max_indices = {},
+                                                int32_t map_max_index = 0) {
+            auto GetNeeded = [](const std::vector<int32_t>& maxes, FieldType type) -> int32_t {
                 size_t typeIdx = static_cast<size_t>(type);
-                return (typeIdx < type_max_indices.size()) ? type_max_indices[typeIdx] : 0;
+                return (typeIdx < maxes.size()) ? maxes[typeIdx] : 0;
             };
 
-            if (int32_t n = GetNeeded(FieldType::Bool))
+            // --- Scalars: default-initialized slot per declared field. ---
+            if (int32_t n = GetNeeded(type_max_indices, FieldType::Bool))
                 container.bool_properties.resize(n);
-            if (int32_t n = GetNeeded(FieldType::Int32))
+            if (int32_t n = GetNeeded(type_max_indices, FieldType::Int32))
                 container.int32_properties.resize(n);
-            if (int32_t n = GetNeeded(FieldType::Int64))
+            if (int32_t n = GetNeeded(type_max_indices, FieldType::Int64))
                 container.int64_properties.resize(n);
-            if (int32_t n = GetNeeded(FieldType::Float))
+            if (int32_t n = GetNeeded(type_max_indices, FieldType::Float))
                 container.float_properties.resize(n);
-            if (int32_t n = GetNeeded(FieldType::Double))
+            if (int32_t n = GetNeeded(type_max_indices, FieldType::Double))
                 container.double_properties.resize(n);
-            if (int32_t n = GetNeeded(FieldType::String))
+            if (int32_t n = GetNeeded(type_max_indices, FieldType::String))
                 container.string_properties.resize(n);
 
-            if (int32_t n = GetNeeded(FieldType::Vector))
+            if (int32_t n = GetNeeded(type_max_indices, FieldType::Vector))
                 container.vector_properties.resize(n);
-            if (int32_t n = GetNeeded(FieldType::Quat))
+            if (int32_t n = GetNeeded(type_max_indices, FieldType::Quat))
                 container.quat_properties.resize(n);
-            if (int32_t n = GetNeeded(FieldType::Transform))
+            if (int32_t n = GetNeeded(type_max_indices, FieldType::Transform))
                 container.transform_properties.resize(n);
-            if (int32_t n = GetNeeded(FieldType::FloatRange))
+            if (int32_t n = GetNeeded(type_max_indices, FieldType::FloatRange))
                 container.range_properties.resize(n);
 
-            if (int32_t n = GetNeeded(FieldType::Struct))
+            if (int32_t n = GetNeeded(type_max_indices, FieldType::Struct))
                 container.any_struct_properties.resize(n);
+
+            // --- Arrays: one empty subarray per declared array field of each type. ---
+            if (int32_t n = GetNeeded(array_max_indices, FieldType::Bool))
+                container.bool_arrays.EnsureSubArrayCount(n);
+            if (int32_t n = GetNeeded(array_max_indices, FieldType::Int32))
+                container.int32_arrays.EnsureSubArrayCount(n);
+            if (int32_t n = GetNeeded(array_max_indices, FieldType::Int64))
+                container.int64_arrays.EnsureSubArrayCount(n);
+            if (int32_t n = GetNeeded(array_max_indices, FieldType::Float))
+                container.float_arrays.EnsureSubArrayCount(n);
+            if (int32_t n = GetNeeded(array_max_indices, FieldType::Double))
+                container.double_arrays.EnsureSubArrayCount(n);
+            if (int32_t n = GetNeeded(array_max_indices, FieldType::String))
+                container.string_arrays.EnsureSubArrayCount(n);
+
+            if (int32_t n = GetNeeded(array_max_indices, FieldType::Vector))
+                container.vector_arrays.EnsureSubArrayCount(n);
+            if (int32_t n = GetNeeded(array_max_indices, FieldType::Quat))
+                container.quat_arrays.EnsureSubArrayCount(n);
+            if (int32_t n = GetNeeded(array_max_indices, FieldType::Transform))
+                container.transform_arrays.EnsureSubArrayCount(n);
+            if (int32_t n = GetNeeded(array_max_indices, FieldType::FloatRange))
+                container.range_arrays.EnsureSubArrayCount(n);
+
+            if (int32_t n = GetNeeded(array_max_indices, FieldType::Struct))
+                container.any_struct_arrays.EnsureSubArrayCount(n);
+
+            // --- Maps: all Struct-valued, a single contiguous index space. ---
+            if (map_max_index > 0)
+                container.map_properties.resize(static_cast<size_t>(map_max_index));
         }
 
         inline void PreparePropertyContainer(PropertyContainer& container, const SchemaStruct& schema) {
-            ResizeContainerToMaxIndices(container, schema.type_max_indices);
+            ResizeContainerToMaxIndices(container, schema.type_max_indices, schema.array_max_indices,
+                                        schema.map_max_index);
         }
 
         inline uint64_t CalculateContainerHash(const PropertyContainer& container) {

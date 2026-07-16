@@ -138,15 +138,22 @@ bool VTX::SchemaRegistry::LoadFromRawString(const std::string& raw_json) {
         for (const auto& field : current_struct.fields) {
             current_struct.field_map[field.name] = &field;
 
-            if (field.container_type == VTX::FieldContainerType::None) {
-                size_t typeIdx = static_cast<size_t>(field.type_id);
+            const size_t typeIdx = static_cast<size_t>(field.type_id);
 
+            if (field.container_type == VTX::FieldContainerType::None) {
                 if (typeIdx >= current_struct.type_max_indices.size()) {
                     current_struct.type_max_indices.resize(typeIdx + 1, 0);
                 }
-
                 current_struct.type_max_indices[typeIdx] =
                     std::max(current_struct.type_max_indices[typeIdx], field.index + 1);
+            } else if (field.container_type == VTX::FieldContainerType::Array) {
+                if (typeIdx >= current_struct.array_max_indices.size()) {
+                    current_struct.array_max_indices.resize(typeIdx + 1, 0);
+                }
+                current_struct.array_max_indices[typeIdx] =
+                    std::max(current_struct.array_max_indices[typeIdx], field.index + 1);
+            } else if (field.container_type == VTX::FieldContainerType::Map) {
+                current_struct.map_max_index = std::max(current_struct.map_max_index, field.index + 1);
             }
         }
     }
@@ -165,6 +172,8 @@ bool VTX::SchemaRegistry::LoadFromRawString(const std::string& raw_json) {
         auto& struct_cache = property_cache_.structs[type_id];
         struct_cache.name = struct_name;
         struct_cache.type_max_indices = struct_def.type_max_indices;
+        struct_cache.array_max_indices = struct_def.array_max_indices;
+        struct_cache.map_max_index = struct_def.map_max_index;
 
         for (const auto& field : struct_def.fields) {
             if (field.type_id != VTX::FieldType::None) {
