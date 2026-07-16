@@ -53,10 +53,16 @@ void VTX::FlatBuffersReaderPolicy::ProcessChunkData(int chunk_index, const std::
     for (size_t i = 0; i < num_frames; ++i) {
         if (st.stop_requested())
             return;
-        VTX::Serialization::FromFlat(chunk->frames()->Get(i), out_native_frames[i]);
+        const auto* frame_fb = chunk->frames()->Get(i);
+        VTX::Serialization::FromFlat(frame_fb, out_native_frames[i]);
 
-        //pack for differ
-        auto* data_obj = chunk->frames()->Get(i)->data()->Get(0);
+        //pack bucket 0 for the differ; a frame with no buckets contributes an empty span
+        const auto* frame_buckets = frame_fb->data();
+        if (!frame_buckets || frame_buckets->size() == 0) {
+            frame_sizes.push_back(0);
+            continue;
+        }
+        auto* data_obj = frame_buckets->Get(0);
         std::unique_ptr<fbsvtx::BucketT> dataT(data_obj->UnPack());
 
         fbb.Clear();
