@@ -16,7 +16,14 @@ std::unique_ptr<VTX::ProtobufVtxPolicy::FrameType> VTX::ProtobufVtxPolicy::FromN
     sorted_native.GetMutableBuckets().resize(native_buckets.size());
 
     for (size_t b_idx = 0; b_idx < native_buckets.size(); ++b_idx) {
-        Serialization::SortBucketByTypeId(native_buckets[b_idx], sorted_native.GetBucket(static_cast<int>(b_idx)));
+        const auto& src_bucket = native_buckets[b_idx];
+        auto& dst_bucket = sorted_native.GetBucket(static_cast<int>(b_idx));
+
+        if (b_idx == 0) {
+            Serialization::SortBucketByTypeId(src_bucket, dst_bucket);
+        } else {
+            dst_bucket = src_bucket;
+        }
     }
 
     auto proto = std::make_unique<cppvtx::Frame>();
