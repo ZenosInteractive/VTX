@@ -127,6 +127,12 @@ namespace VTX {
         /** Creates an empty subarray at the end (i.e., a new marker pointing to current Bucket.size()). */
         void CreateEmptySubArray() { offsets.push_back(data.size()); }
 
+        /** Ensures at least @p Count subarrays exist, appending empty ones as needed (never shrinks). */
+        void EnsureSubArrayCount(size_t Count) {
+            while (offsets.size() < Count)
+                offsets.push_back(data.size());
+        }
+
         /** Appends a subarray with given elements at the end. */
         void AppendSubArray(std::span<const T> Items) {
             offsets.push_back(data.size());

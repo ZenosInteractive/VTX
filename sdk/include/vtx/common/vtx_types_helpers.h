@@ -18,13 +18,52 @@ using int64 = std::int64_t;
 namespace VTX {
     namespace Helpers {
 
+        // Grow-only: ensures each FlatArray holds at least the schema-declared number of
+        // (possibly empty) subarrays. Never shrinks; leaves scalars and maps untouched.
+        // Reused by ResizeContainerToMaxIndices (write/ingest) and by the reader to
+        // restore declared-but-empty array fields that were not serialized.
+        inline void EnsureDeclaredArrays(PropertyContainer& container, const std::vector<int32_t>& array_max_indices) {
+            auto GetNeeded = [&](FieldType type) -> int32_t {
+                size_t typeIdx = static_cast<size_t>(type);
+                return (typeIdx < array_max_indices.size()) ? array_max_indices[typeIdx] : 0;
+            };
+
+            if (int32_t n = GetNeeded(FieldType::Bool))
+                container.bool_arrays.EnsureSubArrayCount(n);
+            if (int32_t n = GetNeeded(FieldType::Int32))
+                container.int32_arrays.EnsureSubArrayCount(n);
+            if (int32_t n = GetNeeded(FieldType::Int64))
+                container.int64_arrays.EnsureSubArrayCount(n);
+            if (int32_t n = GetNeeded(FieldType::Float))
+                container.float_arrays.EnsureSubArrayCount(n);
+            if (int32_t n = GetNeeded(FieldType::Double))
+                container.double_arrays.EnsureSubArrayCount(n);
+            if (int32_t n = GetNeeded(FieldType::String))
+                container.string_arrays.EnsureSubArrayCount(n);
+
+            if (int32_t n = GetNeeded(FieldType::Vector))
+                container.vector_arrays.EnsureSubArrayCount(n);
+            if (int32_t n = GetNeeded(FieldType::Quat))
+                container.quat_arrays.EnsureSubArrayCount(n);
+            if (int32_t n = GetNeeded(FieldType::Transform))
+                container.transform_arrays.EnsureSubArrayCount(n);
+            if (int32_t n = GetNeeded(FieldType::FloatRange))
+                container.range_arrays.EnsureSubArrayCount(n);
+
+            if (int32_t n = GetNeeded(FieldType::Struct))
+                container.any_struct_arrays.EnsureSubArrayCount(n);
+        }
+
         inline void ResizeContainerToMaxIndices(PropertyContainer& container,
-                                                const std::vector<int32_t>& type_max_indices) {
+                                                const std::vector<int32_t>& type_max_indices,
+                                                const std::vector<int32_t>& array_max_indices = {},
+                                                int32_t map_max_index = 0) {
             auto GetNeeded = [&](FieldType type) -> int32_t {
                 size_t typeIdx = static_cast<size_t>(type);
                 return (typeIdx < type_max_indices.size()) ? type_max_indices[typeIdx] : 0;
             };
 
+            // --- Scalars: default-initialized slot per declared field. ---
             if (int32_t n = GetNeeded(FieldType::Bool))
                 container.bool_properties.resize(n);
             if (int32_t n = GetNeeded(FieldType::Int32))
@@ -49,10 +88,18 @@ namespace VTX {
 
             if (int32_t n = GetNeeded(FieldType::Struct))
                 container.any_struct_properties.resize(n);
+
+            // --- Arrays: one empty subarray per declared array field of each type. ---
+            EnsureDeclaredArrays(container, array_max_indices);
+
+            // --- Maps: all Struct-valued, a single contiguous index space. ---
+            if (map_max_index > 0)
+                container.map_properties.resize(static_cast<size_t>(map_max_index));
         }
 
         inline void PreparePropertyContainer(PropertyContainer& container, const SchemaStruct& schema) {
-            ResizeContainerToMaxIndices(container, schema.type_max_indices);
+            ResizeContainerToMaxIndices(container, schema.type_max_indices, schema.array_max_indices,
+                                        schema.map_max_index);
         }
 
         inline uint64_t CalculateContainerHash(const PropertyContainer& container) {

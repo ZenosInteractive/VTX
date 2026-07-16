@@ -46,11 +46,11 @@ namespace VTX {
             return &prop_it->second;
         }
 
-        const std::vector<int32_t>* GetTypeMaxIndices(int32_t entity_type_id) const {
+        const StructSchemaCache* GetStructSizing(int32_t entity_type_id) const {
             auto struct_it = cache_->structs.find(entity_type_id);
             if (struct_it == cache_->structs.end())
                 return nullptr;
-            return &struct_it->second.type_max_indices;
+            return &struct_it->second;
         }
 
         /**

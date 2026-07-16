@@ -19,6 +19,7 @@
 #include "vtx_deserializer_service.h"
 #include "vtx/common/vtx_diagnostics.h"
 #include "vtx/common/vtx_types.h"
+#include "vtx/common/vtx_types_helpers.h"
 #include "vtx/common/vtx_concepts.h"
 #include "vtx/reader/core/vtx_schema_adapter.h"
 #include "vtx/common/vtx_frame_accessor.h"

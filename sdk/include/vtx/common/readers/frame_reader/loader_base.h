@@ -154,15 +154,16 @@ namespace VTX {
     protected:
         /**
          *The Derived loader MUST provide:
-         *const std::vector<int32_t>* GetTypeMaxIndices(int32_t entity_type_id) const;
+         *const StructSchemaCache* GetStructSizing(int32_t entity_type_id) const;
          */
         void PrepareContainer(PropertyContainer& dest) {
             if (dest.entity_type_id < 0) {
                 return;
             }
-            const std::vector<int32_t>* type_max_indices = AsDerived().GetTypeMaxIndices(dest.entity_type_id);
-            if (type_max_indices != nullptr) {
-                Helpers::ResizeContainerToMaxIndices(dest, *type_max_indices);
+            const StructSchemaCache* sizing = AsDerived().GetStructSizing(dest.entity_type_id);
+            if (sizing != nullptr) {
+                Helpers::ResizeContainerToMaxIndices(dest, sizing->type_max_indices, sizing->array_max_indices,
+                                                     sizing->map_max_index);
             }
         }
 

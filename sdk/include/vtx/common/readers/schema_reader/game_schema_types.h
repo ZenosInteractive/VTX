@@ -79,6 +79,13 @@ namespace VTX {
          */
         std::vector<int32_t> type_max_indices;
 
+        /** @brief Max Array-container index (+1) per FieldType, i.e. how many array fields of each
+         * type the struct declares. Used to pre-create empty subarrays in the matching FlatArray. */
+        std::vector<int32_t> array_max_indices;
+
+        /** @brief Number of Map-container fields declared (all Struct-valued); pre-sizes map_properties. */
+        int32_t map_max_index = 0;
+
         /// @brief Fast lookup map: Property Name -> Field Pointer.
         std::unordered_map<std::string, const SchemaField*> field_map;
 
