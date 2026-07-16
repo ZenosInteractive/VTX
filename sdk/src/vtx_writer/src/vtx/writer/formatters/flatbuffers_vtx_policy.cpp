@@ -21,14 +21,7 @@ std::unique_ptr<VTX::FlatBuffersVtxPolicy::FrameType> VTX::FlatBuffersVtxPolicy:
     sorted_frame->GetMutableBuckets().resize(native_buckets.size());
 
     for (size_t b_idx = 0; b_idx < native_buckets.size(); ++b_idx) {
-        const auto& src_bucket = native_buckets[b_idx];
-        auto& dst_bucket = sorted_frame->GetBucket(static_cast<int32_t>(b_idx));
-
-        if (b_idx == 0) {
-            Serialization::SortBucketByTypeId(src_bucket, dst_bucket);
-        } else {
-            dst_bucket = src_bucket;
-        }
+        Serialization::SortBucketByTypeId(native_buckets[b_idx], sorted_frame->GetBucket(static_cast<int32_t>(b_idx)));
     }
 
     return sorted_frame;

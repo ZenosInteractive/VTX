@@ -42,7 +42,9 @@ void VTX::ProtobufReaderPolicy::ProcessChunkData(int chunk_index, const std::str
     //precalculate data size
     size_t total_raw_size = 0;
     for (int i = 0; i < num_frames; ++i) {
-        total_raw_size += proto.frames(i).data(0).ByteSizeLong();
+        if (proto.frames(i).data_size() > 0) {
+            total_raw_size += proto.frames(i).data(0).ByteSizeLong();
+        }
     }
     out_decompressed_blob.reserve(total_raw_size);
 
@@ -55,8 +57,11 @@ void VTX::ProtobufReaderPolicy::ProcessChunkData(int chunk_index, const std::str
             return;
         Serialization::FromProto(proto.frames(i), out_native_frames[i]);
 
-        // Eextract root for the differ
-        std::string rawBytes = proto.frames(i).data(0).SerializeAsString();
+        // Extract bucket 0 for the differ; a frame with no buckets contributes an empty span
+        std::string rawBytes;
+        if (proto.frames(i).data_size() > 0) {
+            rawBytes = proto.frames(i).data(0).SerializeAsString();
+        }
         out_decompressed_blob.insert(out_decompressed_blob.end(), rawBytes.begin(), rawBytes.end());
         frame_sizes.push_back(rawBytes.size());
     }

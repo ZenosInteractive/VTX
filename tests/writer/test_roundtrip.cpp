@@ -256,7 +256,95 @@ TEST_P(RoundtripTest, MultiBucketFramesSurviveRoundtrip) {
         ASSERT_EQ(buckets[2].entities.size(), 1u);
         EXPECT_EQ(buckets[2].unique_ids[0], "economy_0");
         EXPECT_EQ(buckets[2].entities[0].int32_properties[1], 2);
+
+        // type_ranges must be rebuilt for EVERY bucket, not just index 0, so
+        // typed access works on non-first buckets too (regression: SortBucketByTypeId
+        // used to run only for bucket 0, leaving others with empty type_ranges).
+        EXPECT_EQ(buckets[0].GetEntitiesOfType(0).size(), 1u);
+        EXPECT_EQ(buckets[1].GetEntitiesOfType(0).size(), 1u);
+        EXPECT_EQ(buckets[2].GetEntitiesOfType(0).size(), 1u);
     }
+}
+
+// ---------------------------------------------------------------------------
+// A frame built positionally (raw GetMutableBuckets().push_back, empty
+// bucket_map) is adopted into the schema layout instead of rejected.
+// ---------------------------------------------------------------------------
+
+TEST_P(RoundtripTest, AdoptsPositionallyBuiltFrameToSchemaLayout) {
+    auto cfg = MakeConfig("positional", "uuid-rt-positional");
+    cfg.schema_json_path.clear();
+    cfg.schema_json_content = kMultiBucketSchema; // declares ["entity","bone_data","economy"]
+    {
+        auto writer = CreateWriter(cfg);
+        ASSERT_TRUE(writer);
+        for (int i = 0; i < 4; ++i) {
+            VTX::Frame f;
+            // Build positionally: no CreateBucket, so bucket_map stays empty.
+            auto& raw = f.GetMutableBuckets();
+            raw.emplace_back(); // will map to schema bucket 0 ("entity")
+            VTX::PropertyContainer pc;
+            pc.entity_type_id = 0;
+            pc.int32_properties = {i};
+            raw[0].unique_ids.push_back("e_0");
+            raw[0].entities.push_back(std::move(pc));
+
+            VTX::GameTime::GameTimeRegister t;
+            t.game_time = float(i) / kFps;
+            const auto r = writer->TryRecordFrame(f, t);
+            EXPECT_TRUE(r.IsWritten()) << "positional frame " << i << " rejected: " << r.error.message;
+        }
+        writer->Stop();
+    }
+
+    auto ctx = VTX::OpenReplayFile(cfg.output_filepath);
+    ASSERT_TRUE(ctx) << ctx.error;
+    ASSERT_EQ(ctx.reader->GetTotalFrames(), 4);
+
+    const VTX::Frame* f = ctx.reader->GetFrameSync(0);
+    ASSERT_NE(f, nullptr);
+    // The single positional bucket was adopted as schema bucket 0 and the two
+    // remaining declared buckets were materialized empty.
+    ASSERT_EQ(f->GetBuckets().size(), 3u);
+    EXPECT_EQ(f->bucket_map.at("entity"), 0u);
+    ASSERT_EQ(f->GetBuckets()[0].entities.size(), 1u);
+    EXPECT_EQ(f->GetBuckets()[0].unique_ids[0], "e_0");
+    EXPECT_TRUE(f->GetBuckets()[1].entities.empty());
+    EXPECT_TRUE(f->GetBuckets()[2].entities.empty());
+}
+
+// ---------------------------------------------------------------------------
+// A schema without a "buckets" array (legacy) may record zero-bucket frames
+// (idle/gap ticks). They must round-trip without crashing on load.
+// Regression: the reader policies indexed bucket 0 unconditionally.
+// ---------------------------------------------------------------------------
+
+TEST_P(RoundtripTest, ZeroBucketFramesFromSchemalessWriterRoundtrip) {
+    auto cfg = MakeConfig("zero_bucket", "uuid-rt-zerobucket");
+    cfg.schema_json_path.clear();
+    cfg.schema_json_content =
+        R"({"version":"1.0.0","property_mapping":[{"struct":"S","values":[)"
+        R"({"name":"X","typeId":"Int32","containerType":"None","keyId":"None","structType":"","meta":{"defaultValue":"0","fixedArrayDim":1}})"
+        R"(]}]})";
+    {
+        auto writer = CreateWriter(cfg);
+        ASSERT_TRUE(writer);
+        for (int i = 0; i < 3; ++i) {
+            VTX::Frame frame; // zero buckets
+            VTX::GameTime::GameTimeRegister t;
+            t.game_time = float(i) / kFps;
+            writer->RecordFrame(frame, t);
+        }
+        writer->Stop();
+    }
+
+    auto ctx = VTX::OpenReplayFile(cfg.output_filepath);
+    ASSERT_TRUE(ctx) << ctx.error;
+    ASSERT_EQ(ctx.reader->GetTotalFrames(), 3);
+
+    const VTX::Frame* f = ctx.reader->GetFrameSync(0); // must not crash
+    ASSERT_NE(f, nullptr);
+    EXPECT_TRUE(f->GetBuckets().empty());
 }
 
 // ---------------------------------------------------------------------------
