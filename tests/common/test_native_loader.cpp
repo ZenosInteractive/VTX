@@ -11,7 +11,10 @@
 #include <gtest/gtest.h>
 
 #include "vtx/common/adapters/native/struct_mapping.h"
+#include "vtx/common/readers/frame_reader/binary_loader.h"
+#include "vtx/common/readers/frame_reader/flatbuffer_loader.h"
 #include "vtx/common/readers/frame_reader/native_loader.h"
+#include "vtx/common/readers/frame_reader/protobuff_loader.h"
 #include "vtx/common/readers/schema_reader/schema_registry.h"
 #include "vtx/common/vtx_property_cache.h"
 #include "vtx/common/vtx_types.h"
@@ -88,6 +91,21 @@ namespace vtx_native_loader_test {
         // Rotation (Quat[0]) and IsAlive (Bool[0]) are not mapped at all.
     };
 
+    // -----------------------------------------------------------------
+    //  Setup 4: a struct that maps ONLY scalar fields of a schema that
+    //  also declares array + map fields. Used to prove the loader
+    //  pre-creates the declared-but-unpopulated array subarrays and map
+    //  slots (symmetric with scalar pre-sizing) via PrepareContainer ->
+    //  GetStructSizing -> ResizeContainerToMaxIndices.
+    // -----------------------------------------------------------------
+
+    struct HeroScalarOnly {
+        std::string unique_id; // String[0]  (Name = String[1] left unmapped)
+        int score = 0;         // Int32[0]
+        // Cooldowns (float[]), Tags/Names (string[]), Inventory (struct[]) and
+        // AmmoByWeapon (struct map) are all declared in the schema but unmapped.
+    };
+
 } // namespace vtx_native_loader_test
 
 // StructMapping specializations live in namespace VTX (qualified form).
@@ -127,10 +145,45 @@ struct VTX::StructMapping<vtx_native_loader_test::PartialPlayer> {
     }
 };
 
+template <>
+struct VTX::StructMapping<vtx_native_loader_test::HeroScalarOnly> {
+    static constexpr auto GetFields() {
+        using P = vtx_native_loader_test::HeroScalarOnly;
+        return std::make_tuple(MakeStructField("UniqueID", &P::unique_id), MakeStructField("Score", &P::score));
+    }
+};
+
 namespace {
     std::string SchemaPath() {
         return VtxTest::FixturePath("test_schema.json");
     }
+
+    // "Hero" declares scalar fields plus one float array (Cooldowns), two string
+    // arrays (Tags, Names), one struct array (Inventory) and one struct map
+    // (AmmoByWeapon). HeroScalarOnly maps only the scalars, so the array/map
+    // fields exercise the loader's array/map pre-sizing path.
+    constexpr const char* kHeroSchema = R"({
+        "version": "1.0.0",
+        "buckets": ["entity"],
+        "property_mapping": [
+            { "struct": "Item", "values": [
+                {"name":"Id","typeId":"Int32","containerType":"None","keyId":"None","structType":"","meta":{"defaultValue":"0","fixedArrayDim":1}}
+            ]},
+            { "struct": "Ammo", "values": [
+                {"name":"Count","typeId":"Int32","containerType":"None","keyId":"None","structType":"","meta":{"defaultValue":"0","fixedArrayDim":1}}
+            ]},
+            { "struct": "Hero", "values": [
+                {"name":"UniqueID","typeId":"String","containerType":"None","keyId":"None","structType":"","meta":{"defaultValue":"","fixedArrayDim":1}},
+                {"name":"Name","typeId":"String","containerType":"None","keyId":"None","structType":"","meta":{"defaultValue":"","fixedArrayDim":1}},
+                {"name":"Score","typeId":"Int32","containerType":"None","keyId":"None","structType":"","meta":{"defaultValue":"0","fixedArrayDim":1}},
+                {"name":"Cooldowns","typeId":"Float","containerType":"Array","keyId":"None","structType":"","meta":{"defaultValue":"","fixedArrayDim":0}},
+                {"name":"Tags","typeId":"String","containerType":"Array","keyId":"None","structType":"","meta":{"defaultValue":"","fixedArrayDim":0}},
+                {"name":"Names","typeId":"String","containerType":"Array","keyId":"None","structType":"","meta":{"defaultValue":"","fixedArrayDim":0}},
+                {"name":"Inventory","typeId":"Struct","containerType":"Array","keyId":"None","structType":"Item","meta":{"defaultValue":"","fixedArrayDim":0}},
+                {"name":"AmmoByWeapon","typeId":"Struct","containerType":"Map","keyId":"String","structType":"Ammo","meta":{"defaultValue":"","fixedArrayDim":1}}
+            ]}
+        ]
+    })";
 } // namespace
 
 // ===================================================================
@@ -238,6 +291,81 @@ TEST(NativeLoader, PreSizesContainerToSchemaMaxOnPartialMapping) {
     EXPECT_FALSE(dest.bool_properties[0]); // IsAlive -- default
 
     EXPECT_NE(dest.content_hash, 0u);
+}
+
+// The loader pre-creates declared-but-unpopulated ARRAY and MAP fields as
+// empty slots, symmetric with scalar pre-sizing. Exercises the full loader glue:
+// PrepareContainer -> GetStructSizing -> ResizeContainerToMaxIndices(array/map).
+TEST(NativeLoader, PreSizesArraysAndMapsThroughLoader) {
+    VTX::SchemaRegistry schema;
+    ASSERT_TRUE(schema.LoadFromRawString(kHeroSchema));
+
+    VTX::GenericNativeLoader loader(schema.GetPropertyCache());
+
+    vtx_native_loader_test::HeroScalarOnly h {};
+    h.unique_id = "hero_1";
+    h.score = 7;
+
+    VTX::PropertyContainer dest;
+    loader.Load(h, dest, "Hero");
+
+    EXPECT_GE(dest.entity_type_id, 0);
+
+    // Scalars: mapped + pre-sized (UniqueID+Name -> 2 strings; Score -> 1 int32).
+    ASSERT_EQ(dest.string_properties.size(), 2u);
+    EXPECT_EQ(dest.string_properties[0], "hero_1");
+    ASSERT_EQ(dest.int32_properties.size(), 1u);
+    EXPECT_EQ(dest.int32_properties[0], 7);
+
+    // Arrays: declared but unpopulated -> present as empty subarrays.
+    ASSERT_EQ(dest.float_arrays.SubArrayCount(), 1u); // Cooldowns
+    EXPECT_TRUE(dest.float_arrays.GetSubArray(0).empty());
+    ASSERT_EQ(dest.string_arrays.SubArrayCount(), 2u); // Tags, Names
+    EXPECT_TRUE(dest.string_arrays.GetSubArray(0).empty());
+    EXPECT_TRUE(dest.string_arrays.GetSubArray(1).empty());
+    ASSERT_EQ(dest.any_struct_arrays.SubArrayCount(), 1u); // Inventory
+
+    // Array types with no declared field stay untouched.
+    EXPECT_EQ(dest.int32_arrays.SubArrayCount(), 0u);
+
+    // Map: declared but unpopulated -> present as one empty slot.
+    ASSERT_EQ(dest.map_properties.size(), 1u); // AmmoByWeapon
+    EXPECT_TRUE(dest.map_properties[0].keys.empty());
+}
+
+// All four frame loaders must expose the same array/map sizing to the shared
+// base PrepareContainer via GetStructSizing. PreSizesArraysAndMapsThroughLoader
+// (above) pins the base PrepareContainer -> ResizeContainerToMaxIndices path via
+// the native loader; this pins each loader's GetStructSizing hook so a break in
+// any single loader's hook is caught.
+TEST(FrameLoaders, GetStructSizingExposesArrayAndMapSizingForAllLoaders) {
+    VTX::SchemaRegistry schema;
+    ASSERT_TRUE(schema.LoadFromRawString(kHeroSchema));
+    const auto& cache = schema.GetPropertyCache();
+
+    const int32_t heroId = schema.GetStructTypeId("Hero");
+    ASSERT_GE(heroId, 0);
+
+    const auto floatIdx = static_cast<size_t>(VTX::FieldType::Float);
+    const auto stringIdx = static_cast<size_t>(VTX::FieldType::String);
+
+    auto expect_hero_sizing = [&](const VTX::StructSchemaCache* s) {
+        ASSERT_NE(s, nullptr);
+        ASSERT_GT(s->array_max_indices.size(), stringIdx);
+        EXPECT_EQ(s->array_max_indices[floatIdx], 1);  // Cooldowns
+        EXPECT_EQ(s->array_max_indices[stringIdx], 2); // Tags, Names
+        EXPECT_EQ(s->map_max_index, 1);                // AmmoByWeapon
+    };
+
+    VTX::GenericNativeLoader native(cache);
+    VTX::GenericFlatBufferLoader flatbuffer(cache);
+    VTX::GenericProtobufLoader protobuf(schema); // proto loader takes the registry, not the cache
+    VTX::GenericBinaryLoader binary(cache);
+
+    expect_hero_sizing(native.GetStructSizing(heroId));
+    expect_hero_sizing(flatbuffer.GetStructSizing(heroId));
+    expect_hero_sizing(protobuf.GetStructSizing(heroId));
+    expect_hero_sizing(binary.GetStructSizing(heroId));
 }
 
 TEST(NativeLoader, ADLConversionFromCustomMathType) {

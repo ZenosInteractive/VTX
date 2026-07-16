@@ -85,6 +85,8 @@ namespace VTX {
         std::unordered_map<uint64_t, std::string> names_by_lookup_key;
         std::vector<std::string> property_order;
         std::vector<int32_t> type_max_indices;
+        std::vector<int32_t> array_max_indices; ///< Max Array-container index (+1) per FieldType.
+        int32_t map_max_index = 0;              ///< Number of Map-container fields (pre-sizes map_properties).
 
         std::vector<OrderedPropertyView> GetPropertiesInOrder() const {
             std::vector<OrderedPropertyView> ordered_properties;

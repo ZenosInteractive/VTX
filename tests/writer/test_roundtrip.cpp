@@ -12,6 +12,7 @@
 #include "vtx/writer/core/vtx_writer_facade.h"
 #include "vtx/reader/core/vtx_reader_facade.h"
 #include "vtx/common/vtx_types.h"
+#include "vtx/common/readers/schema_reader/schema_registry.h"
 
 #include "util/test_fixtures.h"
 

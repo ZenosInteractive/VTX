@@ -6,6 +6,8 @@
 
 #include <gtest/gtest.h>
 #include "vtx/common/readers/schema_reader/schema_registry.h"
+#include "vtx/common/vtx_types.h"
+#include "vtx/common/vtx_types_helpers.h"
 
 #include "util/test_fixtures.h"
 
