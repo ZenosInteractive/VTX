@@ -12,6 +12,7 @@
 #include "vtx/writer/core/vtx_writer_facade.h"
 #include "vtx/reader/core/vtx_reader_facade.h"
 #include "vtx/common/vtx_types.h"
+#include "vtx/common/readers/schema_reader/schema_registry.h"
 
 #include "util/test_fixtures.h"
 
@@ -376,6 +377,161 @@ TEST_P(RoundtripTest, RestoresBucketNamesFromSchemaOnRead) {
     // By-name const lookup works on read frames now.
     const VTX::Frame& frame_ref = *f;
     EXPECT_EQ(frame_ref.GetBucket("entity").entities.size(), 1u);
+}
+
+// ---------------------------------------------------------------------------
+// Populated array and map field VALUES survive write -> read on both backends.
+// (The existing scalar roundtrip does not cover FlatArray / map serialization.)
+// Note: pre-sizing creates EMPTY declared slots in memory, but an array with no
+// data is intentionally not serialized, so this covers the case that matters on
+// disk -- populated arrays/maps.
+// ---------------------------------------------------------------------------
+
+TEST_P(RoundtripTest, ArrayAndMapFieldValuesRoundtrip) {
+    auto cfg = MakeConfig("arraymap", "uuid-rt-arraymap");
+    {
+        auto writer = CreateWriter(cfg);
+        ASSERT_TRUE(writer);
+
+        VTX::Frame f;
+        auto& bucket = f.CreateBucket("entity");
+
+        VTX::PropertyContainer e;
+        e.entity_type_id = 0;
+        e.float_arrays.AppendSubArray({1.5f, 2.5f, 3.5f});
+        e.string_arrays.AppendSubArray({std::string("alpha"), std::string("beta")});
+
+        VTX::MapContainer m;
+        m.keys = {"rifle", "pistol"};
+        VTX::PropertyContainer v0;
+        v0.entity_type_id = 0;
+        v0.int32_properties = {30};
+        VTX::PropertyContainer v1;
+        v1.entity_type_id = 0;
+        v1.int32_properties = {12};
+        m.values.push_back(std::move(v0));
+        m.values.push_back(std::move(v1));
+        e.map_properties.push_back(std::move(m));
+
+        bucket.unique_ids.push_back("e0");
+        bucket.entities.push_back(std::move(e));
+
+        VTX::GameTime::GameTimeRegister t;
+        t.game_time = 0.0f;
+        writer->RecordFrame(f, t);
+        writer->Stop();
+    }
+
+    auto ctx = VTX::OpenReplayFile(cfg.output_filepath);
+    ASSERT_TRUE(ctx) << ctx.error;
+
+    const VTX::Frame* f = ctx.reader->GetFrameSync(0);
+    ASSERT_NE(f, nullptr);
+    ASSERT_EQ(f->GetBuckets().size(), 1u);
+    ASSERT_EQ(f->GetBuckets()[0].entities.size(), 1u);
+    const auto& e = f->GetBuckets()[0].entities[0];
+
+    // Float array survives with its values, in order.
+    ASSERT_EQ(e.float_arrays.SubArrayCount(), 1u);
+    const auto fa = e.float_arrays.GetSubArray(0);
+    ASSERT_EQ(fa.size(), 3u);
+    EXPECT_FLOAT_EQ(fa[0], 1.5f);
+    EXPECT_FLOAT_EQ(fa[1], 2.5f);
+    EXPECT_FLOAT_EQ(fa[2], 3.5f);
+
+    // String array survives.
+    ASSERT_EQ(e.string_arrays.SubArrayCount(), 1u);
+    const auto sa = e.string_arrays.GetSubArray(0);
+    ASSERT_EQ(sa.size(), 2u);
+    EXPECT_EQ(sa[0], "alpha");
+    EXPECT_EQ(sa[1], "beta");
+
+    // Map survives with keys and per-key values.
+    ASSERT_EQ(e.map_properties.size(), 1u);
+    ASSERT_EQ(e.map_properties[0].keys.size(), 2u);
+    EXPECT_EQ(e.map_properties[0].keys[0], "rifle");
+    EXPECT_EQ(e.map_properties[0].keys[1], "pistol");
+    ASSERT_EQ(e.map_properties[0].values.size(), 2u);
+    ASSERT_FALSE(e.map_properties[0].values[0].int32_properties.empty());
+    EXPECT_EQ(e.map_properties[0].values[0].int32_properties[0], 30);
+    EXPECT_EQ(e.map_properties[0].values[1].int32_properties[0], 12);
+}
+
+// ---------------------------------------------------------------------------
+// Declared-but-empty array fields are restored on read. An array with no data
+// is not serialized, so a reader must re-create the declared empty subarrays
+// from the schema for the read frame to mirror an ingest-loaded frame's layout.
+// (Maps already round-trip their slot count, so this covers only arrays.)
+// ---------------------------------------------------------------------------
+
+namespace {
+    // Hero declares three array-typed fields (one float array, two string arrays,
+    // one struct array); an entity that leaves them empty exercises read-side
+    // restoration.
+    constexpr const char* kHeroArraySchema = R"({
+        "version": "1.0.0",
+        "buckets": ["entity"],
+        "property_mapping": [
+            { "struct": "Item", "values": [
+                {"name":"Id","typeId":"Int32","containerType":"None","keyId":"None","structType":"","meta":{"defaultValue":"0","fixedArrayDim":1}}
+            ]},
+            { "struct": "Hero", "values": [
+                {"name":"UniqueID","typeId":"String","containerType":"None","keyId":"None","structType":"","meta":{"defaultValue":"","fixedArrayDim":1}},
+                {"name":"Score","typeId":"Int32","containerType":"None","keyId":"None","structType":"","meta":{"defaultValue":"0","fixedArrayDim":1}},
+                {"name":"Cooldowns","typeId":"Float","containerType":"Array","keyId":"None","structType":"","meta":{"defaultValue":"","fixedArrayDim":0}},
+                {"name":"Tags","typeId":"String","containerType":"Array","keyId":"None","structType":"","meta":{"defaultValue":"","fixedArrayDim":0}},
+                {"name":"Names","typeId":"String","containerType":"Array","keyId":"None","structType":"","meta":{"defaultValue":"","fixedArrayDim":0}},
+                {"name":"Inventory","typeId":"Struct","containerType":"Array","keyId":"None","structType":"Item","meta":{"defaultValue":"","fixedArrayDim":0}}
+            ]}
+        ]
+    })";
+} // namespace
+
+TEST_P(RoundtripTest, ReaderRestoresDeclaredEmptyArrays) {
+    VTX::SchemaRegistry reg;
+    ASSERT_TRUE(reg.LoadFromRawString(kHeroArraySchema));
+    const int32_t heroTypeId = reg.GetStructTypeId("Hero");
+    ASSERT_GE(heroTypeId, 0);
+
+    auto cfg = MakeConfig("declared_empty_arrays", "uuid-rt-declared-empty");
+    cfg.schema_json_path.clear();
+    cfg.schema_json_content = kHeroArraySchema;
+    {
+        auto writer = CreateWriter(cfg);
+        ASSERT_TRUE(writer);
+
+        VTX::Frame f;
+        auto& bucket = f.CreateBucket("entity");
+        VTX::PropertyContainer e;
+        e.entity_type_id = heroTypeId;
+        e.string_properties = {"hero_1"}; // only a scalar; all array fields left empty
+        bucket.unique_ids.push_back("hero_1");
+        bucket.entities.push_back(std::move(e));
+
+        VTX::GameTime::GameTimeRegister t;
+        t.game_time = 0.0f;
+        writer->RecordFrame(f, t);
+        writer->Stop();
+    }
+
+    auto ctx = VTX::OpenReplayFile(cfg.output_filepath);
+    ASSERT_TRUE(ctx) << ctx.error;
+
+    const VTX::Frame* f = ctx.reader->GetFrameSync(0);
+    ASSERT_NE(f, nullptr);
+    ASSERT_EQ(f->GetBuckets()[0].entities.size(), 1u);
+    const auto& e = f->GetBuckets()[0].entities[0];
+
+    // The declared array fields come back present-and-empty even though nothing
+    // was serialized for them (without read-side restoration these would be 0).
+    EXPECT_EQ(e.float_arrays.SubArrayCount(), 1u);      // Cooldowns
+    EXPECT_EQ(e.string_arrays.SubArrayCount(), 2u);     // Tags, Names
+    EXPECT_EQ(e.any_struct_arrays.SubArrayCount(), 1u); // Inventory
+    EXPECT_TRUE(e.float_arrays.GetSubArray(0).empty());
+    EXPECT_TRUE(e.string_arrays.GetSubArray(0).empty());
+
+    // A type with no declared array field is untouched.
+    EXPECT_EQ(e.int32_arrays.SubArrayCount(), 0u);
 }
 
 // ---------------------------------------------------------------------------

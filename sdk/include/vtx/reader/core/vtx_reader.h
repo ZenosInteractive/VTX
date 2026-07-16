@@ -19,6 +19,7 @@
 #include "vtx_deserializer_service.h"
 #include "vtx/common/vtx_diagnostics.h"
 #include "vtx/common/vtx_types.h"
+#include "vtx/common/vtx_types_helpers.h"
 #include "vtx/common/vtx_concepts.h"
 #include "vtx/reader/core/vtx_schema_adapter.h"
 #include "vtx/common/vtx_frame_accessor.h"
@@ -666,6 +667,7 @@ namespace VTX {
                 SerializerPolicy::ProcessChunkData(idx, compressed_blob, stop_token, cc.native_frames,
                                                    cc.decompressed_blob, cc.raw_frames_spans);
                 RestoreBucketNames(cc.native_frames);
+                RestoreDeclaredArrays(cc.native_frames);
                 return cc;
             } catch (const std::exception& e) {
                 VTX_ERROR("[READER] Chunk {} deserialization failed: {}", idx, e.what());
@@ -693,6 +695,43 @@ namespace VTX {
                     frame.bucket_map[bucket_names[i]] = i;
                 }
             }
+        }
+
+        // A declared array field with no data is not serialized (an empty array has
+        // nothing to store), so deserialized entities come back missing those
+        // subarrays. Re-create the declared-but-empty subarrays from the schema so a
+        // read frame mirrors the same array layout an ingest-loaded frame has (maps
+        // already round-trip their slot count, so only arrays need this). Recurses
+        // into nested structs / struct-array elements / map values, matching the
+        // loader's recursive PrepareContainer. Grow-only: never touches populated
+        // arrays, scalars, or maps.
+        void RestoreDeclaredArrays(std::vector<VTX::Frame>& frames) const {
+            if (property_address_cache_.structs.empty())
+                return;
+            for (auto& frame : frames) {
+                for (auto& bucket : frame.GetMutableBuckets()) {
+                    for (auto& entity : bucket.entities) {
+                        PreSizeDeclaredArraysRecursive(entity);
+                    }
+                }
+            }
+        }
+
+        void PreSizeDeclaredArraysRecursive(VTX::PropertyContainer& container) const {
+            auto it = property_address_cache_.structs.find(container.entity_type_id);
+            if (it != property_address_cache_.structs.end()) {
+                Helpers::EnsureDeclaredArrays(container, it->second.array_max_indices);
+            }
+            for (auto& nested : container.any_struct_properties)
+                PreSizeDeclaredArraysRecursive(nested);
+            for (auto& nested : container.any_struct_arrays.data)
+                PreSizeDeclaredArraysRecursive(nested);
+            for (auto& map_item : container.map_properties)
+                for (auto& value : map_item.values)
+                    PreSizeDeclaredArraysRecursive(value);
+            for (auto& map_item : container.map_arrays.data)
+                for (auto& value : map_item.values)
+                    PreSizeDeclaredArraysRecursive(value);
         }
 
     private:

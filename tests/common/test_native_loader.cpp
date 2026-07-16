@@ -11,7 +11,10 @@
 #include <gtest/gtest.h>
 
 #include "vtx/common/adapters/native/struct_mapping.h"
+#include "vtx/common/readers/frame_reader/binary_loader.h"
+#include "vtx/common/readers/frame_reader/flatbuffer_loader.h"
 #include "vtx/common/readers/frame_reader/native_loader.h"
+#include "vtx/common/readers/frame_reader/protobuff_loader.h"
 #include "vtx/common/readers/schema_reader/schema_registry.h"
 #include "vtx/common/vtx_property_cache.h"
 #include "vtx/common/vtx_types.h"
@@ -315,9 +318,9 @@ TEST(NativeLoader, PreSizesArraysAndMapsThroughLoader) {
     EXPECT_EQ(dest.int32_properties[0], 7);
 
     // Arrays: declared but unpopulated -> present as empty subarrays.
-    ASSERT_EQ(dest.float_arrays.SubArrayCount(), 1u);   // Cooldowns
+    ASSERT_EQ(dest.float_arrays.SubArrayCount(), 1u); // Cooldowns
     EXPECT_TRUE(dest.float_arrays.GetSubArray(0).empty());
-    ASSERT_EQ(dest.string_arrays.SubArrayCount(), 2u);  // Tags, Names
+    ASSERT_EQ(dest.string_arrays.SubArrayCount(), 2u); // Tags, Names
     EXPECT_TRUE(dest.string_arrays.GetSubArray(0).empty());
     EXPECT_TRUE(dest.string_arrays.GetSubArray(1).empty());
     ASSERT_EQ(dest.any_struct_arrays.SubArrayCount(), 1u); // Inventory
@@ -328,6 +331,41 @@ TEST(NativeLoader, PreSizesArraysAndMapsThroughLoader) {
     // Map: declared but unpopulated -> present as one empty slot.
     ASSERT_EQ(dest.map_properties.size(), 1u); // AmmoByWeapon
     EXPECT_TRUE(dest.map_properties[0].keys.empty());
+}
+
+// All four frame loaders must expose the same array/map sizing to the shared
+// base PrepareContainer via GetStructSizing. PreSizesArraysAndMapsThroughLoader
+// (above) pins the base PrepareContainer -> ResizeContainerToMaxIndices path via
+// the native loader; this pins each loader's GetStructSizing hook so a break in
+// any single loader's hook is caught.
+TEST(FrameLoaders, GetStructSizingExposesArrayAndMapSizingForAllLoaders) {
+    VTX::SchemaRegistry schema;
+    ASSERT_TRUE(schema.LoadFromRawString(kHeroSchema));
+    const auto& cache = schema.GetPropertyCache();
+
+    const int32_t heroId = schema.GetStructTypeId("Hero");
+    ASSERT_GE(heroId, 0);
+
+    const auto floatIdx = static_cast<size_t>(VTX::FieldType::Float);
+    const auto stringIdx = static_cast<size_t>(VTX::FieldType::String);
+
+    auto expect_hero_sizing = [&](const VTX::StructSchemaCache* s) {
+        ASSERT_NE(s, nullptr);
+        ASSERT_GT(s->array_max_indices.size(), stringIdx);
+        EXPECT_EQ(s->array_max_indices[floatIdx], 1);  // Cooldowns
+        EXPECT_EQ(s->array_max_indices[stringIdx], 2); // Tags, Names
+        EXPECT_EQ(s->map_max_index, 1);                // AmmoByWeapon
+    };
+
+    VTX::GenericNativeLoader native(cache);
+    VTX::GenericFlatBufferLoader flatbuffer(cache);
+    VTX::GenericProtobufLoader protobuf(schema); // proto loader takes the registry, not the cache
+    VTX::GenericBinaryLoader binary(cache);
+
+    expect_hero_sizing(native.GetStructSizing(heroId));
+    expect_hero_sizing(flatbuffer.GetStructSizing(heroId));
+    expect_hero_sizing(protobuf.GetStructSizing(heroId));
+    expect_hero_sizing(binary.GetStructSizing(heroId));
 }
 
 TEST(NativeLoader, ADLConversionFromCustomMathType) {
