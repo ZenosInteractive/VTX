@@ -2,12 +2,14 @@
 #include <string>
 #include <stdexcept>
 #include <cstdint>
+#include <cstdio>
 #include <vector>
 #include <zstd.h>
 #include <xxh3.h>
 #include "vtx/common/vtx_types.h"
 #include "vtx/common/vtx_concepts.h"
 #include "vtx/writer/policies/sinks/durable_file.h"
+#include "vtx/writer/policies/sinks/recovery_journal.h"
 namespace VTX {
 
     template <IVtxWriterPolicy Policy>
@@ -23,7 +25,8 @@ namespace VTX {
             HeaderType header_config;
             bool b_use_compression = true;
             int8_t compression_level = 10;
-            bool durable_writes = true; ///< fsync each chunk to physical disk (crash/power-loss safe).
+            bool durable_writes = true;           ///< fsync each chunk to physical disk (crash/power-loss safe).
+            bool enable_recovery_journal = true;  ///< maintain a ".recovery" sidecar for crash recovery.
         };
 
         explicit ChunkedFileSink(Config config)
@@ -44,6 +47,12 @@ namespace VTX {
             file_.Write(header_payload.data(), final_size);
             if (config_.durable_writes)
                 file_.Sync();
+
+            // Start the crash-recovery journal only once the header is durable.
+            if (config_.enable_recovery_journal) {
+                journal_.Open(RecoveryJournal::PathFor(config_.filename), SerializerPolicy::GetMagicBytes(),
+                              config_.durable_writes);
+            }
         }
 
         void SaveChunk(std::vector<std::unique_ptr<FrameType>>& frames, const std::vector<int64_t>& created_utc,
@@ -70,6 +79,11 @@ namespace VTX {
             indexEntry.chunk_size_bytes = final_size + sizeof(uint32_t);
             indexEntry.checksum = XXH3_64bits(payload.data(), payload.size());
             seek_table_.push_back(indexEntry);
+
+            // Journal the committed chunk AFTER its bytes are durable on disk, so
+            // the journal never references a chunk that isn't there (data-before-journal).
+            if (journal_.IsOpen())
+                journal_.AppendChunk(indexEntry);
         }
 
         void Close(const SessionFooter& footerData) {
@@ -84,6 +98,13 @@ namespace VTX {
             WriteBlob(SerializerPolicy::GetMagicBytes());
             if (config_.durable_writes)
                 file_.Sync();
+
+            // Clean shutdown: the footer is durable, so the recovery journal is no
+            // longer needed. Its absence signals a clean file to the repair path.
+            if (journal_.IsOpen()) {
+                journal_.Close();
+                std::remove(RecoveryJournal::PathFor(config_.filename).c_str());
+            }
         }
 
     private:
@@ -114,6 +135,7 @@ namespace VTX {
 
         Config config_;
         DurableFile file_;
+        RecoveryJournal journal_;
         int32_t chunkIndex_ = 0;
         std::vector<ChunkIndexData> seek_table_; //Generic tables, format agnostic
     };

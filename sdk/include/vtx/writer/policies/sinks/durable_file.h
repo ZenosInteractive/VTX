@@ -39,6 +39,13 @@ namespace VTX {
             return fp_ != nullptr;
         }
 
+        /// Open an EXISTING file for binary read/write WITHOUT truncating (used by repair).
+        bool OpenExisting(const std::string& path) {
+            Close();
+            fp_ = std::fopen(path.c_str(), "rb+");
+            return fp_ != nullptr;
+        }
+
         bool IsOpen() const { return fp_ != nullptr; }
 
         void Write(const void* data, size_t size) {
