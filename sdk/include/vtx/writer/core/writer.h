@@ -62,6 +62,9 @@ namespace VTX {
             } else {
                 registry_.LoadFromJson(config.schema_json_path);
             }
+            // Journal the resolved timing before the session opens, so a crash-repair can
+            // reconstruct the footer's derived time data (duration/gaps/segments) exactly.
+            sink_.JournalTiming(config.default_fps, config.is_increasing);
             auto schema = Serializer::CreateSchema(registry_);
             sink_.OnSessionStart(schema);
             frame_accessor_.InitializeFromCache(registry_.GetPropertyCache());
@@ -137,6 +140,15 @@ namespace VTX {
             const int32_t assigned_index = total_frames_;
             total_frames_++;
             current_chunk_bytes_ += frame_size;
+
+            // Journal the frame (payload + resolved times) before it joins the pending
+            // batch, so a crash before the next flush can still recover it.
+            const auto& game_times = timer_.GetGameTime();
+            const auto& created_utc = timer_.GetCreatedUtc();
+            const int64_t frame_game_time = game_times.empty() ? 0 : game_times.back();
+            const int64_t frame_created_utc = created_utc.empty() ? 0 : created_utc.back();
+            sink_.JournalFrame(*sink_frame, assigned_index, frame_game_time, frame_created_utc);
+
             pending_frames_.push_back(std::move(sink_frame));
             return RecordResult::MadeWritten(assigned_index);
         }

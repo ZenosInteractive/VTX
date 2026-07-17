@@ -130,6 +130,12 @@ namespace VTX {
             seek_table_.push_back(entry);
         }
 
+        // Crash-recovery journaling is file-sink only (a socket has no local file to
+        // repair); accept the writer's journaling hooks as no-ops over the network.
+        void JournalFrame(const FrameType& /*frame*/, int32_t /*frame_index*/, int64_t /*game_time*/,
+                          int64_t /*created_utc*/) {}
+        void JournalTiming(float /*fps*/, bool /*is_increasing*/) {}
+
         void Close(const SessionFooter& footerData) {
             if (socket_ == kVtxInvalidSocket)
                 return;

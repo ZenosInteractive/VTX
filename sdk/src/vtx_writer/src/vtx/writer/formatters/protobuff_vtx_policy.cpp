@@ -135,6 +135,7 @@ std::string VTX::ProtobufVtxPolicy::SerializeFooter(const std::vector<ChunkIndex
         proto_entry->set_end_frame(entry.end_frame);
         proto_entry->set_file_offset(entry.file_offset);
         proto_entry->set_chunk_size_bytes(entry.chunk_size_bytes);
+        proto_entry->set_checksum(entry.checksum);
     }
 
     std::string payload;

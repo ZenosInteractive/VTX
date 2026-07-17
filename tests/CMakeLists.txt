@@ -76,6 +76,7 @@ add_executable(vtx_tests
     writer/test_schema_in_memory.cpp
     writer/test_frame_post_processor.cpp
     writer/test_frame_finalization.cpp
+    writer/test_crash_recovery.cpp
     writer/test_network_sink.cpp
     writer/test_pipe_source.cpp
     writer/test_websocket_source.cpp

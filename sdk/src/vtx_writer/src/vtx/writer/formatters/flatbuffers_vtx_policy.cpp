@@ -113,8 +113,8 @@ std::string VTX::FlatBuffersVtxPolicy::SerializeFooter(const std::vector<ChunkIn
 
     for (const auto& e : seek_table) {
         index_offsets.push_back(fbsvtx::CreateChunkIndexEntry(builder, e.chunk_index, e.start_frame, e.end_frame,
-                                                              static_cast<uint64_t>(e.file_offset),
-                                                              e.chunk_size_bytes));
+                                                              static_cast<uint64_t>(e.file_offset), e.chunk_size_bytes,
+                                                              e.checksum));
     }
     auto index_vector = builder.CreateVector(index_offsets);
 
