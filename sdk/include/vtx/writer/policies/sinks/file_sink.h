@@ -25,8 +25,8 @@ namespace VTX {
             HeaderType header_config;
             bool b_use_compression = true;
             int8_t compression_level = 10;
-            bool durable_writes = true;           ///< fsync each chunk to physical disk (crash/power-loss safe).
-            bool enable_recovery_journal = true;  ///< maintain a ".recovery" sidecar for crash recovery.
+            bool durable_writes = true;          ///< fsync each chunk to physical disk (crash/power-loss safe).
+            bool enable_recovery_journal = true; ///< maintain a ".recovery" sidecar for crash recovery.
         };
 
         explicit ChunkedFileSink(Config config)
@@ -47,6 +47,8 @@ namespace VTX {
             file_.Write(header_payload.data(), final_size);
             if (config_.durable_writes)
                 file_.Sync();
+            else
+                file_.Flush(); // process-crash safe (reaches the OS) even without fsync
 
             // Start the crash-recovery journal only once the header is durable.
             if (config_.enable_recovery_journal) {
@@ -70,6 +72,8 @@ namespace VTX {
             file_.Write(payload.data(), final_size);
             if (config_.durable_writes)
                 file_.Sync();
+            else
+                file_.Flush(); // process-crash safe (reaches the OS) even without fsync
 
             ChunkIndexData indexEntry;
             indexEntry.chunk_index = chunkIndex_++;
@@ -98,6 +102,8 @@ namespace VTX {
             WriteBlob(SerializerPolicy::GetMagicBytes());
             if (config_.durable_writes)
                 file_.Sync();
+            else
+                file_.Flush(); // process-crash safe (reaches the OS) even without fsync
 
             // Clean shutdown: the footer is durable, so the recovery journal is no
             // longer needed. Its absence signals a clean file to the repair path.

@@ -168,6 +168,87 @@ TEST(CrashRecovery, ChecksumDetectsCorruptChunk) {
     EXPECT_EQ(ctx.reader->GetTotalFrames(), 1);
 }
 
+// A crash between the footer fsync and the journal delete leaves a COMPLETE file
+// plus a leftover .recovery. Repair must detect the valid footer and preserve it
+// (incl. timing) rather than truncating and rewriting a timing-less one.
+TEST(CrashRecovery, PreservesValidFooterWhenJournalLeftover) {
+    const std::string path = WriteValidFile("leftover", 3);
+
+    // Recreate the leftover journal WITHOUT truncating the (valid) footer.
+    {
+        std::vector<VTX::ChunkIndexData> records;
+        {
+            auto ctx = VTX::OpenReplayFile(path);
+            ASSERT_TRUE(ctx) << ctx.error;
+            for (const auto& e : ctx.reader->GetSeekTable()) {
+                VTX::ChunkIndexData d;
+                d.chunk_index = e.chunk_index;
+                d.start_frame = e.start_frame;
+                d.end_frame = e.end_frame;
+                d.file_offset = static_cast<int64_t>(e.file_offset);
+                d.chunk_size_bytes = e.chunk_size_bytes;
+                d.checksum = e.checksum;
+                records.push_back(d);
+            }
+        }
+        VTX::RecoveryJournal journal;
+        ASSERT_TRUE(journal.Open(VTX::RecoveryJournal::PathFor(path), "VTXF", true));
+        for (const auto& d : records)
+            journal.AppendChunk(d);
+        journal.Close();
+    }
+
+    const auto size_before = std::filesystem::file_size(path);
+    const auto rr = VTX::RepairReplayFile(path);
+    ASSERT_TRUE(rr.ok()) << rr.error;
+    EXPECT_TRUE(rr.was_clean);  // detected an already-complete file
+    EXPECT_FALSE(rr.repaired);  // did NOT rewrite the footer
+    EXPECT_EQ(std::filesystem::file_size(path), size_before); // footer left untouched
+    EXPECT_FALSE(std::filesystem::exists(VTX::RecoveryJournal::PathFor(path)));
+
+    auto ctx = VTX::OpenReplayFile(path);
+    ASSERT_TRUE(ctx) << ctx.error;
+    EXPECT_EQ(ctx.reader->GetTotalFrames(), 3);
+}
+
+// A journal whose recorded format magic disagrees with the main file (e.g. a stale
+// sidecar left over a file replaced with the other format) must be refused, not
+// applied (which would truncate a valid file).
+TEST(CrashRecovery, RefusesMismatchedJournalFormat) {
+    const std::string path = WriteValidFile("mismatch", 2);
+
+    std::vector<VTX::ChunkIndexData> records;
+    int64_t last_end = 0;
+    {
+        auto ctx = VTX::OpenReplayFile(path);
+        ASSERT_TRUE(ctx) << ctx.error;
+        for (const auto& e : ctx.reader->GetSeekTable()) {
+            VTX::ChunkIndexData d;
+            d.chunk_index = e.chunk_index;
+            d.start_frame = e.start_frame;
+            d.end_frame = e.end_frame;
+            d.file_offset = static_cast<int64_t>(e.file_offset);
+            d.chunk_size_bytes = e.chunk_size_bytes;
+            d.checksum = e.checksum;
+            records.push_back(d);
+            last_end = std::max<int64_t>(last_end, static_cast<int64_t>(e.file_offset) + e.chunk_size_bytes);
+        }
+    }
+    std::filesystem::resize_file(path, static_cast<std::uintmax_t>(last_end)); // footerless
+    {
+        VTX::RecoveryJournal journal;
+        // Wrong format magic: the file is VTXF (FlatBuffers).
+        ASSERT_TRUE(journal.Open(VTX::RecoveryJournal::PathFor(path), "VTXP", true));
+        for (const auto& d : records)
+            journal.AppendChunk(d);
+        journal.Close();
+    }
+
+    const auto rr = VTX::RepairReplayFile(path);
+    EXPECT_FALSE(rr.ok()); // refused: journal format does not match the file
+    EXPECT_FALSE(rr.repaired);
+}
+
 // A cleanly-closed file has no journal, so repair is a no-op and the file is intact.
 TEST(CrashRecovery, CleanFileNeedsNoRepair) {
     const std::string path = WriteValidFile("clean", 3);

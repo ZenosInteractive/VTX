@@ -19,11 +19,11 @@
 namespace VTX {
 
     struct RepairResult {
-        bool was_clean = false;         ///< No recovery journal present -> nothing to repair.
-        bool repaired = false;          ///< A footer was reconstructed and written.
-        int32_t recovered_chunks = 0;   ///< Chunks preserved in the recovered file.
-        int32_t recovered_frames = 0;   ///< total_frames of the recovered file.
-        std::string error;              ///< Non-empty on failure.
+        bool was_clean = false;       ///< No recovery journal present -> nothing to repair.
+        bool repaired = false;        ///< A footer was reconstructed and written.
+        int32_t recovered_chunks = 0; ///< Chunks preserved in the recovered file.
+        int32_t recovered_frames = 0; ///< total_frames of the recovered file.
+        std::string error;            ///< Non-empty on failure.
 
         bool ok() const { return error.empty(); }
     };

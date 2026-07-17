@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -21,6 +22,28 @@ namespace VTX {
             std::error_code ec;
             auto s = std::filesystem::file_size(path, ec);
             return ec ? -1 : static_cast<int64_t>(s);
+        }
+
+        // True if the file already ends with a well-formed footer trailer
+        // [u32 footer_size][4-byte magic]. A cleanly-closed file ends this way; a
+        // crash-truncated (footerless) file almost never does. Used to detect a
+        // complete file with only a leftover journal, so we DON'T rewrite its footer.
+        bool HasValidTrailingFooter(const std::string& path, const std::string& magic, int64_t file_size) {
+            if (file_size < 8)
+                return false;
+            std::ifstream in(path, std::ios::binary);
+            if (!in.is_open())
+                return false;
+            in.seekg(file_size - 8);
+            char buf[8];
+            in.read(buf, 8);
+            if (in.gcount() != 8)
+                return false;
+            uint32_t footer_size = 0;
+            std::memcpy(&footer_size, buf, sizeof(footer_size)); // host-native, matches the sink
+            if (std::string(buf + 4, 4) != magic)
+                return false;
+            return footer_size > 0 && static_cast<int64_t>(footer_size) + 8 <= file_size;
         }
 
         // Byte offset where chunks begin (magic(4) + u32 header_size + header), or -1 if
@@ -148,6 +171,24 @@ namespace VTX {
         in.read(magic, 4);
         in.close();
         const std::string m(magic, 4);
+
+        const int64_t file_size = FileSizeOf(path);
+
+        // A cleanly-finished file already ends with a valid footer; the journal is
+        // just leftover (crash between the footer fsync and the journal delete).
+        // Preserve the complete footer (incl. per-frame times) -- only drop the journal.
+        if (HasValidTrailingFooter(path, m, file_size)) {
+            std::remove(journal_path.c_str());
+            r.was_clean = true;
+            return r;
+        }
+
+        // Refuse a journal whose recorded format does not match this file (e.g. a
+        // stale sidecar left over a file that was replaced with the other format).
+        if (journal.header_valid && !journal.format_magic.empty() && journal.format_magic != m) {
+            r.error = "recovery journal format (" + journal.format_magic + ") does not match file (" + m + ")";
+            return r;
+        }
 
         if (m == "VTXP")
             return RepairImpl<ProtobufVtxPolicy>(path, journal);

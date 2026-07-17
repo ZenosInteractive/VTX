@@ -56,6 +56,8 @@ namespace VTX {
             file_.Write(fmt, 4);
             if (durable_)
                 file_.Sync();
+            else
+                file_.Flush(); // process-crash safe (reaches the OS) even without fsync
             return true;
         }
 
@@ -76,6 +78,8 @@ namespace VTX {
             file_.Write(rec, kRecordSize);
             if (durable_)
                 file_.Sync();
+            else
+                file_.Flush(); // process-crash safe (reaches the OS) even without fsync
         }
 
         void Close() { file_.Close(); }
@@ -83,9 +87,9 @@ namespace VTX {
         // --- Read side (repair) ---
 
         struct Parsed {
-            bool has_journal = false;   ///< The sidecar file existed.
-            bool header_valid = false;  ///< Header magic/version parsed OK.
-            std::string format_magic;   ///< Main-file magic recorded in the header.
+            bool has_journal = false;           ///< The sidecar file existed.
+            bool header_valid = false;          ///< Header magic/version parsed OK.
+            std::string format_magic;           ///< Main-file magic recorded in the header.
             std::vector<ChunkIndexData> chunks; ///< Valid committed-chunk records, in order.
         };
 
