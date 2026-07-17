@@ -1,5 +1,6 @@
 
 #include "vtx/reader/policies/formatters/flatbuffer_reader_policy.h"
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -11,6 +12,12 @@
 
 VTX::FlatBuffersReaderPolicy::HeaderType VTX::FlatBuffersReaderPolicy::ParseHeader(const std::string& buffer) {
     HeaderType header;
+    // Verify before touching offsets: a corrupt/truncated buffer must fail
+    // cleanly (throw), never dereference a bad offset (undefined behavior).
+    flatbuffers::Verifier verifier(reinterpret_cast<const uint8_t*>(buffer.data()), buffer.size());
+    if (!verifier.VerifyBuffer<fbsvtx::FileHeader>(nullptr)) {
+        throw std::runtime_error("VTX [FlatBuffers]: header failed verification (corrupt or truncated)");
+    }
     auto* root = fbsvtx::GetFileHeader(buffer.data());
     if (root) {
         root->UnPackTo(&header);
@@ -24,6 +31,13 @@ std::string VTX::FlatBuffersReaderPolicy::GetMagicBytes() {
 
 VTX::FlatBuffersReaderPolicy::FooterType VTX::FlatBuffersReaderPolicy::ParseFooter(const std::string& buffer) {
     FooterType footer;
+    // Verify before touching offsets: a corrupt/truncated footer (e.g. a
+    // crash-truncated file whose tail bytes happen to pass the size gate) must
+    // fail cleanly instead of dereferencing garbage offsets (was a crash).
+    flatbuffers::Verifier verifier(reinterpret_cast<const uint8_t*>(buffer.data()), buffer.size());
+    if (!verifier.VerifyBuffer<fbsvtx::FileFooter>(nullptr)) {
+        throw std::runtime_error("VTX [FlatBuffers]: footer failed verification (corrupt or truncated)");
+    }
     auto* root = flatbuffers::GetRoot<fbsvtx::FileFooter>(buffer.data());
     if (root) {
         root->UnPackTo(&footer);
@@ -96,6 +110,7 @@ void VTX::FlatBuffersReaderPolicy::PopulateIndexTable(const FooterType& footer,
         ce.end_frame = e->end_frame;
         ce.file_offset = e->file_offset;
         ce.chunk_size_bytes = e->chunk_size_bytes;
+        ce.checksum = e->checksum;
 
         chunk_index_table.push_back(ce);
     }

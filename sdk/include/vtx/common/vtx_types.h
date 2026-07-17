@@ -635,6 +635,7 @@ namespace VTX {
 
         uint64_t file_offset = 0;      ///< Byte offset in the file where the chunk begins.
         uint32_t chunk_size_bytes = 0; ///< Size of the chunk in bytes.
+        uint64_t checksum = 0;         ///< xxHash64 of the on-disk chunk payload (0 = not set).
     };
 
     /**
@@ -1223,12 +1224,14 @@ namespace VTX {
             , file_offset(0)
             , chunk_size_bytes(0)
             , start_frame(0)
-            , end_frame(0) {}
+            , end_frame(0)
+            , checksum(0) {}
 
         int32_t chunk_index;
         int64_t file_offset;
         uint32_t chunk_size_bytes;
         int32_t start_frame;
         int32_t end_frame;
+        uint64_t checksum; ///< xxHash64 of the on-disk chunk payload.
     };
 } // namespace VTX

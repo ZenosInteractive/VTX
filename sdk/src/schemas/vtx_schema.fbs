@@ -198,6 +198,7 @@ table ChunkIndexEntry {
   end_frame: int;
   file_offset: ulong;
   chunk_size_bytes: uint;
+  checksum: ulong;  // xxHash64 of the on-disk chunk payload (0 = not set)
 }
 
 table ReplayTimeData {
