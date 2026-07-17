@@ -53,6 +53,7 @@ endif()
 # static init.  `benchmark::benchmark_main` provides the main() that calls
 # Initialize + RunSpecifiedBenchmarks + Shutdown.
 add_executable(vtx_benchmarks
+    bench_crash_recovery.cpp
     bench_reader.cpp
     bench_reader_ready.cpp
     bench_writer.cpp
@@ -79,6 +80,9 @@ target_include_directories(vtx_benchmarks PRIVATE
     # vtx_common keeps protobuf / flatbuffers headers PRIVATE; benchmarks
     # that touch PropertyContainer internals need the same thirdparty paths.
     "${PROJECT_SOURCE_DIR}/thirdparty/protobuf/include"
+    # bench_crash_recovery.cpp instantiates the raw ReplayWriter/ChunkedFileSink,
+    # which needs the generated schema headers (same as tests/).
+    "${VTX_COMMON_GENERATED_DIR}"
 )
 
 target_compile_definitions(vtx_benchmarks PRIVATE

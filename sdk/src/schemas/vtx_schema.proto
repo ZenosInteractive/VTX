@@ -236,6 +236,7 @@ message ChunkIndexEntry {
 
   uint64 file_offset = 4;      // Byte offset where the chunk starts
   uint32 chunk_size_bytes = 5; // Size of the serialized chunk
+  uint64 checksum = 6;         // xxHash64 of the on-disk chunk payload (0 = not set)
 }
 
 message ReplayTimeData{

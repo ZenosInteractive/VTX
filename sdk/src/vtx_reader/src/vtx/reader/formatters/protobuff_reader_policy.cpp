@@ -87,6 +87,7 @@ void VTX::ProtobufReaderPolicy::PopulateIndexTable(const FooterType& footer,
         nativeEntry.end_frame = protoEntry.end_frame();
         nativeEntry.file_offset = protoEntry.file_offset();
         nativeEntry.chunk_size_bytes = protoEntry.chunk_size_bytes();
+        nativeEntry.checksum = protoEntry.checksum();
 
         chunk_index_table.push_back(nativeEntry);
     }
