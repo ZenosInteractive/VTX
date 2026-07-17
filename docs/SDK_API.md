@@ -255,6 +255,41 @@ writer->Stop();   // Write footer and close file
 
 If the facade is destroyed without an explicit `Stop()`, its destructor finalizes the replay as a best-effort fallback, so a dropped writer still yields a readable `.vtx`.
 
+### Crash recovery
+
+A recording that dies before `Stop()` -- process crash or power loss, mid-chunk or mid-frame -- is **recoverable up to the last recorded frame**. While recording, the file sink maintains a write-ahead sidecar **`<file>.vtx.recovery`**: every recorded frame is journaled before it joins the pending batch, and every flushed chunk is committed to the journal *after* its bytes are durable in the `.vtx` (data-before-journal ordering, append-only log, per-record checksums). On a clean `Stop()` the sidecar is deleted -- its presence at open time is the signal of an unclean shutdown.
+
+Recovery is **never automatic**; the flow is user-driven:
+
+```cpp
+#include "vtx/writer/core/vtx_replay_recovery.h"
+
+if (VTX::ReplayNeedsRecovery(path)) {          // cheap: does "<path>.recovery" exist?
+    VTX::RepairResult r = VTX::RepairReplayFile(path);
+    if (r.ok()) {
+        // r.was_clean          -> the file was already complete (leftover sidecar cleaned up)
+        // r.repaired           -> a footer was reconstructed
+        // r.recovered_chunks / r.recovered_frames
+    } else {
+        // r.error -- the journal is left in place, so a retry (or a copy of the
+        // file made writable, freed disk space, ...) can still recover.
+    }
+}
+auto ctx = VTX::OpenReplayFile(path);          // a repaired file opens like any other
+```
+
+`RepairReplayFile` verifies each committed chunk against its journaled xxHash64 checksum (dropping a torn or corrupt tail), re-appends the in-flight frames that only existed in the journal, and synthesizes the footer with the **exact per-frame times** -- `game_time`, `created_utc`, duration, timeline gaps and game segments all match what a clean `Stop()` would have written (at a chunk boundary the recovered file is byte-identical to a cleanly closed one). Both FlatBuffers and Protobuf files are supported; a journal whose format or version does not match the file is refused, a recording still being written is refused (the writer holds a deny-write handle on Windows), and a `.recovery` file that is not actually a journal is never deleted. `RecoveryJournalPath(path)` returns the sidecar's path if you need to locate or archive it.
+
+One property of salvaged files to know about: the in-flight frames that only existed in the journal are re-appended as **one-frame chunks**, so a recovery with a large pending batch reads sequentially ~3x slower than a cleanly chunked file (measured in `BM_ReaderRecoveredTail`). For hot-path use, transcode the salvaged file with the public API -- open it, drain every frame with its footer times into a fresh writer, `Stop()`. `created_utc` round-trips exactly; `game_time` re-enters through the float-seconds register and can lose 1 tick (100 ns) per frame.
+
+Durability knobs on the file sink (`ChunkedFileSink::Config`; facade users currently get the defaults):
+
+| Knob | Default | Meaning |
+|------|---------|---------|
+| `durable_writes` | `true` | fsync every chunk and journal record to physical media -- survives **power loss**. Set `false` to only flush to the OS: cheaper, still survives a **process crash**. |
+| `enable_recovery_journal` | `true` | Maintain the `.recovery` sidecar. Opting out removes any stale sidecar at session start; a crash then leaves an unrecoverable (footerless) file. |
+| `journal_compact_threshold_bytes` | `0` (64 MB) | How many superseded journal bytes accrue before the sidecar is compacted (rewritten via an atomic rename). |
+
 ### One call: `WriteReplay`
 
 When you already have an `IFrameDataSource` and just want a finished `.vtx`, `WriteReplay` runs the whole pipeline in one call -- create the writer, initialize the source, drain every frame through `TryRecordFrame`, finalize, and report:

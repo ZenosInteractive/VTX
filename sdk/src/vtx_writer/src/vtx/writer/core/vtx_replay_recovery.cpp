@@ -1,5 +1,6 @@
 #include "vtx/writer/core/vtx_replay_recovery.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -8,6 +9,7 @@
 #include <string>
 #include <vector>
 #include <xxh3.h>
+#include <zstd.h>
 
 #include "vtx/common/vtx_types.h"
 #include "vtx/writer/policies/formatters/flatbuffers_vtx_policy.h"
@@ -44,6 +46,22 @@ namespace VTX {
             if (std::string(buf + 4, 4) != magic)
                 return false;
             return footer_size > 0 && static_cast<int64_t>(footer_size) + 8 <= file_size;
+        }
+
+        // Mirror of ChunkedFileSink::CompressIfBeneficial, so a footer synthesized by
+        // repair is byte-identical to one written by a clean Close() under the same
+        // (journaled) compression settings.
+        std::string CompressIfBeneficial(std::string payload, bool use_compression, int8_t level) {
+            if (!use_compression || payload.size() < 512)
+                return payload;
+            const size_t max_size = ZSTD_compressBound(payload.size());
+            std::string compressed(max_size, '\0');
+            const size_t compressed_size =
+                ZSTD_compress(compressed.data(), max_size, payload.data(), payload.size(), level);
+            if (ZSTD_isError(compressed_size) || compressed_size >= payload.size())
+                return payload;
+            compressed.resize(compressed_size);
+            return compressed;
         }
 
         // Byte offset where chunks begin (magic(4) + u32 header_size + header), or -1 if
@@ -85,9 +103,10 @@ namespace VTX {
                 return r;
             }
 
-            // Keep only chunks whose on-disk bytes are present and checksum-clean, in order.
+            // Keep only committed chunks whose on-disk bytes are present and checksum-clean, in order.
             std::vector<ChunkIndexData> good;
             int64_t truncate_to = header_end;
+            int32_t last_committed_frame = -1;
             for (const auto& c : journal.chunks) {
                 const int64_t off = c.file_offset;
                 const int64_t end = off + static_cast<int64_t>(c.chunk_size_bytes);
@@ -110,6 +129,7 @@ namespace VTX {
 
                 good.push_back(c);
                 truncate_to = end;
+                last_committed_frame = c.end_frame;
             }
             in.close();
 
@@ -122,34 +142,143 @@ namespace VTX {
                 return r;
             }
 
-            // Synthesize and append a footer over the recovered chunk index.
-            SessionFooter footer_data;
-            footer_data.total_frames = good.empty() ? 0 : (good.back().end_frame + 1);
-            const std::string footer_payload = Policy::SerializeFooter(good, footer_data);
-
             DurableFile out;
             if (!out.OpenExisting(path)) {
-                r.error = "cannot reopen main file to append footer";
+                r.error = "cannot reopen main file to append";
                 return r;
             }
             out.SeekEnd();
-            out.Write(footer_payload.data(), footer_payload.size());
+
+            // Recover the in-flight (un-flushed) frames: append each pending frame (index
+            // beyond the last committed one) as its own chunk, in contiguous order.
+            std::vector<const RecoveryJournal::PendingFrame*> pending;
+            for (const auto& f : journal.frames)
+                if (f.index > last_committed_frame)
+                    pending.push_back(&f);
+            std::sort(pending.begin(), pending.end(),
+                      [](const RecoveryJournal::PendingFrame* a, const RecoveryJournal::PendingFrame* b) {
+                          return a->index < b->index;
+                      });
+
+            int32_t last_frame = last_committed_frame;
+            int32_t expected = last_committed_frame + 1;
+            for (const auto* f : pending) {
+                if (f->index != expected || f->payload.empty())
+                    break; // gap / duplicate / empty -> stop at the first hole
+                const uint64_t offset = out.Tell();
+                const uint32_t size = static_cast<uint32_t>(f->payload.size());
+                out.Write(&size, sizeof(size));
+                out.Write(f->payload.data(), f->payload.size());
+
+                ChunkIndexData e;
+                e.chunk_index = good.empty() ? 0 : good.back().chunk_index + 1;
+                e.file_offset = static_cast<int64_t>(offset);
+                e.start_frame = f->index;
+                e.end_frame = f->index;
+                e.chunk_size_bytes = size + static_cast<uint32_t>(sizeof(uint32_t));
+                e.checksum = XXH3_64bits(f->payload.data(), f->payload.size());
+                good.push_back(e);
+
+                last_frame = f->index;
+                ++expected;
+            }
+
+            const int32_t total_frames = last_frame + 1;
+
+            // Reconstruct exact per-frame times from T records (committed) and F records (pending).
+            std::vector<int64_t> game_times(total_frames > 0 ? static_cast<size_t>(total_frames) : 0, 0);
+            std::vector<int64_t> created_utc(total_frames > 0 ? static_cast<size_t>(total_frames) : 0, 0);
+            auto place = [&](int32_t idx, int64_t gt, int64_t cu) {
+                if (idx >= 0 && idx < total_frames) {
+                    game_times[static_cast<size_t>(idx)] = gt;
+                    created_utc[static_cast<size_t>(idx)] = cu;
+                }
+            };
+            for (const auto& t : journal.times)
+                place(t.index, t.game_time, t.created_utc);
+            for (const auto& f : journal.frames)
+                place(f.index, f.game_time, f.created_utc);
+
+            // Reconstruct the footer's derived time data exactly as VTXGameTimes would have
+            // produced it (mirrors GetDuration / DetectGap / DetectGameSegment): duration
+            // from the created_utc span, timeline gaps from UTC deltas vs the FPS-derived
+            // threshold, and game segments from game-time direction reversals. Frame
+            // numbers are 1-based, as in VTXGameTimes::GetFrameNumber(). Manual segment
+            // marks are not journaled and so are not recovered.
+            SessionFooter footer_data;
+            footer_data.total_frames = total_frames;
+            std::vector<int32_t> gaps;
+            std::vector<int32_t> segments;
+            if (total_frames > 0) {
+                // GetDuration() returns float; keep the same float rounding before the
+                // footer's double field so a recovered footer matches a clean Stop() exactly.
+                const double duration = static_cast<float>(created_utc.back() - created_utc.front()) /
+                                        static_cast<double>(GameTime::TICKS_PER_SECOND);
+                footer_data.duration_seconds = static_cast<float>(duration);
+            }
+            if (journal.has_timing && total_frames > 1) {
+                if (journal.fps > 0.0f) {
+                    // Same expression as VTXGameTimes::SetFPS -> fps_inverse_.
+                    const int64_t fps_inverse = static_cast<int64_t>((1.0f / journal.fps) * GameTime::TICKS_PER_SECOND);
+                    const int64_t threshold = 3 * fps_inverse;
+                    for (int32_t i = 1; i < total_frames; ++i)
+                        if (created_utc[static_cast<size_t>(i)] - created_utc[static_cast<size_t>(i) - 1] > threshold)
+                            gaps.push_back(i + 1);
+                }
+                for (int32_t i = 1; i < total_frames; ++i) {
+                    const int64_t delta = game_times[static_cast<size_t>(i)] - game_times[static_cast<size_t>(i) - 1];
+                    if ((journal.is_increasing && delta < 0) || (!journal.is_increasing && delta > 0))
+                        segments.push_back(i + 1);
+                }
+            }
+            // Always pass the vectors -- even empty -- exactly as Stop() does, so a
+            // recovered footer serializes byte-identically to a clean shutdown's.
+            footer_data.game_times = &game_times;
+            footer_data.created_utc = &created_utc;
+            footer_data.gaps = &gaps;
+            footer_data.segments = &segments;
+            // Compress exactly as the sink's Close() would have (settings journaled in
+            // the 'S' record), so large recovered footers also match byte-for-byte.
+            const std::string footer_payload = CompressIfBeneficial(Policy::SerializeFooter(good, footer_data),
+                                                                    journal.use_compression, journal.compression_level);
+
+            bool footer_ok = out.Write(footer_payload.data(), footer_payload.size());
             const uint32_t footer_size = static_cast<uint32_t>(footer_payload.size());
-            out.Write(&footer_size, sizeof(footer_size));
+            footer_ok = out.Write(&footer_size, sizeof(footer_size)) && footer_ok;
             const std::string magic = Policy::GetMagicBytes();
-            out.Write(magic.data(), magic.size());
-            out.Sync();
+            footer_ok = out.Write(magic.data(), magic.size()) && footer_ok;
+            footer_ok = out.Sync() && footer_ok;
+            // Good() also catches any failure in the pending-frame append writes above.
+            const bool all_ok = footer_ok && out.Good();
             out.Close();
 
-            std::remove(RecoveryJournal::PathFor(path).c_str());
+            if (!all_ok) {
+                // Leave the journal in place: a re-run (more disk free, or a CLI tool) is
+                // idempotent -- it re-truncates to the last committed chunk and retries.
+                r.error = "failed to write the recovered footer durably (disk full?); journal left intact";
+                return r;
+            }
+
+            const std::string journal_path = RecoveryJournal::PathFor(path);
+            std::remove(journal_path.c_str());
+            std::remove(RecoveryJournal::CompactTempFor(journal_path).c_str());
 
             r.repaired = true;
             r.recovered_chunks = static_cast<int32_t>(good.size());
-            r.recovered_frames = footer_data.total_frames;
+            r.recovered_frames = total_frames;
             return r;
         }
 
     } // namespace
+
+    std::string RecoveryJournalPath(const std::string& path) {
+        return RecoveryJournal::PathFor(path);
+    }
+
+    bool ReplayNeedsRecovery(const std::string& path) {
+        std::error_code ec;
+        return std::filesystem::exists(RecoveryJournal::PathFor(path), ec);
+    }
 
     RepairResult RepairReplayFile(const std::string& path) {
         RepairResult r;
@@ -178,14 +307,29 @@ namespace VTX {
         // just leftover (crash between the footer fsync and the journal delete).
         // Preserve the complete footer (incl. per-frame times) -- only drop the journal.
         if (HasValidTrailingFooter(path, m, file_size)) {
-            std::remove(journal_path.c_str());
+            // Only delete the sidecar if it actually IS a journal ("VTXR" magic) -- an
+            // unrelated user file that merely shares the ".recovery" suffix must never
+            // be destroyed on the strength of a name collision.
+            if (journal.looks_like_journal) {
+                std::remove(journal_path.c_str());
+                std::remove(RecoveryJournal::CompactTempFor(journal_path).c_str());
+            }
             r.was_clean = true;
+            return r;
+        }
+
+        // A present-but-unparseable journal header (corrupt first bytes, or a version
+        // from an incompatible SDK) carries no chunk index. Repairing from it would
+        // truncate the main file down to just its header and destroy the body -- refuse
+        // instead, leaving the file untouched for manual recovery.
+        if (!journal.header_valid) {
+            r.error = "recovery journal header is unreadable or from an incompatible version; refusing to repair";
             return r;
         }
 
         // Refuse a journal whose recorded format does not match this file (e.g. a
         // stale sidecar left over a file that was replaced with the other format).
-        if (journal.header_valid && !journal.format_magic.empty() && journal.format_magic != m) {
+        if (!journal.format_magic.empty() && journal.format_magic != m) {
             r.error = "recovery journal format (" + journal.format_magic + ") does not match file (" + m + ")";
             return r;
         }
