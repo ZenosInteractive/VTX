@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-07-20
+
 ### Added
 
 - **common/diagnostics**: unified structured-diagnostics model -- new header **`sdk/include/vtx/common/vtx_diagnostics.h`**.  Replaces the SDK's previous mix of `nullptr` / `false` / thrown / logged / silently-ignored failures with one model that automation (PRISM v2) can act on without parsing logs:
