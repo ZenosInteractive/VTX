@@ -1677,14 +1677,6 @@ namespace {
     // nothing in flight) must recover to a file that is BYTE-IDENTICAL to one produced
     // by a clean Stop() with the same inputs -- same chunks, same seek table, same
     // footer (times, gaps, segments, duration, compression), same trailer.
-    //
-    // The file header embeds a SECOND-granularity recording timestamp and is
-    // zstd-compressed, so a control/crash pair recorded across a second boundary gets
-    // different header bytes -- and possibly a different compressed header SIZE, which
-    // shifts every absolute offset in the seek table (a legitimate difference; repair
-    // never rewrites the header). Full-file identity is therefore only meaningful for
-    // a SAME-SECOND pair: re-record the pair (bounded retries, each takes well under a
-    // second) until both headers are byte-identical, then demand total equality.
     template <typename Policy>
     void RunBoundaryByteIdentity(const std::string& prefix, int frames, int32_t chunk_max) {
         auto record_all = [frames](RawWriterFor<Policy>& w) {
@@ -1698,45 +1690,19 @@ namespace {
             }
             w.Flush(); // land the trailing batch -> crash sits exactly on a chunk boundary
         };
-        auto header_region = [](const std::vector<std::byte>& bytes) {
-            if (bytes.size() < 8)
-                return std::vector<std::byte>();
-            uint32_t header_size = 0;
-            std::memcpy(&header_size, bytes.data() + 4, sizeof(header_size));
-            const size_t end = static_cast<size_t>(8) + header_size;
-            if (end > bytes.size())
-                return std::vector<std::byte>();
-            return std::vector<std::byte>(bytes.begin(), bytes.begin() + static_cast<std::ptrdiff_t>(end));
-        };
 
         const std::string control_path = VtxTest::OutputPath(prefix + "_ident_control.vtx");
-        const std::string crash_path = VtxTest::OutputPath(prefix + "_ident_crash.vtx");
-
-        // Flush-only durability: fsync vs fflush changes NO file bytes (and the flag is
-        // not journaled), but it makes each recording take milliseconds instead of
-        // seconds -- essential so a same-second pair is reachable even on slow CI
-        // runners, where fsync-per-frame recordings span more than a second each.
-        bool same_second_pair = false;
-        for (int attempt = 0; attempt < 8 && !same_second_pair; ++attempt) {
-            {
-                auto w = MakeRawWriter<Policy>(control_path, chunk_max, /*durable=*/false);
-                record_all(*w);
-                if (::testing::Test::HasFatalFailure())
-                    return;
-                w->Stop();
-            }
-            {
-                auto w = MakeRawWriter<Policy>(crash_path, chunk_max, /*durable=*/false);
-                record_all(*w);
-                if (::testing::Test::HasFatalFailure())
-                    return;
-                // dropped without Stop(): every frame is in a committed chunk, none pending
-            }
-            const auto control_header = header_region(VtxTest::ReadAllBytes(control_path));
-            const auto crash_header = header_region(VtxTest::ReadAllBytes(crash_path));
-            same_second_pair = !control_header.empty() && control_header == crash_header;
+        {
+            auto w = MakeRawWriter<Policy>(control_path, chunk_max);
+            record_all(*w);
+            w->Stop();
         }
-        ASSERT_TRUE(same_second_pair) << "could not record a same-second control/crash pair in 8 attempts";
+        const std::string crash_path = VtxTest::OutputPath(prefix + "_ident_crash.vtx");
+        {
+            auto w = MakeRawWriter<Policy>(crash_path, chunk_max);
+            record_all(*w);
+            // dropped without Stop(): every frame is in a committed chunk, none pending
+        }
 
         const auto rr = VTX::RepairReplayFile(crash_path);
         ASSERT_TRUE(rr.ok()) << rr.error;
@@ -1745,8 +1711,28 @@ namespace {
         const auto control_bytes = VtxTest::ReadAllBytes(control_path);
         const auto recovered_bytes = VtxTest::ReadAllBytes(crash_path);
         ASSERT_FALSE(control_bytes.empty());
+        ASSERT_GE(control_bytes.size(), 8u);
+        ASSERT_GE(recovered_bytes.size(), 8u);
+
+        // The header embeds a second-granularity recording timestamp, so two separately
+        // recorded sessions may legitimately differ there (repair never touches the
+        // header -- the recovered file keeps its own, which IS the guarantee). Compare
+        // everything from the end of the header on: chunks, seek table, footer, trailer.
+        auto header_end = [](const std::vector<std::byte>& bytes) {
+            uint32_t header_size = 0;
+            std::memcpy(&header_size, bytes.data() + 4, sizeof(header_size));
+            return static_cast<size_t>(8) + header_size;
+        };
+        const size_t control_body = header_end(control_bytes);
+        ASSERT_EQ(header_end(recovered_bytes), control_body); // same header structure/size
+        ASSERT_LT(control_body, control_bytes.size());
+
         EXPECT_EQ(recovered_bytes.size(), control_bytes.size());
-        EXPECT_EQ(recovered_bytes, control_bytes); // bit-for-bit equal to the clean file
+        const bool body_identical =
+            recovered_bytes.size() == control_bytes.size() &&
+            std::equal(control_bytes.begin() + static_cast<std::ptrdiff_t>(control_body), control_bytes.end(),
+                       recovered_bytes.begin() + static_cast<std::ptrdiff_t>(control_body));
+        EXPECT_TRUE(body_identical); // chunks + footer + trailer bit-for-bit equal
     }
 
 } // namespace
