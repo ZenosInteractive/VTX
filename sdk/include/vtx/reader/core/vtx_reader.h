@@ -15,6 +15,7 @@
 #include <stop_token>
 #include <stdexcept>
 #include <span>
+#include <thread>
 
 #include "vtx_deserializer_service.h"
 #include "vtx/common/vtx_diagnostics.h"
@@ -40,6 +41,11 @@ namespace VTX {
     struct ReplayReaderEvents {
         std::function<void(int32_t)> OnChunkLoadStarted;
         std::function<void(int32_t)> OnChunkLoadFinished;
+        // Fired when a load that already emitted OnChunkLoadStarted ends WITHOUT the
+        // chunk becoming resident (cancelled by a window shift, or the worker failed).
+        // Consumers must clear the chunk from their "loading" set on this signal;
+        // otherwise the started/finished pair never balances and the loading set leaks.
+        std::function<void(int32_t)> OnChunkLoadCancelled;
         std::function<void(int32_t)> OnChunkEvicted;
         std::function<void()> OnReady;
         std::function<void(const VtxError&)> OnReadyFailed;
@@ -86,11 +92,23 @@ namespace VTX {
                     if (kv.second.future.valid())
                         tasks.push_back(kv.second.future);
                 }
+                // Cancelled-load workers also run against `this`; wait on them too.
+                for (auto& f : cancelled_load_futures_) {
+                    if (f.valid())
+                        tasks.push_back(f);
+                }
             }
 
+            // Wait ONLY for load workers -- they touch `this`, so they must finish before
+            // the reader dies. These are stop-requested and unwind quickly.
             for (auto& task : tasks) {
                 task.wait();
             }
+
+            // The resident cache is heavy to free (hundreds of ms to seconds for real
+            // captures) and holds only self-contained data. Freeing it inline here is what
+            // made closing the app hang; hand it to a detached thread and return at once.
+            FreeInBackground(std::move(chunk_cache_));
         }
 
         void SetEvents(const ReplayReaderEvents& events) {
@@ -268,6 +286,30 @@ namespace VTX {
             return nullptr;
         }
 
+        // Side-effect-free read: returns the frame ONLY if its chunk is already
+        // resident, WITHOUT moving the cache window or cancelling in-flight loads.
+        // Use this for incidental reads (e.g. showing a stale frame while another
+        // frame streams) so they don't fight the window-driving GetFramePtr call.
+        const VTX::Frame* GetResidentFramePtr(int32_t frame_index) {
+            auto it = std::lower_bound(chunk_index_table_.begin(), chunk_index_table_.end(), frame_index,
+                                       [](const ChunkIndexEntry& e, int32_t val) { return e.end_frame < val; });
+
+            if (it == chunk_index_table_.end() || frame_index < it->start_frame)
+                return nullptr;
+
+            int32_t target_chunk = it->chunk_index;
+            int32_t relative_idx = frame_index - it->start_frame;
+
+            std::lock_guard<std::mutex> lock(cache_mutex_);
+            if (chunk_cache_.contains(target_chunk)) {
+                const auto& chunk = chunk_cache_[target_chunk];
+                if (relative_idx >= 0 && relative_idx < chunk.native_frames.size()) {
+                    return &chunk.native_frames[relative_idx];
+                }
+            }
+            return nullptr;
+        }
+
         const VTX::Frame* GetFramePtrSync(int32_t frame_index) {
             auto it = std::lower_bound(chunk_index_table_.begin(), chunk_index_table_.end(), frame_index,
                                        [](const ChunkIndexEntry& e, int32_t val) { return e.end_frame < val; });
@@ -438,9 +480,28 @@ namespace VTX {
             SerializerPolicy::PopulateGameTimes(footer_, game_times_);
         }
 
-        void UpdateCacheWindow(int32_t current_idx) {
-            std::vector<PendingLoad> orphans;
+        // Destroys `doomed` on a detached background thread. Chunk data is self-contained
+        // (owns its blob/frames, no pointers back into the reader), so it is safe to free
+        // after the reader itself is gone -- which is exactly what makes teardown fast: we
+        // hand the resident cache off and return instead of freeing it inline. We do NOT
+        // track or join these threads: at process exit the OS reclaims the memory whether
+        // or not the free finished, and mid-session they simply run to completion.
+        template <typename T>
+        static void FreeInBackground(T&& doomed) {
+            if (doomed.empty()) {
+                return;
+            }
+            try {
+                std::thread([data = std::forward<T>(doomed)]() mutable { data.clear(); }).detach();
+            } catch (...) {
+                // Thread creation failed (called from a destructor, so we must not throw).
+                // The data was moved into the lambda temporary, which freed it inline as it
+                // unwound; clear() here is a harmless no-op on the moved-from container.
+                doomed.clear();
+            }
+        }
 
+        void UpdateCacheWindow(int32_t current_idx) {
             std::lock_guard<std::mutex> lock(cache_mutex_);
 
             bool do_lateral_prefetch = true;
@@ -464,9 +525,67 @@ namespace VTX {
                 }
             }
 
+            // Reap finished cancelled-load futures. A std::async future blocks in its
+            // destructor until the task ends, so we only destroy these once ready --
+            // destroying a still-running one here (on the UI thread) is exactly the stall
+            // we are avoiding. wait_for(0) never blocks.
+            for (auto it = cancelled_load_futures_.begin(); it != cancelled_load_futures_.end();) {
+                if (it->wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+                    it = cancelled_load_futures_.erase(it);
+                } else {
+                    ++it;
+                }
+            }
+
             int32_t start = std::max(0, current_idx - static_cast<int32_t>(cache_backward_));
             int32_t end =
                 std::min(static_cast<int32_t>(chunk_index_table_.size()) - 1, current_idx + (int32_t)cache_forward_);
+
+            const auto evts = GetEventsSnapshot();
+
+            const size_t max_concurrent_loads = 3;
+
+            // `priority` loads (the chunk actually being viewed) bypass the concurrency
+            // cap: they must never be starved by in-flight prefetches. Lateral prefetches
+            // stay capped so a jump does not spawn an unbounded fan-out.
+            auto trigger = [&](int32_t i, bool priority) {
+                if (chunk_cache_.contains(i))
+                    return;
+
+                const bool stale = pending_loads_.contains(i) && pending_loads_[i].stop.get_token().stop_requested();
+
+                if (pending_loads_.contains(i) && !stale)
+                    return;
+
+
+                if (!priority && !stale && pending_loads_.size() >= max_concurrent_loads)
+                    return;
+
+                if (evts.OnChunkLoadStarted)
+                    evts.OnChunkLoadStarted(i);
+
+                if (stale) {
+                    // The old worker is already stop-requested; park its future (reaped
+                    // lazily above) instead of letting it destruct here and block the UI
+                    // thread until the worker unwinds.
+                    cancelled_load_futures_.push_back(std::move(pending_loads_[i].future));
+                }
+
+                PendingLoad pl;
+                auto token = pl.stop.get_token();
+                pl.future =
+                    std::async(std::launch::async, [this, i, token]() { this->AsyncLoadTask(i, token); }).share();
+                pending_loads_[i] = std::move(pl); // overwrites moved-from entry if stale
+            };
+
+            // The viewed chunk must ALWAYS be resident or in-flight, independent of the
+            // range-equality short-circuit below. When a jump lands outside the cached
+            // range while the prefetch slots are saturated by not-yet-reaped cancelled
+            // loads, the concurrency cap skips this chunk; committing current_range_ and
+            // returning on the next (unchanged-range) call would then wedge the reader on
+            // "loading" forever. Triggering it here, uncapped and before that guard, keeps
+            // the async view path self-healing.
+            trigger(current_idx, /*priority=*/true);
 
             if (start == current_range_start_ && end == current_range_end_)
                 return;
@@ -479,53 +598,31 @@ namespace VTX {
                 }
             }
 
-
-            const auto evts = GetEventsSnapshot();
-
+            // Evict out-of-range chunks. Freeing a chunk is EXPENSIVE -- it destroys up
+            // to ~1000 frames x hundreds of entities, each with nested heap containers,
+            // which measured in the hundreds of ms to >1s for real captures. Doing that
+            // on the caller (UI) thread is a visible freeze on every cross-range jump.
+            // So we only unlink here (cheap map-node removal) and hand the owned data to
+            // a background task to destruct off-thread.
+            std::vector<CachedChunk> evicted;
             for (auto it = chunk_cache_.begin(); it != chunk_cache_.end();) {
                 if (it->first < start || it->first > end) {
                     if (evts.OnChunkEvicted)
                         evts.OnChunkEvicted(it->first);
+                    evicted.push_back(std::move(it->second));
                     it = chunk_cache_.erase(it);
                 } else {
                     ++it;
                 }
             }
+            // Free the evicted chunks off-thread so the UI thread pays only the cheap
+            // unlink above, never the (hundreds-of-ms) destructor cost.
+            FreeInBackground(std::move(evicted));
 
-            const size_t max_concurrent_loads = 3;
-
-            auto trigger = [&](int32_t i) {
-                if (chunk_cache_.contains(i))
-                    return;
-
-                const bool stale = pending_loads_.contains(i) && pending_loads_[i].stop.get_token().stop_requested();
-
-                if (pending_loads_.contains(i) && !stale)
-                    return;
-
-
-                if (!stale && pending_loads_.size() >= max_concurrent_loads)
-                    return;
-
-                if (evts.OnChunkLoadStarted)
-                    evts.OnChunkLoadStarted(i);
-
-                if (stale) {
-                    orphans.push_back(std::move(pending_loads_[i]));
-                }
-
-                PendingLoad pl;
-                auto token = pl.stop.get_token();
-                pl.future =
-                    std::async(std::launch::async, [this, i, token]() { this->AsyncLoadTask(i, token); }).share();
-                pending_loads_[i] = std::move(pl); // overwrites moved-from entry if stale
-            };
-
-            trigger(current_idx);
             if (do_lateral_prefetch) {
                 for (int32_t i = start; i <= end; ++i) {
                     if (i != current_idx)
-                        trigger(i);
+                        trigger(i, /*priority=*/false);
                 }
             }
         }
@@ -561,17 +658,27 @@ namespace VTX {
             }
 
             const bool load_succeeded = thread_survived && !data.native_frames.empty();
+            bool became_resident = false;
             {
                 std::lock_guard<std::mutex> lock(cache_mutex_);
-                if (!stop_token.stop_requested()) {
+                if (load_succeeded && !stop_token.stop_requested()) {
                     chunk_cache_[idx] = std::move(data);
+                    became_resident = true;
                 }
             }
 
-            if (thread_survived) {
-                const auto evts = GetEventsSnapshot();
+            // OnChunkLoadFinished means "now resident in RAM". Emit it ONLY when the chunk
+            // actually landed in the cache. A cancelled or failed load that still fired
+            // OnChunkLoadStarted must emit OnChunkLoadCancelled instead -- otherwise the
+            // chunk is marked loaded but is absent from chunk_cache_, so eviction never
+            // fires OnChunkEvicted for it and the "loaded" set grows without bound.
+            const auto evts = GetEventsSnapshot();
+            if (became_resident) {
                 if (evts.OnChunkLoadFinished)
                     evts.OnChunkLoadFinished(idx);
+            } else {
+                if (evts.OnChunkLoadCancelled)
+                    evts.OnChunkLoadCancelled(idx);
             }
 
             if (idx == 0 && !stop_token.stop_requested()) {
@@ -710,6 +817,11 @@ namespace VTX {
 
         std::map<int32_t, CachedChunk> chunk_cache_;
         std::map<int32_t, PendingLoad> pending_loads_;
+        // Cancelled-and-respawned load futures. These workers run AGAINST `this` (they read
+        // filepath_/chunk_index_table_ and write chunk_cache_), so they must be waited on
+        // at destruction -- but never destroyed on the caller (UI) thread mid-run, since a
+        // std::async future blocks in its destructor. Reaped lazily via wait_for(0).
+        std::vector<std::shared_future<void>> cancelled_load_futures_;
 
         mutable std::mutex cache_mutex_;
         ReplayReaderEvents events_;

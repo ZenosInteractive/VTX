@@ -563,7 +563,10 @@ namespace VtxServices {
             result.is_loading = true;
             result.status_message = "Scrubbing to Frame " + std::to_string(context.current_frame) + "...";
             if (context.last_drawn_frame_index != -1) {
-                result.frame_to_draw = reader.GetFrame(context.last_drawn_frame_index);
+                // Stale-frame read must be side-effect-free: a plain GetFrame here would
+                // move the cache window to the stale chunk and cancel the load of the
+                // frame we're actually seeking to (window ping-pong -> never resident).
+                result.frame_to_draw = reader.GetResidentFrame(context.last_drawn_frame_index);
                 if (result.frame_to_draw) {
                     result.showing_stale_frame = true;
                     result.stale_frame_index = context.last_drawn_frame_index;
@@ -577,7 +580,9 @@ namespace VtxServices {
             result.is_loading = true;
             result.status_message = "Loading chunk data for frame " + std::to_string(context.current_frame) + "...";
             if (context.last_drawn_frame_index != -1) {
-                result.frame_to_draw = reader.GetFrame(context.last_drawn_frame_index);
+                // Peek only: see the scrubbing branch above. GetFrame(current_frame) is
+                // the sole window-driving read; the stale fallback must not move it.
+                result.frame_to_draw = reader.GetResidentFrame(context.last_drawn_frame_index);
                 if (result.frame_to_draw) {
                     result.showing_stale_frame = true;
                     result.stale_frame_index = context.last_drawn_frame_index;

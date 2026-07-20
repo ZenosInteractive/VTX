@@ -41,6 +41,12 @@ int32_t total = reader->GetTotalFrames();
 // Synchronous read (blocks until chunk is loaded)
 const VTX::Frame* frame = reader->GetFrameSync(42);
 
+// Side-effect-free peek: returns the frame ONLY if its chunk is already
+// resident. Does NOT move the cache window, trigger loads, or cancel
+// in-flight ones — use for incidental reads (e.g. drawing a stale frame
+// while another frame streams in). GetFrame is the window-driving read.
+const VTX::Frame* resident = reader->GetResidentFrame(42);  // nullptr if not resident
+
 // Copy-based read
 VTX::Frame frame_copy;
 bool ok = reader->GetFrame(42, frame_copy);
@@ -108,6 +114,8 @@ VTX::ReaderChunkSnapshot snapshot = ctx.chunk_state->GetSnapshot();
 // snapshot.loaded_chunks  — chunk indices currently in RAM
 // snapshot.loading_chunks — chunk indices being loaded asynchronously
 ```
+
+Custom consumers registering their own `ReplayReaderEvents` should handle all four chunk signals: `OnChunkLoadStarted`, then exactly one of `OnChunkLoadFinished` (chunk became resident) or `OnChunkLoadCancelled` (load was cancelled by a window shift, or failed — the chunk is NOT resident), and later `OnChunkEvicted` for resident chunks leaving the cache. Treating `Started` as "will finish" leaks the loading set: cancelled loads never emit `Finished`.
 
 ### Cache Window Control
 
