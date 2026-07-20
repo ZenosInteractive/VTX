@@ -29,6 +29,16 @@ namespace VTX {
         VTX_DEBUG("Chunk {} loaded into RAM.", chunk_idx);
     }
 
+    void ReaderChunkState::OnChunkLoadCancelled(int32_t chunk_idx) {
+        std::lock_guard<std::mutex> lock(state_mutex_);
+        auto it = std::remove(loading_chunks_.begin(), loading_chunks_.end(), chunk_idx);
+        if (it != loading_chunks_.end()) {
+            loading_chunks_.erase(it, loading_chunks_.end());
+        }
+        // Deliberately NOT added to loaded_chunks_: the load never became resident.
+        VTX_DEBUG("Chunk {} load cancelled (not resident).", chunk_idx);
+    }
+
     void ReaderChunkState::OnChunkEvicted(int32_t chunk_idx) {
         std::lock_guard<std::mutex> lock(state_mutex_);
         auto it = std::remove(loaded_chunks_.begin(), loaded_chunks_.end(), chunk_idx);
@@ -85,6 +95,10 @@ namespace VTX {
         }
 
         const VTX::Frame* GetFrame(int32_t frame_index) override { return InternalReader.GetFramePtr(frame_index); }
+
+        const VTX::Frame* GetResidentFrame(int32_t frame_index) override {
+            return InternalReader.GetResidentFramePtr(frame_index);
+        }
 
         const VTX::Frame* GetFrameSync(int frame_index) override { return InternalReader.GetFramePtrSync(frame_index); }
 
@@ -160,6 +174,10 @@ namespace VTX {
         }
 
         const VTX::Frame* GetFrame(int32_t frame_index) override { return InternalReader.GetFramePtr(frame_index); }
+
+        const VTX::Frame* GetResidentFrame(int32_t frame_index) override {
+            return InternalReader.GetResidentFramePtr(frame_index);
+        }
 
         const VTX::Frame* GetFrameSync(int frame_index) override { return InternalReader.GetFramePtrSync(frame_index); }
 
@@ -257,6 +275,9 @@ namespace VTX {
             };
             events.OnChunkLoadFinished = [cs](int32_t chunk_idx) {
                 cs->OnChunkLoadFinished(chunk_idx);
+            };
+            events.OnChunkLoadCancelled = [cs](int32_t chunk_idx) {
+                cs->OnChunkLoadCancelled(chunk_idx);
             };
             events.OnChunkEvicted = [cs](int32_t chunk_idx) {
                 cs->OnChunkEvicted(chunk_idx);

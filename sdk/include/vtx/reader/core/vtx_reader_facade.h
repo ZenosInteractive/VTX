@@ -22,6 +22,7 @@ namespace VTX {
     public:
         void OnChunkLoadStarted(int32_t chunk_idx);
         void OnChunkLoadFinished(int32_t chunk_idx);
+        void OnChunkLoadCancelled(int32_t chunk_idx);
         void OnChunkEvicted(int32_t chunk_idx);
 
         ReaderChunkSnapshot GetSnapshot() const;
@@ -41,6 +42,7 @@ namespace VTX {
         virtual int32_t GetTotalFrames() const = 0;
         virtual bool GetFrame(int32_t frame_index, VTX::Frame& out_frame) = 0;
         virtual const VTX::Frame* GetFrame(int32_t frame_index) = 0;
+        virtual const VTX::Frame* GetResidentFrame(int32_t frame_index) = 0;
         virtual const VTX::Frame* GetFrameSync(int frame_index) = 0;
         virtual void GetFrameRange(int32_t start_frame, int32_t range, std::vector<VTX::Frame>& out_frames) = 0;
         virtual std::vector<VTX::Frame> GetFrameContext(int32_t center_frame, int32_t back_range,
