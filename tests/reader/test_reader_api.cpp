@@ -204,8 +204,14 @@ TEST(ReaderApiFlatBuffers, CacheWindowZeroEvictsPreviousChunks) {
     auto ctx = VTX::OpenReplayFile(path);
     ASSERT_TRUE(ctx) << ctx.error;
 
+    // OpenReplayFile eagerly warms chunk 0 on a background thread; wait for it so
+    // the cache assertions below are deterministic. (Asserting a cold cache here
+    // raced that warm-up -- it only passed when the assert beat the loader thread,
+    // which slow/instrumented runners lose.)
+    ASSERT_TRUE(ctx.reader->WaitUntilReady());
+    EXPECT_EQ(ctx.reader->GetChunkFrameCountSafe(0), 1); // warmed by open
+
     ctx.reader->SetCacheWindow(0, 0);
-    EXPECT_EQ(ctx.reader->GetChunkFrameCountSafe(0), 0);
 
     ASSERT_NE(ctx.reader->GetFrameSync(0), nullptr);
     EXPECT_EQ(ctx.reader->GetChunkFrameCountSafe(0), 1);
