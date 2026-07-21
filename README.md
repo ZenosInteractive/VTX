@@ -15,6 +15,7 @@ VTX is an open binary format for real-time per-frame state data, plus a C++20 SD
 - **Both Protobuf and FlatBuffers.** SDK supports both backends out of the box. The file announces which in its magic bytes; readers auto-detect.
 - **Live streaming transports.** Ingest frames live from an OS pipe (Windows named pipe, POSIX FIFO, stdin) or a WebSocket connection, and emit the `.vtx` byte stream over a TCP socket instead of writing to disk. Same writer API behind each transport -- file or network, sink-agnostic.
 - **Crash-safe recording.** A write-ahead `.recovery` sidecar (checksummed, append-only, fsync'd per operation by default) makes a recording that dies before `Stop()` recoverable up to the last recorded frame -- exact per-frame timestamps included. `RepairReplayFile()` reconstructs the footer; a hours-long session that crashes is no longer lost.
+- **Non-blocking recording.** Opt into `async_io` and chunk/journal disk I/O -- serialization, zstd, `fsync`, the chunk-boundary flush -- moves to a dedicated worker thread, so your capture loop never waits on the disk. Accept/reject stays synchronous and post-processors keep running on your thread; a bounded queue applies backpressure instead of dropping frames. The bytes on disk are identical to a synchronous recording, and crash recovery is unchanged.
 - **Validation & structured diagnostics.** Validate a schema, entity, frame, or whole replay independently; strict recording rejects frames observably (bad game-time, unresolved entity type). Every failure is a structured `VtxError` -- code, severity, location, expected-vs-provided type -- so automation acts on data, not parsed log lines.
 - **Engine-independent C++20.** No engine dependency. Language bindings wherever Protobuf or FlatBuffers exist (Python, Go, Rust, Java, JS).
 - **Open.** Apache-2.0. Spec, reference reader, and tooling all in the repo.
@@ -55,6 +56,10 @@ while (simulation_is_running) {
 writer->Flush();
 writer->Stop();
 ```
+
+#### Optional: keep the disk off your capture loop
+
+Set `config.async_io = true` and the chunk/journal writes move to a worker thread -- `RecordFrame` no longer pays serialization, compression, `fsync`, or the chunk-boundary flush. The API is otherwise the same, with two things to know: `Flush()` stops being a durability barrier (it queues the write; the new `writer->Drain()` is the barrier), and if the disk cannot keep up the caller blocks on a bounded queue rather than losing frames. Full contract in [`docs/SDK_API.md`](docs/SDK_API.md).
 
 #### Optional: one call with `WriteReplay`
 

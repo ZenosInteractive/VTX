@@ -8,6 +8,7 @@
 #include "vtx/common/vtx_logger.h"
 #include "vtx/writer/policies/formatters/flatbuffers_vtx_policy.h"
 #include "vtx/writer/policies/formatters/protobuff_vtx_policy.h"
+#include "vtx/writer/policies/sinks/async_sink_adapter.h"
 #include "vtx/writer/policies/sinks/file_sink.h"
 #include "vtx/writer/policies/sinks/network_sink.h"
 
@@ -108,6 +109,17 @@ namespace VTX {
 
         VTX::SchemaRegistry& GetSchema() override { return writer_.GetRegistry(); }
 
+        VtxError Drain() override {
+            if (stopped_) {
+                return VtxError {};
+            }
+            return writer_.Drain();
+        }
+
+        VtxError GetLastError() const override { return writer_.GetLastError(); }
+
+        size_t GetQueueDepth() const override { return writer_.GetQueueDepth(); }
+
         void SetPostProcessor(std::shared_ptr<IFramePostProcessor> processor) override {
             writer_.SetPostProcessor(std::move(processor));
         }
@@ -119,6 +131,53 @@ namespace VTX {
         bool stopped_ = false;
     };
 
+    namespace {
+        // Builds a file-writer facade for serialization policy P, selecting the synchronous
+        // ChunkedFileSink or its AsyncSinkAdapter<> decorator based on config.async_io. Both
+        // share the same inner sink config; only the durability barrier / queue differ.
+        template <typename P>
+        std::unique_ptr<IVtxWriterFacade> MakeFileWriterFacade(const WriterFacadeConfig& config) {
+            using InnerSink = ChunkedFileSink<P>;
+
+            typename InnerSink::Config sink_cfg;
+            sink_cfg.filename = config.output_filepath;
+            sink_cfg.header_config.replay_name = config.replay_name;
+            sink_cfg.header_config.replay_uuid = config.replay_uuid;
+            sink_cfg.b_use_compression = config.use_compression;
+            sink_cfg.durable_writes = config.durable_writes;
+            sink_cfg.enable_recovery_journal = config.enable_recovery_journal;
+            sink_cfg.perf_observer = config.perf_observer;
+
+            const auto fill_common = [&](auto& internal_cfg) {
+                internal_cfg.default_fps = config.default_fps;
+                internal_cfg.is_increasing = config.is_increasing;
+                internal_cfg.chunker_config.max_frames = config.chunk_max_frames;
+                internal_cfg.chunker_config.max_bytes = config.chunk_max_bytes;
+                internal_cfg.schema_json_path = config.schema_json_path;
+                internal_cfg.schema_json_content = config.schema_json_content;
+                internal_cfg.schema_registry = config.schema_registry;
+                internal_cfg.retain_finalized_snapshot = config.retain_finalized_snapshot;
+            };
+
+            if (config.async_io) {
+                using SinkType = AsyncSinkAdapter<InnerSink>;
+                typename ReplayWriter<SinkType>::Config internal_cfg;
+                fill_common(internal_cfg);
+                internal_cfg.sink_config.inner = std::move(sink_cfg);
+                internal_cfg.sink_config.async_max_queue_frames =
+                    config.async_max_queue_frames != 0
+                        ? config.async_max_queue_frames
+                        : static_cast<size_t>(2) * static_cast<size_t>(config.chunk_max_frames);
+                return std::make_unique<WriterFacadeImpl<SinkType>>(std::move(internal_cfg));
+            }
+
+            typename ReplayWriter<InnerSink>::Config internal_cfg;
+            fill_common(internal_cfg);
+            internal_cfg.sink_config = std::move(sink_cfg);
+            return std::make_unique<WriterFacadeImpl<InnerSink>>(std::move(internal_cfg));
+        }
+    } // namespace
+
 
     std::unique_ptr<IVtxWriterFacade> CreateFlatBuffersWriterFacade(const WriterFacadeConfig& config) {
         if (!WriterSchemaIsAcceptable(config.schema_json_path, config.schema_json_content, config.schema_registry)) {
@@ -127,25 +186,7 @@ namespace VTX {
         if (config.create_output_dirs) {
             EnsureOutputDir(config.output_filepath);
         }
-        using SinkType = ChunkedFileSink<VTX::FlatBuffersVtxPolicy>;
-
-        ReplayWriter<SinkType>::Config internal_cfg;
-        internal_cfg.default_fps = config.default_fps;
-        internal_cfg.is_increasing = config.is_increasing;
-        internal_cfg.chunker_config.max_frames = config.chunk_max_frames;
-        internal_cfg.chunker_config.max_bytes = config.chunk_max_bytes;
-
-        internal_cfg.sink_config.filename = config.output_filepath;
-        internal_cfg.schema_json_path = config.schema_json_path;
-        internal_cfg.schema_json_content = config.schema_json_content;
-        internal_cfg.schema_registry = config.schema_registry;
-        internal_cfg.retain_finalized_snapshot = config.retain_finalized_snapshot;
-        internal_cfg.sink_config.header_config.replay_name = config.replay_name;
-        internal_cfg.sink_config.header_config.replay_uuid = config.replay_uuid;
-        internal_cfg.sink_config.b_use_compression = config.use_compression;
-        internal_cfg.sink_config.perf_observer = config.perf_observer;
-
-        return std::make_unique<WriterFacadeImpl<SinkType>>(internal_cfg);
+        return MakeFileWriterFacade<VTX::FlatBuffersVtxPolicy>(config);
     }
 
     std::unique_ptr<IVtxWriterFacade> CreateProtobufWriterFacade(const WriterFacadeConfig& config) {
@@ -155,25 +196,7 @@ namespace VTX {
         if (config.create_output_dirs) {
             EnsureOutputDir(config.output_filepath);
         }
-        using SinkType = VTX::ChunkedFileSink<VTX::ProtobufVtxPolicy>;
-
-        ReplayWriter<SinkType>::Config internal_cfg;
-        internal_cfg.sink_config.header_config.replay_name = config.replay_name;
-        internal_cfg.sink_config.header_config.replay_uuid = config.replay_uuid;
-        internal_cfg.default_fps = config.default_fps;
-        internal_cfg.is_increasing = config.is_increasing;
-        internal_cfg.chunker_config.max_frames = config.chunk_max_frames;
-        internal_cfg.chunker_config.max_bytes = config.chunk_max_bytes;
-
-        internal_cfg.sink_config.filename = config.output_filepath;
-        internal_cfg.schema_json_path = config.schema_json_path;
-        internal_cfg.schema_json_content = config.schema_json_content;
-        internal_cfg.schema_registry = config.schema_registry;
-        internal_cfg.retain_finalized_snapshot = config.retain_finalized_snapshot;
-
-        internal_cfg.sink_config.b_use_compression = config.use_compression;
-        internal_cfg.sink_config.perf_observer = config.perf_observer;
-        return std::make_unique<WriterFacadeImpl<SinkType>>(internal_cfg);
+        return MakeFileWriterFacade<VTX::ProtobufVtxPolicy>(config);
     }
 
     std::unique_ptr<IVtxWriterFacade> CreateFlatBuffersNetworkWriterFacade(const NetworkWriterFacadeConfig& config) {

@@ -263,6 +263,8 @@ writer->Stop();   // Write footer and close file
 
 If the facade is destroyed without an explicit `Stop()`, its destructor finalizes the replay as a best-effort fallback, so a dropped writer still yields a readable `.vtx`.
 
+With `async_io = true` these two calls keep working, but `Flush()` is no longer a durability barrier -- it closes the current chunk and *enqueues* the write. `Stop()` still blocks until everything is durable, and `Drain()` is the mid-recording barrier. See [Async (non-blocking) recording](#async-non-blocking-recording).
+
 ### Crash recovery
 
 A recording that dies before `Stop()` -- process crash or power loss, mid-chunk or mid-frame -- is **recoverable up to the last recorded frame**. While recording, the file sink maintains a write-ahead sidecar **`<file>.vtx.recovery`**: every recorded frame is journaled before it joins the pending batch, and every flushed chunk is committed to the journal *after* its bytes are durable in the `.vtx` (data-before-journal ordering, append-only log, per-record checksums). On a clean `Stop()` the sidecar is deleted -- its presence at open time is the signal of an unclean shutdown.
@@ -290,13 +292,44 @@ auto ctx = VTX::OpenReplayFile(path);          // a repaired file opens like any
 
 One property of salvaged files to know about: the in-flight frames that only existed in the journal are re-appended as **one-frame chunks**, so a recovery with a large pending batch reads sequentially ~3x slower than a cleanly chunked file (measured in `BM_ReaderRecoveredTail`). For hot-path use, transcode the salvaged file with the public API -- open it, drain every frame with its footer times into a fresh writer, `Stop()`. `created_utc` round-trips exactly; `game_time` re-enters through the float-seconds register and can lose 1 tick (100 ns) per frame.
 
-Durability knobs on the file sink (`ChunkedFileSink::Config`; facade users currently get the defaults):
+Durability knobs (on `WriterFacadeConfig`, and on `ChunkedFileSink::Config` for direct sink users):
 
 | Knob | Default | Meaning |
 |------|---------|---------|
 | `durable_writes` | `true` | fsync every chunk and journal record to physical media -- survives **power loss**. Set `false` to only flush to the OS: cheaper, still survives a **process crash**. |
 | `enable_recovery_journal` | `true` | Maintain the `.recovery` sidecar. Opting out removes any stale sidecar at session start; a crash then leaves an unrecoverable (footerless) file. |
-| `journal_compact_threshold_bytes` | `0` (64 MB) | How many superseded journal bytes accrue before the sidecar is compacted (rewritten via an atomic rename). |
+| `journal_compact_threshold_bytes` | `0` (64 MB) | How many superseded journal bytes accrue before the sidecar is compacted (rewritten via an atomic rename). Sink config only. |
+
+### Async (non-blocking) recording
+
+By default recording is synchronous: `RecordFrame` runs the whole pipeline on the caller's thread, so the frame that crosses a chunk boundary pays the full serialize + zstd + write + `fsync` bill inline, and every journaled frame pays an `fsync`. Set **`async_io = true`** to move all chunk/journal disk I/O to a dedicated worker thread -- accepting a frame then never waits on disk.
+
+```cpp
+VTX::WriterFacadeConfig config;
+config.output_filepath = "output.vtx";
+config.schema_json_path = "schema.json";
+config.async_io = true;                 // opt in: I/O runs on a worker thread
+config.async_max_queue_frames = 0;      // 0 -> 2 * chunk_max_frames
+
+auto writer = VTX::CreateFlatBuffersWriterFacade(config);
+// ... writer->RecordFrame(...) never blocks on serialization/fsync/chunk flush ...
+writer->Drain();   // durability barrier: block until every accepted frame is on disk
+writer->Stop();    // drains, writes the footer, joins the worker
+```
+
+Validation and rejection stay synchronous -- `TryRecordFrame` still accepts or rejects on the caller's thread exactly as before, and a registered post-processor still runs on the caller's thread. Only the chunk/journal I/O is deferred. Ordering and crash-recovery are unchanged: one FIFO drained by one worker reproduces the exact synchronous on-disk sequence, so a repaired async recording is identical to a repaired synchronous one.
+
+What changes:
+
+- **Durability lag.** A frame is crash-recoverable only once its queued work is durable. A hard kill loses the not-yet-durable suffix (bounded by the queue); recovery still yields a clean contiguous prefix. **`Drain()`** and `Stop()` are the zero-lag synchronization points.
+- **`Flush()` is no longer a durability barrier under async** -- it closes the current chunk and *enqueues* its write, but returns before the bytes are on disk. Use **`Drain()`** when you need durability (e.g. before a checkpoint).
+- **Backpressure.** `async_max_queue_frames` bounds the queue by item count. If the disk cannot keep up, the caller *blocks* on a full queue (degrading to synchronous behavior) rather than dropping frames or growing memory without bound. `GetQueueDepth()` reports the current depth.
+- **I/O failure.** If the worker hits a durable-write failure it aborts the recording: the queue is discarded, the file + journal handles are released (the partial `.vtx` becomes repair-ready immediately), and the next `TryRecordFrame` returns **`VtxErrorCode::SinkFailed`**. `GetLastError()` returns the latched error; `PipelineReport::sink_failed` counts these separately from validation rejections.
+
+| Knob | Default | Meaning |
+|------|---------|---------|
+| `async_io` | `false` | Move chunk/journal I/O to a worker thread. |
+| `async_max_queue_frames` | `0` (-> `2 * chunk_max_frames`) | Backpressure bound, in queued items. A full queue blocks the caller. |
 
 ### One call: `WriteReplay`
 

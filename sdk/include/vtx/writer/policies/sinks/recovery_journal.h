@@ -122,7 +122,16 @@ namespace VTX {
         void SetCompactThresholdBytes(uint64_t bytes) { compact_threshold_ = bytes; }
 
         // Append an un-flushed frame (F record) at the tail. Call as each frame is recorded.
-        void AppendFrame(int32_t index, int64_t game_time, int64_t created_utc, const std::string& chunk_payload) {
+        //
+        // @param sync  When true (default, synchronous sink) the record is made durable
+        //              immediately. When false the record is only appended to the buffer;
+        //              the caller must issue a later SyncNow() to make this and any other
+        //              un-synced F records durable together (group commit, used by the
+        //              async sink). Batching only defers WHEN the append becomes durable,
+        //              never the append ORDER: records still hit disk in write order, so a
+        //              crash still lands on a clean contiguous prefix.
+        void AppendFrame(int32_t index, int64_t game_time, int64_t created_utc, const std::string& chunk_payload,
+                         bool sync = true) {
             // A frame whose record would exceed the read-side sanity bound could not be
             // parsed back on repair; skip journaling it rather than write an unreadable
             // record (the frame is still captured once its chunk is flushed to the .vtx).
@@ -130,8 +139,13 @@ namespace VTX {
                 return;
             const std::vector<uint8_t> payload = BuildFramePayload(index, game_time, created_utc, chunk_payload);
             pending_f_bytes_ += WriteRecordTo(file_, 'F', payload);
-            SyncOrFlush();
+            if (sync)
+                SyncOrFlush();
         }
+
+        // Make every buffered-but-un-synced record durable. Pairs with AppendFrame(sync=false)
+        // to implement group commit: N appends, then ONE fsync for the whole batch.
+        void SyncNow() { SyncOrFlush(); }
 
         // Commit a flushed chunk: durably append the chunk (C) and its frames' times (T).
         // Call AFTER the chunk is durable in the .vtx. Append-only -- the now-redundant F

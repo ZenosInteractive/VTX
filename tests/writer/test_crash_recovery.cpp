@@ -45,6 +45,7 @@
 #include "vtx/writer/core/writer.h"
 #include "vtx/writer/policies/formatters/flatbuffers_vtx_policy.h"
 #include "vtx/writer/policies/formatters/protobuff_vtx_policy.h"
+#include "vtx/writer/policies/sinks/async_sink_adapter.h"
 #include "vtx/writer/policies/sinks/file_sink.h"
 #include "vtx/writer/policies/sinks/recovery_journal.h"
 
@@ -698,6 +699,32 @@ namespace {
         return std::make_unique<RawWriterFor<Policy>>(cfg);
     }
 
+    // Same raw writer, but with the async decorator in front of the file sink: chunk and
+    // journal I/O run on a worker thread. Dropping it without Stop() still leaves exactly
+    // what a crash leaves, so every crash-recovery expectation below applies unchanged --
+    // that is the point of these variants.
+    template <typename Policy>
+    using RawAsyncWriterFor = VTX::ReplayWriter<VTX::AsyncSinkAdapter<VTX::ChunkedFileSink<Policy>>>;
+
+    template <typename Policy>
+    std::unique_ptr<RawAsyncWriterFor<Policy>>
+    MakeRawAsyncWriter(const std::string& path, int32_t chunk_max_frames, bool durable = true, bool compression = true,
+                       bool journal = true, uint64_t compact_threshold = 0, size_t queue_cap = 0,
+                       const std::string& schema_name = "test_schema.json") {
+        typename RawAsyncWriterFor<Policy>::Config cfg;
+        cfg.sink_config.inner.filename = path;
+        cfg.sink_config.inner.header_config.replay_name = "CrashRecoveryE2E";
+        cfg.sink_config.inner.durable_writes = durable;
+        cfg.sink_config.inner.b_use_compression = compression;
+        cfg.sink_config.inner.enable_recovery_journal = journal;
+        cfg.sink_config.inner.journal_compact_threshold_bytes = compact_threshold;
+        cfg.sink_config.async_max_queue_frames = queue_cap;
+        cfg.schema_json_path = VtxTest::FixturePath(schema_name);
+        cfg.default_fps = 60.0f;
+        cfg.chunker_config.max_frames = chunk_max_frames;
+        return std::make_unique<RawAsyncWriterFor<Policy>>(cfg);
+    }
+
     // Records 8 frames with explicit game_time + created_utc: a UTC jump at frame 3
     // (timeline gap) and a game-time reversal at frame 5 (game segment). Chunks of 3 ->
     // crash state = 2 committed chunks + 2 in-flight frames.
@@ -721,8 +748,9 @@ namespace {
 
     // Full crash-vs-control comparison through the real writer for one policy.
     template <typename Policy>
-    void RunRealWriterCrashVsControl(const std::string& prefix) {
-        // Control: identical inputs, clean Stop().
+    void RunRealWriterCrashVsControl(const std::string& prefix, bool async_crash = false) {
+        // Control: identical inputs, clean Stop(). Always the SYNCHRONOUS writer, so an async
+        // crash side is held to the exact output a synchronous clean run would have produced.
         const std::string control_path = VtxTest::OutputPath(prefix + "_e2e_control.vtx");
         {
             auto w = MakeRawWriter<Policy>(control_path, 3);
@@ -734,8 +762,16 @@ namespace {
         // Crash: same inputs, writer dropped without Stop().
         const std::string crash_path = VtxTest::OutputPath(prefix + "_e2e_crash.vtx");
         {
-            auto w = MakeRawWriter<Policy>(crash_path, 3);
-            RecordEightFrames(*w);
+            if (async_crash) {
+                // The adapter's destructor drains the queue and closes WITHOUT a footer, so an
+                // in-process drop leaves the same footerless .vtx + journal a crash leaves --
+                // and, having drained, must still account for every recorded frame.
+                auto w = MakeRawAsyncWriter<Policy>(crash_path, 3);
+                RecordEightFrames(*w);
+            } else {
+                auto w = MakeRawWriter<Policy>(crash_path, 3);
+                RecordEightFrames(*w);
+            }
             // dropped here -- no Stop(), no footer
         }
         ASSERT_TRUE(VTX::ReplayNeedsRecovery(crash_path));
@@ -805,6 +841,18 @@ TEST(CrashRecoveryE2E, RealWriterCrashMatchesCleanStopExactly) {
 
 TEST(CrashRecoveryE2E, RealWriterCrashMatchesCleanStopExactly_Protobuf) {
     RunRealWriterCrashVsControl<VTX::ProtobufVtxPolicy>("pb");
+}
+
+// Same contract with async I/O: the recovered output must be indistinguishable from a clean
+// SYNCHRONOUS run -- every frame, every content hash, and every footer time field (per-frame
+// times, duration, timeline gaps, game segments). Nothing about the journal or the repair
+// path may behave differently just because the writes came off a worker thread.
+TEST(CrashRecoveryE2E, AsyncWriterCrashMatchesCleanStopExactly) {
+    RunRealWriterCrashVsControl<VTX::FlatBuffersVtxPolicy>("fb_async", /*async_crash=*/true);
+}
+
+TEST(CrashRecoveryE2E, AsyncWriterCrashMatchesCleanStopExactly_Protobuf) {
+    RunRealWriterCrashVsControl<VTX::ProtobufVtxPolicy>("pb_async", /*async_crash=*/true);
 }
 
 namespace {
@@ -1906,6 +1954,21 @@ TEST(CrashRecoverySweep, CompactedJournalTruncationSweep) {
 // the only honest way to validate the flush-only (durable_writes=false) claim that
 // data pushed to the OS survives a process crash.
 
+namespace {
+
+    // Endless recording loop for the child process; terminated externally by the parent.
+    template <typename Writer>
+    void ChildRecordLoop(Writer& w) {
+        for (int i = 0;; ++i) {
+            auto frame = BuildFrame(i);
+            VTX::GameTime::GameTimeRegister t;
+            t.game_time = float(i) / 60.0f;
+            (void)w.TryRecordFrame(frame, t);
+        }
+    }
+
+} // namespace
+
 // Child mode: an endless writer loop. Skipped unless spawned with the env var set.
 TEST(CrashRecoveryProcess, ChildWriterLoop) {
     const char* path = std::getenv("VTX_CHILD_WRITE_PATH");
@@ -1915,21 +1978,27 @@ TEST(CrashRecoveryProcess, ChildWriterLoop) {
     const bool durable = !durable_env || std::string(durable_env) != "0";
     const char* compact_env = std::getenv("VTX_CHILD_COMPACT_THRESHOLD");
     const uint64_t compact_threshold = compact_env ? std::strtoull(compact_env, nullptr, 10) : 0;
+    const char* async_env = std::getenv("VTX_CHILD_ASYNC");
+    const bool async = async_env && std::string(async_env) == "1";
 
-    auto w = MakeRawWriter<VTX::FlatBuffersVtxPolicy>(path, /*chunk_max_frames=*/10, durable,
-                                                      /*compression=*/true, /*journal=*/true, compact_threshold);
-    for (int i = 0;; ++i) { // terminated externally
-        auto frame = BuildFrame(i);
-        VTX::GameTime::GameTimeRegister t;
-        t.game_time = float(i) / 60.0f;
-        (void)w->TryRecordFrame(frame, t);
+    if (async) {
+        // Chunk/journal I/O on a worker thread. TerminateProcess kills the worker mid-write
+        // exactly like the main thread -- no unwinding, no drain, handles abandoned.
+        auto w =
+            MakeRawAsyncWriter<VTX::FlatBuffersVtxPolicy>(path, /*chunk_max_frames=*/10, durable,
+                                                          /*compression=*/true, /*journal=*/true, compact_threshold);
+        ChildRecordLoop(*w);
+    } else {
+        auto w = MakeRawWriter<VTX::FlatBuffersVtxPolicy>(path, /*chunk_max_frames=*/10, durable,
+                                                          /*compression=*/true, /*journal=*/true, compact_threshold);
+        ChildRecordLoop(*w);
     }
 }
 
 namespace {
 
     void RunKilledProcessTest(bool durable, const char* tag, uint64_t compact_threshold = 0,
-                              uint64_t progress_threshold = 20'000) {
+                              uint64_t progress_threshold = 20'000, bool async = false) {
         const std::string path = VtxTest::OutputPath(std::string("killed_") + tag + ".vtx");
         const std::string journal_path = VTX::RecoveryJournalPath(path);
         std::filesystem::remove(path);
@@ -1939,6 +2008,7 @@ namespace {
         ASSERT_GT(GetModuleFileNameA(nullptr, exe, MAX_PATH), 0u);
         SetEnvironmentVariableA("VTX_CHILD_WRITE_PATH", path.c_str());
         SetEnvironmentVariableA("VTX_CHILD_DURABLE", durable ? "1" : "0");
+        SetEnvironmentVariableA("VTX_CHILD_ASYNC", async ? "1" : "0");
         if (compact_threshold > 0)
             SetEnvironmentVariableA("VTX_CHILD_COMPACT_THRESHOLD", std::to_string(compact_threshold).c_str());
         std::string cmd = std::string("\"") + exe + "\" --gtest_filter=CrashRecoveryProcess.ChildWriterLoop";
@@ -1949,6 +2019,7 @@ namespace {
             CreateProcessA(nullptr, cmd.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi);
         SetEnvironmentVariableA("VTX_CHILD_WRITE_PATH", nullptr);
         SetEnvironmentVariableA("VTX_CHILD_DURABLE", nullptr);
+        SetEnvironmentVariableA("VTX_CHILD_ASYNC", nullptr);
         SetEnvironmentVariableA("VTX_CHILD_COMPACT_THRESHOLD", nullptr);
         ASSERT_TRUE(created);
 
@@ -2037,6 +2108,50 @@ TEST(CrashRecoveryProcess, KilledAtVariedProgressPointsSoak) {
     for (const auto& r : rounds) {
         SCOPED_TRACE(r.tag);
         RunKilledProcessTest(r.durable, r.tag, r.compact_threshold, r.progress_threshold);
+        if (::testing::Test::HasFatalFailure())
+            return;
+    }
+}
+
+// --- The same real-kill matrix, with ASYNC I/O ---------------------------------
+//
+// With async_io the chunk/journal writes happen on a worker thread, so a cold kill lands
+// mid-write on a thread the recording loop never synchronized with. The recovery contract
+// is unchanged: whatever became durable must recover as a CLEAN CONTIGUOUS PREFIX (frames
+// 0..N-1, correct per-frame content, footer times sized to match). Only the durability LAG
+// differs -- the not-yet-drained queue is lost, which is equivalent to crashing earlier.
+
+TEST(CrashRecoveryProcess, KilledMidRecordingDurableAsync) {
+    RunKilledProcessTest(/*durable=*/true, "durable_async", /*compact_threshold=*/0,
+                         /*progress_threshold=*/20'000, /*async=*/true);
+}
+
+TEST(CrashRecoveryProcess, KilledMidRecordingFlushOnlyAsync) {
+    RunKilledProcessTest(/*durable=*/false, "flushonly_async", /*compact_threshold=*/0,
+                         /*progress_threshold=*/20'000, /*async=*/true);
+}
+
+TEST(CrashRecoveryProcess, KilledMidRecordingWhileCompactingAsync) {
+    RunKilledProcessTest(/*durable=*/true, "compacting_async", /*compact_threshold=*/1,
+                         /*progress_threshold=*/20'000, /*async=*/true);
+}
+
+TEST(CrashRecoveryProcess, KilledAtVariedProgressPointsSoakAsync) {
+    struct Round {
+        bool durable;
+        uint64_t compact_threshold;
+        uint64_t progress_threshold;
+        const char* tag;
+    };
+    const Round rounds[] = {
+        {true, 0, 800, "soak_async_early"},
+        {false, 0, 3'000, "soak_async_firstchunk"},
+        {true, 1, 8'000, "soak_async_compact"},
+        {false, 0, 25'000, "soak_async_deep"},
+    };
+    for (const auto& r : rounds) {
+        SCOPED_TRACE(r.tag);
+        RunKilledProcessTest(r.durable, r.tag, r.compact_threshold, r.progress_threshold, /*async=*/true);
         if (::testing::Test::HasFatalFailure())
             return;
     }
