@@ -560,17 +560,19 @@ TEST_P(RoundtripTest, StructArraySubArrayOffsetsRoundtrip) {
         // 3 subarrays; middle one is deliberately empty.
         e.vector_arrays.AppendSubArray({VTX::Vector {1.0, 2.0, 3.0}, VTX::Vector {4.0, 5.0, 6.0}});
         e.vector_arrays.AppendSubArray({});
-        e.vector_arrays.AppendSubArray({VTX::Vector {7.0, 8.0, 9.0}, VTX::Vector {10.0, 11.0, 12.0},
-                                        VTX::Vector {13.0, 14.0, 15.0}});
+        e.vector_arrays.AppendSubArray(
+            {VTX::Vector {7.0, 8.0, 9.0}, VTX::Vector {10.0, 11.0, 12.0}, VTX::Vector {13.0, 14.0, 15.0}});
 
         e.quat_arrays.AppendSubArray({VTX::Quat {0.0f, 0.0f, 0.0f, 1.0f}});
         e.quat_arrays.AppendSubArray({VTX::Quat {1.0f, 0.0f, 0.0f, 0.0f}, VTX::Quat {0.0f, 1.0f, 0.0f, 0.0f}});
         e.quat_arrays.AppendSubArray({});
 
         e.transform_arrays.AppendSubArray({});
-        e.transform_arrays.AppendSubArray({VTX::Transform {{1.0, 2.0, 3.0}, {0.0f, 0.0f, 0.0f, 1.0f}, {1.0, 1.0, 1.0}}});
-        e.transform_arrays.AppendSubArray({VTX::Transform {{4.0, 5.0, 6.0}, {0.0f, 0.0f, 0.0f, 1.0f}, {2.0, 2.0, 2.0}},
-                                           VTX::Transform {{7.0, 8.0, 9.0}, {1.0f, 0.0f, 0.0f, 0.0f}, {3.0, 3.0, 3.0}}});
+        e.transform_arrays.AppendSubArray(
+            {VTX::Transform {{1.0, 2.0, 3.0}, {0.0f, 0.0f, 0.0f, 1.0f}, {1.0, 1.0, 1.0}}});
+        e.transform_arrays.AppendSubArray(
+            {VTX::Transform {{4.0, 5.0, 6.0}, {0.0f, 0.0f, 0.0f, 1.0f}, {2.0, 2.0, 2.0}},
+             VTX::Transform {{7.0, 8.0, 9.0}, {1.0f, 0.0f, 0.0f, 0.0f}, {3.0, 3.0, 3.0}}});
 
         e.range_arrays.AppendSubArray({VTX::FloatRange {0.0f, 100.0f, 0.5f}});
         e.range_arrays.AppendSubArray({VTX::FloatRange {-1.0f, 1.0f, 0.0f}, VTX::FloatRange {10.0f, 20.0f, 0.75f}});

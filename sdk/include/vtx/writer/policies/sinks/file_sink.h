@@ -44,8 +44,7 @@ namespace VTX {
             disk_write_us_.fetch_add(static_cast<uint64_t>(us.count()), std::memory_order_relaxed);
         }
         FileSinkPerformanceStats Snapshot() const {
-            return {serialization_us_.load(std::memory_order_relaxed),
-                    compression_us_.load(std::memory_order_relaxed),
+            return {serialization_us_.load(std::memory_order_relaxed), compression_us_.load(std::memory_order_relaxed),
                     disk_write_us_.load(std::memory_order_relaxed)};
         }
         void Reset() {
@@ -55,9 +54,9 @@ namespace VTX {
         }
 
     private:
-        std::atomic<uint64_t> serialization_us_{0};
-        std::atomic<uint64_t> compression_us_{0};
-        std::atomic<uint64_t> disk_write_us_{0};
+        std::atomic<uint64_t> serialization_us_ {0};
+        std::atomic<uint64_t> compression_us_ {0};
+        std::atomic<uint64_t> disk_write_us_ {0};
     };
 
     template <IVtxWriterPolicy Policy>
