@@ -59,6 +59,7 @@ namespace VTX {
         size_t skipped = 0;
         size_t validation_errors = 0;
         size_t timer_errors = 0;
+        size_t sink_failed = 0; ///< Rejections caused by a latched async-sink I/O failure.
         std::vector<VtxError> errors;
 
         size_t Total() const { return written + rejected + skipped; }
@@ -71,6 +72,11 @@ namespace VTX {
             ++rejected;
             if (result.error.code == VtxErrorCode::GameTimeRejected) {
                 ++timer_errors;
+            } else if (result.error.code == VtxErrorCode::SinkFailed) {
+                // A dead sink is an I/O condition, not a rejected-frame validation problem: keep
+                // it in its own bucket so callers can tell "this frame was malformed" from "the
+                // recording is gone".
+                ++sink_failed;
             } else {
                 ++validation_errors;
             }

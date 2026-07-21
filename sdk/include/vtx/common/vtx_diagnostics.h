@@ -61,6 +61,8 @@ namespace VTX {
 
         ReplayOpenFailed,
         ReplayNotReady,
+
+        SinkFailed, ///< Async sink's I/O worker latched a durable-write failure; recording aborted.
     };
 
     inline std::string_view ToString(VtxErrorCode code) {
@@ -101,6 +103,8 @@ namespace VTX {
             return "ReplayOpenFailed";
         case VtxErrorCode::ReplayNotReady:
             return "ReplayNotReady";
+        case VtxErrorCode::SinkFailed:
+            return "SinkFailed";
         }
         return "Unknown";
     }

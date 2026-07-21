@@ -74,7 +74,7 @@ namespace VTX {
             int8_t compression_level = 10;
             bool durable_writes = true;          ///< fsync each chunk to physical disk (crash/power-loss safe).
             bool enable_recovery_journal = true; ///< maintain a ".recovery" sidecar for crash recovery.
-            uint64_t journal_compact_threshold_bytes = 0; ///< journal compaction trigger; 0 = journal default.
+            uint64_t journal_compact_threshold_bytes = 0;   ///< journal compaction trigger; 0 = journal default.
             IFileSinkPerfObserver* perf_observer = nullptr; ///< optional perf timings; null = no-op.
         };
 
@@ -173,14 +173,39 @@ namespace VTX {
         // Journal a single recorded frame BEFORE it is flushed as part of a chunk, so
         // a crash mid-batch can still recover the in-flight frames (and their times).
         void JournalFrame(const FrameType& frame, int32_t frame_index, int64_t game_time, int64_t created_utc) {
-            if (!journal_.IsOpen())
-                return;
-            std::vector<std::unique_ptr<FrameType>> one;
-            one.push_back(std::make_unique<FrameType>(frame));
-            std::string payload = SerializerPolicy::SerializeChunk(one, /*chunk_idx*/ 0, config_.b_use_compression);
-            payload = CompressIfBeneficial(std::move(payload));
-            journal_.AppendFrame(frame_index, game_time, created_utc, payload);
-            batch_times_.push_back({frame_index, game_time, created_utc});
+            JournalFrameImpl(frame, frame_index, game_time, created_utc, /*sync=*/true);
+        }
+
+        // Same as JournalFrame but does NOT force the F record durable; the caller (the async
+        // sink's I/O worker) batches a run of these and issues one SyncJournal() at the end --
+        // group commit. Only WHEN the record becomes durable changes; the append order (and
+        // therefore crash-recovery contiguity) is identical to the synchronous path.
+        void JournalFrameBatched(const FrameType& frame, int32_t frame_index, int64_t game_time, int64_t created_utc) {
+            JournalFrameImpl(frame, frame_index, game_time, created_utc, /*sync=*/false);
+        }
+
+        // Flush the journal's group-commit batch to durability. No-op if journaling is off.
+        void SyncJournal() {
+            if (journal_.IsOpen())
+                journal_.SyncNow();
+        }
+
+        // True once OnSessionStart has an open recovery journal. Lets the async adapter skip
+        // enqueuing (and copying) journal frames when journaling is disabled or failed to open.
+        bool IsJournalActive() const { return journal_.IsOpen(); }
+
+        // True while no write/seek/sync on the main .vtx file has failed. The async worker
+        // latches its failure protocol on this going false (see AbortClose()).
+        bool Good() const { return file_.Good(); }
+
+        // Failure/abort path: release the file + journal handles WITHOUT writing a footer and
+        // WITHOUT deleting the recovery journal. On Windows this drops the deny-write share so
+        // the partially written .vtx and its journal become repair-ready immediately, even while
+        // the process keeps running. (Contrast Close(), which finalizes a clean recording.)
+        void AbortClose() {
+            file_.Close();
+            if (journal_.IsOpen())
+                journal_.Close();
         }
 
         void Close(const SessionFooter& footerData) {
@@ -209,6 +234,18 @@ namespace VTX {
         }
 
     private:
+        void JournalFrameImpl(const FrameType& frame, int32_t frame_index, int64_t game_time, int64_t created_utc,
+                              bool sync) {
+            if (!journal_.IsOpen())
+                return;
+            std::vector<std::unique_ptr<FrameType>> one;
+            one.push_back(std::make_unique<FrameType>(frame));
+            std::string payload = SerializerPolicy::SerializeChunk(one, /*chunk_idx*/ 0, config_.b_use_compression);
+            payload = CompressIfBeneficial(std::move(payload));
+            journal_.AppendFrame(frame_index, game_time, created_utc, payload, sync);
+            batch_times_.push_back({frame_index, game_time, created_utc});
+        }
+
         void NotifySerialize(std::chrono::steady_clock::time_point start) const {
             if (config_.perf_observer)
                 config_.perf_observer->OnSerialize(

@@ -53,6 +53,8 @@ The writer is **single-threaded by design**: `RecordFrame()` is called sequentia
 
 This is different from the reader-side processor model some other VTX features use (e.g. async chunk loads). The writer's simplicity is deliberate.
 
+**Async I/O does not change any of this.** With `async_io = true` the writer still runs validation, the post-processor, and serialization on your calling thread -- only the chunk/journal disk writes move to the I/O worker, and that worker never touches a frame the processor can still see (it consumes an already-serialized copy). `Process` therefore keeps its caller-thread affinity: it is safe to read game state from it under async exactly as it is under the synchronous writer. Preserving this guarantee is precisely why the async cut was made between the writer and the sink, rather than moving the whole pipeline onto a worker.
+
 ## API at a glance
 
 ```cpp
@@ -324,7 +326,7 @@ Avoid resolving `PropertyKey<T>` per `Process()` call -- the lookup hashes by na
 
 - **Re-serializing mutated bytes back to disk on the reader side.** Not this feature. Reader-side mutations would diverge from on-disk wire bytes -- documented contract.
 - **Mutating raw byte spans.** `GetRawFrameBytes` returns on-disk truth by design.
-- **Async processors.** `Process` is synchronous on the writer's calling thread. Long-running work blocks `RecordFrame`.
+- **Async processors.** `Process` is synchronous on the writer's calling thread. Long-running work blocks `RecordFrame`. (Not to be confused with the writer's `async_io` option, which offloads only the sink's disk I/O -- it does not move `Process` off your thread, by design.)
 - **Replay-level metadata emission API.** Processors that produce per-replay artefacts (KeyFrames, stats) expose them via their own getters -- the SDK does not add a metadata channel.
 
 ## See also

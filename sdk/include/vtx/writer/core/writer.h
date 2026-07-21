@@ -80,6 +80,16 @@ namespace VTX {
 
         RecordResult TryRecordFrame(VTX::Frame& native_frame,
                                     const VTX::GameTime::GameTimeRegister& game_time_register) {
+            // Async sinks run their I/O on a worker thread; once it latches an I/O failure the
+            // recording is dead. Reject cheaply and synchronously here rather than accepting
+            // frames the worker will never durably write. Compiles out for synchronous sinks.
+            if constexpr (requires(const SinkPolicy& s) { s.HasFailed(); }) {
+                if (sink_.HasFailed()) {
+                    return RecordResult::MadeRejected(VtxErrorCode::SinkFailed,
+                                                      "async sink I/O failed; recording aborted");
+                }
+            }
+
             timer_.CreateSnapshot();
 
             if (!timer_.AddTimeRegistry(game_time_register)) {
@@ -188,6 +198,45 @@ namespace VTX {
             footer_data.segments = &v_seg;
 
             sink_.Close(footer_data);
+        }
+
+        // --- Async-sink surface (defaults for synchronous sinks; selected via if constexpr) ---
+
+        // Durability barrier: block until every frame accepted so far is durable on disk. For a
+        // synchronous sink every accepted frame is already durable, so this is a no-op.
+        VtxError Drain() {
+            if constexpr (requires { sink_.Drain(); }) {
+                return sink_.Drain();
+            } else {
+                return VtxError {};
+            }
+        }
+
+        // The last latched async-sink I/O error, or a default (None) error.
+        VtxError GetLastError() const {
+            if constexpr (requires { sink_.GetLastError(); }) {
+                return sink_.GetLastError();
+            } else {
+                return VtxError {};
+            }
+        }
+
+        // True once an async sink has latched an I/O failure; always false for synchronous sinks.
+        bool HasSinkFailed() const {
+            if constexpr (requires { sink_.HasFailed(); }) {
+                return sink_.HasFailed();
+            } else {
+                return false;
+            }
+        }
+
+        // Depth of the async sink's pending-I/O queue (0 for synchronous sinks).
+        size_t GetQueueDepth() const {
+            if constexpr (requires { sink_.GetQueueDepth(); }) {
+                return sink_.GetQueueDepth();
+            } else {
+                return 0;
+            }
         }
 
         VTX::SchemaRegistry& GetRegistry() { return registry_; }

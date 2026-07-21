@@ -98,6 +98,7 @@ Ratio shrinks on big frames because hashing itself becomes non-trivial — but t
 - **No competitor comparison.** We measure VTX against itself.
 - **`items_per_second` in google/benchmark uses CPU time, not wall time.** Where wall ≫ CPU (async I/O), that metric overstates user-observable throughput. For customer-facing claims use the wall-time column.
 - **One known fixture bug** — `BM_AccessorRandomWithinBucket` inflates its own counter 2× due to a duplicate-push in the shuffle setup. Flagged for a follow-up fix; everything else is trustworthy.
+- **Synchronous writer only.** Every writer number here is the default (synchronous) sink, where `RecordFrame` pays serialization, compression, `fsync` and the chunk-boundary flush inline. They say nothing about `async_io = true`, which moves that work to an I/O worker thread. **No async figures are published yet**: the async-aware benchmark — per-`RecordFrame` latency histograms (p50/p99/max) measured *inside* the loop, excluding the `Stop()` drain — is not in the suite yet. `BM_WriterDurabilityTier` as it stands includes `Stop()` in its per-iteration time, so it cannot show the difference. Until that lands, treat the async win as *architectural* (the fsync and the boundary hitch leave the capture loop) rather than a measured number.
 
 ## Running benchmarks locally
 
