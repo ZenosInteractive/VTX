@@ -4,6 +4,8 @@
 #include <cstdint>
 #include <cstdio>
 #include <vector>
+#include <atomic>
+#include <chrono>
 #include <zstd.h>
 #include <xxh3.h>
 #include "vtx/common/vtx_types.h"
@@ -11,6 +13,52 @@
 #include "vtx/writer/policies/sinks/durable_file.h"
 #include "vtx/writer/policies/sinks/recovery_journal.h"
 namespace VTX {
+
+    struct FileSinkPerformanceStats {
+        uint64_t serialization_us = 0;
+        uint64_t compression_us = 0;
+        uint64_t disk_write_us = 0;
+    };
+
+    // Called synchronously from the writer thread; implementations must be cheap.
+    // Attach via Config::perf_observer; leave null for zero-cost no-op.
+    class IFileSinkPerfObserver {
+    public:
+        virtual ~IFileSinkPerfObserver() = default;
+        virtual void OnSerialize(std::chrono::microseconds us) = 0;
+        virtual void OnCompress(std::chrono::microseconds us) = 0;
+        virtual void OnDiskWrite(std::chrono::microseconds us) = 0;
+    };
+
+    // Default thread-safe collector. Share one instance across sinks to aggregate;
+    // one per sink for per-writer measurements.
+    class FileSinkAtomicPerfObserver : public IFileSinkPerfObserver {
+    public:
+        void OnSerialize(std::chrono::microseconds us) override {
+            serialization_us_.fetch_add(static_cast<uint64_t>(us.count()), std::memory_order_relaxed);
+        }
+        void OnCompress(std::chrono::microseconds us) override {
+            compression_us_.fetch_add(static_cast<uint64_t>(us.count()), std::memory_order_relaxed);
+        }
+        void OnDiskWrite(std::chrono::microseconds us) override {
+            disk_write_us_.fetch_add(static_cast<uint64_t>(us.count()), std::memory_order_relaxed);
+        }
+        FileSinkPerformanceStats Snapshot() const {
+            return {serialization_us_.load(std::memory_order_relaxed),
+                    compression_us_.load(std::memory_order_relaxed),
+                    disk_write_us_.load(std::memory_order_relaxed)};
+        }
+        void Reset() {
+            serialization_us_.store(0, std::memory_order_relaxed);
+            compression_us_.store(0, std::memory_order_relaxed);
+            disk_write_us_.store(0, std::memory_order_relaxed);
+        }
+
+    private:
+        std::atomic<uint64_t> serialization_us_{0};
+        std::atomic<uint64_t> compression_us_{0};
+        std::atomic<uint64_t> disk_write_us_{0};
+    };
 
     template <IVtxWriterPolicy Policy>
     class ChunkedFileSink {
@@ -28,6 +76,7 @@ namespace VTX {
             bool durable_writes = true;          ///< fsync each chunk to physical disk (crash/power-loss safe).
             bool enable_recovery_journal = true; ///< maintain a ".recovery" sidecar for crash recovery.
             uint64_t journal_compact_threshold_bytes = 0; ///< journal compaction trigger; 0 = journal default.
+            IFileSinkPerfObserver* perf_observer = nullptr; ///< optional perf timings; null = no-op.
         };
 
         explicit ChunkedFileSink(Config config)
@@ -41,11 +90,13 @@ namespace VTX {
             std::string magic_bytes = SerializerPolicy::GetMagicBytes();
             WriteBlob(magic_bytes);
 
+            const auto serialize_start = std::chrono::steady_clock::now();
             std::string header_payload = SerializerPolicy::SerializeHeader(config_.header_config, schema);
+            NotifySerialize(serialize_start);
             header_payload = CompressIfBeneficial(std::move(header_payload));
             uint32_t final_size = static_cast<uint32_t>(header_payload.size());
-            file_.Write(&final_size, sizeof(final_size));
-            file_.Write(header_payload.data(), final_size);
+            TimedWrite(&final_size, sizeof(final_size));
+            TimedWrite(header_payload.data(), final_size);
             if (config_.durable_writes)
                 file_.Sync();
             else
@@ -87,14 +138,16 @@ namespace VTX {
             if (frames.empty())
                 return;
 
+            const auto serialize_start = std::chrono::steady_clock::now();
             std::string payload = SerializerPolicy::SerializeChunk(frames, chunkIndex_, config_.b_use_compression);
+            NotifySerialize(serialize_start);
             payload = CompressIfBeneficial(std::move(payload));
 
             uint64_t current_offset = file_.Tell();
             uint32_t final_size = static_cast<uint32_t>(payload.size());
 
-            file_.Write(&final_size, sizeof(final_size));
-            file_.Write(payload.data(), final_size);
+            TimedWrite(&final_size, sizeof(final_size));
+            TimedWrite(payload.data(), final_size);
             if (config_.durable_writes)
                 file_.Sync();
             else
@@ -134,12 +187,14 @@ namespace VTX {
         void Close(const SessionFooter& footerData) {
             if (!file_.IsOpen())
                 return;
+            const auto serialize_start = std::chrono::steady_clock::now();
             std::string footer_payload = SerializerPolicy::SerializeFooter(seek_table_, footerData);
+            NotifySerialize(serialize_start);
             footer_payload = CompressIfBeneficial(std::move(footer_payload));
 
-            file_.Write(footer_payload.data(), footer_payload.size());
+            TimedWrite(footer_payload.data(), footer_payload.size());
             uint32_t final_size = static_cast<uint32_t>(footer_payload.size());
-            file_.Write(&final_size, sizeof(final_size));
+            TimedWrite(&final_size, sizeof(final_size));
             WriteBlob(SerializerPolicy::GetMagicBytes());
             if (config_.durable_writes)
                 file_.Sync();
@@ -155,18 +210,40 @@ namespace VTX {
         }
 
     private:
-        void WriteBlob(const std::string& data) { file_.Write(data.data(), data.size()); }
+        void NotifySerialize(std::chrono::steady_clock::time_point start) const {
+            if (config_.perf_observer)
+                config_.perf_observer->OnSerialize(
+                    std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - start));
+        }
+        void NotifyCompress(std::chrono::steady_clock::time_point start) const {
+            if (config_.perf_observer)
+                config_.perf_observer->OnCompress(
+                    std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - start));
+        }
+        void NotifyDiskWrite(std::chrono::steady_clock::time_point start) const {
+            if (config_.perf_observer)
+                config_.perf_observer->OnDiskWrite(
+                    std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - start));
+        }
+        void TimedWrite(const void* data, size_t size) {
+            const auto start = std::chrono::steady_clock::now();
+            file_.Write(data, size);
+            NotifyDiskWrite(start);
+        }
+        void WriteBlob(const std::string& data) { TimedWrite(data.data(), data.size()); }
 
         std::string CompressIfBeneficial(std::string payload) {
             if (!config_.b_use_compression || payload.size() < 512) {
                 return payload;
             }
 
+            const auto compression_start = std::chrono::steady_clock::now();
             size_t const max_size = ZSTD_compressBound(payload.size());
             std::string compressed_blob(max_size, '\0');
 
             size_t const compressed_size = ZSTD_compress(compressed_blob.data(), max_size, payload.data(),
                                                          payload.size(), config_.compression_level);
+            NotifyCompress(compression_start);
 
             if (ZSTD_isError(compressed_size)) {
                 return payload;

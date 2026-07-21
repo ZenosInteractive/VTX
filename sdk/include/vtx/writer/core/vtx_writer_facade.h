@@ -12,6 +12,7 @@
 
 namespace VTX {
 
+    class IFileSinkPerfObserver; // defined in vtx/writer/policies/sinks/file_sink.h
 
     class IVtxWriterFacade {
     public:
@@ -54,6 +55,7 @@ namespace VTX {
         std::shared_ptr<SchemaRegistry> schema_registry = nullptr; // pre-built registry (wins over content/path)
         bool retain_finalized_snapshot = false;
         bool create_output_dirs = true;
+        IFileSinkPerfObserver* perf_observer = nullptr; ///< optional file-sink timings; null = no-op.
     };
 
     enum class SerializationFormat : uint8_t {

@@ -143,6 +143,7 @@ namespace VTX {
         internal_cfg.sink_config.header_config.replay_name = config.replay_name;
         internal_cfg.sink_config.header_config.replay_uuid = config.replay_uuid;
         internal_cfg.sink_config.b_use_compression = config.use_compression;
+        internal_cfg.sink_config.perf_observer = config.perf_observer;
 
         return std::make_unique<WriterFacadeImpl<SinkType>>(internal_cfg);
     }
@@ -171,6 +172,7 @@ namespace VTX {
         internal_cfg.retain_finalized_snapshot = config.retain_finalized_snapshot;
 
         internal_cfg.sink_config.b_use_compression = config.use_compression;
+        internal_cfg.sink_config.perf_observer = config.perf_observer;
         return std::make_unique<WriterFacadeImpl<SinkType>>(internal_cfg);
     }
 

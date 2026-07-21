@@ -13,6 +13,7 @@
 #include "vtx/reader/core/vtx_reader_facade.h"
 #include "vtx/common/vtx_types.h"
 #include "vtx/common/readers/schema_reader/schema_registry.h"
+#include "vtx/writer/policies/sinks/file_sink.h"
 
 #include "util/test_fixtures.h"
 
@@ -532,6 +533,172 @@ TEST_P(RoundtripTest, ReaderRestoresDeclaredEmptyArrays) {
 
     // A type with no declared array field is untouched.
     EXPECT_EQ(e.int32_arrays.SubArrayCount(), 0u);
+}
+
+// ---------------------------------------------------------------------------
+// Struct-array fields (Vector/Quat/Transform/FloatRange) round-trip with their
+// subarray partitioning intact. Regression: the FlatBuffers reader's
+// unpackStructArray lambda restored `data` but silently dropped `offsets`,
+// so any struct-array with >=2 subarrays lost its boundaries on load.
+// Uses three subarrays with mixed sizes (including an empty one) so a fully
+// broken offsets restore, or one that only preserves the terminal offset,
+// both fail visibly.
+// ---------------------------------------------------------------------------
+
+TEST_P(RoundtripTest, StructArraySubArrayOffsetsRoundtrip) {
+    auto cfg = MakeConfig("struct_array_offsets", "uuid-rt-struct-offsets");
+    {
+        auto writer = CreateWriter(cfg);
+        ASSERT_TRUE(writer);
+
+        VTX::Frame f;
+        auto& bucket = f.CreateBucket("entity");
+
+        VTX::PropertyContainer e;
+        e.entity_type_id = 0;
+
+        // 3 subarrays; middle one is deliberately empty.
+        e.vector_arrays.AppendSubArray({VTX::Vector {1.0, 2.0, 3.0}, VTX::Vector {4.0, 5.0, 6.0}});
+        e.vector_arrays.AppendSubArray({});
+        e.vector_arrays.AppendSubArray({VTX::Vector {7.0, 8.0, 9.0}, VTX::Vector {10.0, 11.0, 12.0},
+                                        VTX::Vector {13.0, 14.0, 15.0}});
+
+        e.quat_arrays.AppendSubArray({VTX::Quat {0.0f, 0.0f, 0.0f, 1.0f}});
+        e.quat_arrays.AppendSubArray({VTX::Quat {1.0f, 0.0f, 0.0f, 0.0f}, VTX::Quat {0.0f, 1.0f, 0.0f, 0.0f}});
+        e.quat_arrays.AppendSubArray({});
+
+        e.transform_arrays.AppendSubArray({});
+        e.transform_arrays.AppendSubArray({VTX::Transform {{1.0, 2.0, 3.0}, {0.0f, 0.0f, 0.0f, 1.0f}, {1.0, 1.0, 1.0}}});
+        e.transform_arrays.AppendSubArray({VTX::Transform {{4.0, 5.0, 6.0}, {0.0f, 0.0f, 0.0f, 1.0f}, {2.0, 2.0, 2.0}},
+                                           VTX::Transform {{7.0, 8.0, 9.0}, {1.0f, 0.0f, 0.0f, 0.0f}, {3.0, 3.0, 3.0}}});
+
+        e.range_arrays.AppendSubArray({VTX::FloatRange {0.0f, 100.0f, 0.5f}});
+        e.range_arrays.AppendSubArray({VTX::FloatRange {-1.0f, 1.0f, 0.0f}, VTX::FloatRange {10.0f, 20.0f, 0.75f}});
+        e.range_arrays.AppendSubArray({VTX::FloatRange {50.0f, 60.0f, 0.25f}});
+
+        // Snapshot expected offsets/totals before move.
+        const std::vector<uint32_t> expected_vec_offsets = e.vector_arrays.offsets;
+        const std::vector<uint32_t> expected_quat_offsets = e.quat_arrays.offsets;
+        const std::vector<uint32_t> expected_trans_offsets = e.transform_arrays.offsets;
+        const std::vector<uint32_t> expected_range_offsets = e.range_arrays.offsets;
+
+        ASSERT_EQ(expected_vec_offsets, (std::vector<uint32_t> {0u, 2u, 2u}));
+        ASSERT_EQ(expected_quat_offsets, (std::vector<uint32_t> {0u, 1u, 3u}));
+        ASSERT_EQ(expected_trans_offsets, (std::vector<uint32_t> {0u, 0u, 1u}));
+        ASSERT_EQ(expected_range_offsets, (std::vector<uint32_t> {0u, 1u, 3u}));
+
+        bucket.unique_ids.push_back("e0");
+        bucket.entities.push_back(std::move(e));
+
+        VTX::GameTime::GameTimeRegister t;
+        t.game_time = 0.0f;
+        writer->RecordFrame(f, t);
+        writer->Stop();
+    }
+
+    auto ctx = VTX::OpenReplayFile(cfg.output_filepath);
+    ASSERT_TRUE(ctx) << ctx.error;
+
+    const VTX::Frame* f = ctx.reader->GetFrameSync(0);
+    ASSERT_NE(f, nullptr);
+    ASSERT_EQ(f->GetBuckets().size(), 1u);
+    ASSERT_EQ(f->GetBuckets()[0].entities.size(), 1u);
+    const auto& e = f->GetBuckets()[0].entities[0];
+
+    // --- Vector array: 3 subarrays, offsets [0, 2, 2] ---
+    ASSERT_EQ(e.vector_arrays.SubArrayCount(), 3u);
+    EXPECT_EQ(e.vector_arrays.offsets, (std::vector<uint32_t> {0u, 2u, 2u}));
+    ASSERT_EQ(e.vector_arrays.TotalElementCount(), 5u);
+    {
+        auto s0 = e.vector_arrays.GetSubArray(0);
+        ASSERT_EQ(s0.size(), 2u);
+        EXPECT_DOUBLE_EQ(s0[0].x, 1.0);
+        EXPECT_DOUBLE_EQ(s0[1].z, 6.0);
+        EXPECT_TRUE(e.vector_arrays.GetSubArray(1).empty());
+        auto s2 = e.vector_arrays.GetSubArray(2);
+        ASSERT_EQ(s2.size(), 3u);
+        EXPECT_DOUBLE_EQ(s2[0].x, 7.0);
+        EXPECT_DOUBLE_EQ(s2[2].z, 15.0);
+    }
+
+    // --- Quat array: 3 subarrays, offsets [0, 1, 3] ---
+    ASSERT_EQ(e.quat_arrays.SubArrayCount(), 3u);
+    EXPECT_EQ(e.quat_arrays.offsets, (std::vector<uint32_t> {0u, 1u, 3u}));
+    ASSERT_EQ(e.quat_arrays.TotalElementCount(), 3u);
+    {
+        auto s0 = e.quat_arrays.GetSubArray(0);
+        ASSERT_EQ(s0.size(), 1u);
+        EXPECT_FLOAT_EQ(s0[0].w, 1.0f);
+        auto s1 = e.quat_arrays.GetSubArray(1);
+        ASSERT_EQ(s1.size(), 2u);
+        EXPECT_FLOAT_EQ(s1[0].x, 1.0f);
+        EXPECT_FLOAT_EQ(s1[1].y, 1.0f);
+        EXPECT_TRUE(e.quat_arrays.GetSubArray(2).empty());
+    }
+
+    // --- Transform array: 3 subarrays, offsets [0, 0, 1] ---
+    ASSERT_EQ(e.transform_arrays.SubArrayCount(), 3u);
+    EXPECT_EQ(e.transform_arrays.offsets, (std::vector<uint32_t> {0u, 0u, 1u}));
+    ASSERT_EQ(e.transform_arrays.TotalElementCount(), 3u);
+    {
+        EXPECT_TRUE(e.transform_arrays.GetSubArray(0).empty());
+        auto s1 = e.transform_arrays.GetSubArray(1);
+        ASSERT_EQ(s1.size(), 1u);
+        EXPECT_DOUBLE_EQ(s1[0].translation.x, 1.0);
+        auto s2 = e.transform_arrays.GetSubArray(2);
+        ASSERT_EQ(s2.size(), 2u);
+        EXPECT_DOUBLE_EQ(s2[0].translation.x, 4.0);
+        EXPECT_DOUBLE_EQ(s2[1].scale.z, 3.0);
+    }
+
+    // --- Range array: 3 subarrays, offsets [0, 1, 3] ---
+    ASSERT_EQ(e.range_arrays.SubArrayCount(), 3u);
+    EXPECT_EQ(e.range_arrays.offsets, (std::vector<uint32_t> {0u, 1u, 3u}));
+    ASSERT_EQ(e.range_arrays.TotalElementCount(), 4u);
+    {
+        auto s0 = e.range_arrays.GetSubArray(0);
+        ASSERT_EQ(s0.size(), 1u);
+        EXPECT_FLOAT_EQ(s0[0].max, 100.0f);
+        auto s1 = e.range_arrays.GetSubArray(1);
+        ASSERT_EQ(s1.size(), 2u);
+        EXPECT_FLOAT_EQ(s1[1].value_normalized, 0.75f);
+        auto s2 = e.range_arrays.GetSubArray(2);
+        ASSERT_EQ(s2.size(), 1u);
+        EXPECT_FLOAT_EQ(s2[0].min, 50.0f);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// PRISM perf observer plumbing: attaching a FileSinkAtomicPerfObserver via
+// WriterFacadeConfig must produce non-zero timings on the three sink stages
+// (serialize / compress / disk write) after a real write session on both
+// backends. Regression guard for the facade wiring, since a missing
+// `internal_cfg.sink_config.perf_observer = config.perf_observer` line would
+// silently leave the observer as null.
+// ---------------------------------------------------------------------------
+
+TEST_P(RoundtripTest, PerfObserverReceivesSinkTimings) {
+    VTX::FileSinkAtomicPerfObserver perf;
+
+    auto cfg = MakeConfig("perf_observer", "uuid-rt-perf-observer");
+    cfg.perf_observer = &perf;
+    cfg.use_compression = true; // ensure the compression stage runs
+    {
+        auto writer = CreateWriter(cfg);
+        ASSERT_TRUE(writer);
+        for (int i = 0; i < 30; ++i) {
+            auto frame = BuildFrame(i);
+            VTX::GameTime::GameTimeRegister t;
+            t.game_time = float(i) / kFps;
+            writer->RecordFrame(frame, t);
+        }
+        writer->Stop();
+    }
+
+    const auto stats = perf.Snapshot();
+    EXPECT_GT(stats.serialization_us, 0u) << "SerializeChunk/Header/Footer never notified";
+    EXPECT_GT(stats.disk_write_us, 0u) << "TimedWrite never notified";
+    EXPECT_GT(stats.compression_us, 0u) << "ZSTD_compress never notified";
 }
 
 // ---------------------------------------------------------------------------

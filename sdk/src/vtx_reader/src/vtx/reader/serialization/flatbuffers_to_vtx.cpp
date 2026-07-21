@@ -146,6 +146,9 @@ void VTX::Serialization::FromFlat(const fbsvtx::PropertyContainer* src, VTX::Pro
                 FromFlat(d->Get(i), nativeArr.data[i]);
             }
         }
+        if (auto o = fbsArr->offsets()) {
+            nativeArr.offsets.assign(o->begin(), o->end());
+        }
     };
 
     unpackStructArray(src->vector_arrays(), dst.vector_arrays);
