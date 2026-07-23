@@ -24,9 +24,8 @@ namespace VtxCli {
                 w.Key("game_time_seconds").WriteNull();
             }
 
-            const int64_t utc = (frame_index >= 0 && idx < times.created_utc.size())
-                                    ? static_cast<int64_t>(times.created_utc[idx])
-                                    : 0;
+            const int64_t utc =
+                (frame_index >= 0 && idx < times.created_utc.size()) ? static_cast<int64_t>(times.created_utc[idx]) : 0;
             WriteUtcTicks(w, "created_utc", utc);
         }
 

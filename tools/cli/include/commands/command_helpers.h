@@ -24,8 +24,9 @@ namespace VtxCli {
             writer.WriteNull().Key(prefix + "_iso").WriteNull();
             return writer;
         }
-        writer.WriteInt64(ticks).Key(prefix + "_iso").WriteString(
-            VTX::TimeUtils::FormatUtcTicksIso8601(VTX::TimeUtils::NormalizeUtcToUeTicks(ticks)));
+        writer.WriteInt64(ticks)
+            .Key(prefix + "_iso")
+            .WriteString(VTX::TimeUtils::FormatUtcTicksIso8601(VTX::TimeUtils::NormalizeUtcToUeTicks(ticks)));
         return writer;
     }
 

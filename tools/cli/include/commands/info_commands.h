@@ -230,11 +230,10 @@ namespace VtxCli {
                     .WriteString(evt.entity_unique_id);
                 // Wall-clock derived from recording start + game_time offset;
                 // null when the file did not record a start timestamp.
-                const int64_t evt_utc =
-                    recorded_utc != 0
-                        ? recorded_utc + static_cast<int64_t>(static_cast<double>(evt.game_time) *
-                                                              VTX::TimeUtils::TICKS_PER_SECOND)
-                        : 0;
+                const int64_t evt_utc = recorded_utc != 0
+                                            ? recorded_utc + static_cast<int64_t>(static_cast<double>(evt.game_time) *
+                                                                                  VTX::TimeUtils::TICKS_PER_SECOND)
+                                            : 0;
                 WriteUtcTicks(writer, "utc", evt_utc);
                 writer.Key("location");
                 Serialize(writer, evt.location);
@@ -278,8 +277,8 @@ namespace VtxCli {
                     start = std::stoll(std::string(args[0]));
                     end = std::stoll(std::string(args[1]));
                 } catch (...) {
-                    ResponseError(writer, Name, "Invalid frame range: " + std::string(args[0]) + " " +
-                                                    std::string(args[1]));
+                    ResponseError(writer, Name,
+                                  "Invalid frame range: " + std::string(args[0]) + " " + std::string(args[1]));
                     return;
                 }
                 if (start < 0 || end < start || static_cast<size_t>(end) >= table_size) {
@@ -318,8 +317,8 @@ namespace VtxCli {
             // Game-time span
             writer.Key("game_duration_seconds");
             if (!times.game_time.empty()) {
-                const auto span = static_cast<int64_t>(times.game_time.back()) -
-                                  static_cast<int64_t>(times.game_time.front());
+                const auto span =
+                    static_cast<int64_t>(times.game_time.back()) - static_cast<int64_t>(times.game_time.front());
                 writer.WriteDouble(VTX::TimeUtils::TicksToSeconds(span));
             } else {
                 writer.WriteNull();

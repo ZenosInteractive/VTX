@@ -409,9 +409,9 @@ namespace VTX {
             if (value <= 0)
                 return 0;
             if (value >= TICKS_AT_UNIX_EPOCH)
-                return value; // already UE ticks
-            constexpr int64 kUnixSecondsMax = 100'000'000'000;      // unix seconds until ~5138 AD
-            constexpr int64 kUnixMillisMax = 100'000'000'000'000;   // unix ms in the same range
+                return value;                                     // already UE ticks
+            constexpr int64 kUnixSecondsMax = 100'000'000'000;    // unix seconds until ~5138 AD
+            constexpr int64 kUnixMillisMax = 100'000'000'000'000; // unix ms in the same range
             if (value < kUnixSecondsMax)
                 return value * TICKS_PER_SECOND + TICKS_AT_UNIX_EPOCH;
             if (value < kUnixMillisMax)
