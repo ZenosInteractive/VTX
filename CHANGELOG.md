@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **tools/cli**: the CLI now exposes the file's timing data, which was previously unreachable from the command surface:
+  - new **`times [start] [end]`** command -- dumps the footer per-frame time table: counts, `first_created_utc_*` / `last_created_utc_*`, `wall_duration_seconds`, `game_duration_seconds`, the median wall-clock frame step, a discontinuity scan (`anomalies` = frames whose `created_utc` delta is negative or more than twice the median step, capped at 100 with `anomaly_count` / `anomalies_truncated`), raw `gaps` / `segments`, and -- with a frame range -- a per-frame `frames` slice (`game_time_ticks`, `created_utc_ticks`, `created_utc_iso`, `delta_ticks`)
+  - `frame` now reports the current frame's `game_time_ticks` / `game_time_seconds` and `created_utc_ticks` / `created_utc_iso` (null when the file did not record them)
+  - `header` adds `recorded_utc_iso` alongside the raw `recorded_utc_timestamp`; `info` adds `recorded_utc_ticks` / `recorded_utc_iso`
+  - `footer` adds `game_time_count` / `created_utc_count` / `gap_count` / `segment_count`
+  - `chunks` entries add `checksum` (xxHash64 of the on-disk chunk payload, 0 = not set)
+  - `events` entries add derived `utc_ticks` / `utc_iso` (recording start + `game_time`)
+  - absolute wall-clock values follow one convention everywhere: `<name>_ticks` (the stamp exactly as stored in the file, so raw deltas stay diagnosable) + `<name>_iso` (ISO-8601 UTC derived after unit normalization), both null when not recorded; `events.utc_ticks` is synthetic and always UE-tick-based
+- **common/time**: `TimeUtils::FormatUtcTicksIso8601(ticks)` -- machine-readable ISO-8601 sibling of `FormatUtcTicks`
+- **common/time**: `TimeUtils::NormalizeUtcToUeTicks(value)` -- maps an absolute UTC stamp of unknown legacy unit (unix seconds / unix milliseconds / unix-relative ticks / UE ticks) onto the UE tick timeline.  Needed because the writer stamps the header's `recorded_utc_timestamp` in **unix seconds** while the footer's per-frame `created_utc` uses **UE ticks** -- the same file carries two units.  The CLI derives every `*_iso` string and the event UTC through it while passing stored `*_ticks` values through raw.  (The writer-side unit inconsistency itself is left as is in this change -- fixing it alters what new files contain and deserves its own decision.)
+
 ## [0.4.0] - 2026-07-20
 
 ### Added

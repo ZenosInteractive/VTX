@@ -2,13 +2,33 @@
 #include "core/cli_concepts.h"
 #include "commands/command_registry.h"
 #include "vtx/common/vtx_property_cache.h"
+#include "vtx/common/vtx_types_helpers.h"
 
 #include <algorithm>
+#include <cstdint>
 #include <string>
 #include <string_view>
 #include <vector>
 
 namespace VtxCli {
+
+    /// Write a "<prefix>_ticks" / "<prefix>_iso" pair for an absolute UTC timestamp.
+    /// "_ticks" carries the value exactly as stored in the file (raw deltas stay
+    /// diagnosable); "_iso" is derived after unit normalization, so it renders
+    /// correctly whether the file stamped unix seconds, unix-relative ticks, or
+    /// UE ticks.  Zero means "not recorded" and emits nulls.
+    template <FormatWriter Fmt>
+    Fmt& WriteUtcTicks(Fmt& writer, const std::string& prefix, int64_t ticks) {
+        writer.Key(prefix + "_ticks");
+        if (ticks == 0) {
+            writer.WriteNull().Key(prefix + "_iso").WriteNull();
+            return writer;
+        }
+        writer.WriteInt64(ticks)
+            .Key(prefix + "_iso")
+            .WriteString(VTX::TimeUtils::FormatUtcTicksIso8601(VTX::TimeUtils::NormalizeUtcToUeTicks(ticks)));
+        return writer;
+    }
 
     template <FormatWriter Fmt>
     Fmt& ResponseOk(Fmt& writer, std::string_view command_name) {

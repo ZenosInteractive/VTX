@@ -7,6 +7,28 @@
 namespace VtxCli {
 
     namespace detail {
+        /// Write per-frame timing from the footer time table: game_time (relative
+        /// ticks/seconds) and created_utc (absolute wall clock).  Keys are always
+        /// present; frames without a recorded value emit null.
+        template <FormatWriter Fmt>
+        void WriteFrameTimes(Fmt& w, const VTX::ReplayTimeData& times, int32_t frame_index) {
+            const auto idx = static_cast<size_t>(frame_index);
+
+            w.Key("game_time_ticks");
+            if (frame_index >= 0 && idx < times.game_time.size()) {
+                const auto ticks = static_cast<int64_t>(times.game_time[idx]);
+                w.WriteInt64(ticks);
+                w.Key("game_time_seconds").WriteDouble(VTX::TimeUtils::TicksToSeconds(ticks));
+            } else {
+                w.WriteNull();
+                w.Key("game_time_seconds").WriteNull();
+            }
+
+            const int64_t utc =
+                (frame_index >= 0 && idx < times.created_utc.size()) ? static_cast<int64_t>(times.created_utc[idx]) : 0;
+            WriteUtcTicks(w, "created_utc", utc);
+        }
+
         /// Write bucket_count and entity_count for a given frame.
         /// Always writes both keys (0 if frame is null).
         template <FormatWriter Fmt>
@@ -38,6 +60,7 @@ namespace VtxCli {
             // No args: query current frame
             if (args.empty()) {
                 const auto* frame = context.session.GetCurrentFrameData();
+                const auto footer = context.session.GetFooter();
 
                 ResponseOk(w, Name)
                     .Key("current_frame")
@@ -45,6 +68,7 @@ namespace VtxCli {
                     .Key("total_frames")
                     .WriteInt(context.session.GetTotalFrames());
                 detail::WriteFrameStats(w, frame);
+                detail::WriteFrameTimes(w, footer.times, context.session.GetCurrentFrame());
                 EndResponse(w);
                 return;
             }
@@ -64,6 +88,7 @@ namespace VtxCli {
             }
 
             const auto* frame = context.session.GetCurrentFrameData();
+            const auto footer = context.session.GetFooter();
 
             ResponseOk(w, Name)
                 .Key("current_frame")
@@ -71,6 +96,7 @@ namespace VtxCli {
                 .Key("total_frames")
                 .WriteInt(context.session.GetTotalFrames());
             detail::WriteFrameStats(w, frame);
+            detail::WriteFrameTimes(w, footer.times, context.session.GetCurrentFrame());
             EndResponse(w);
         }
     };

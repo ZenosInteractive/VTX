@@ -89,6 +89,7 @@ namespace VtxCli {
             registry_.template Register<SchemaCommand>();
             registry_.template Register<ChunksCommand>();
             registry_.template Register<EventsCommand>();
+            registry_.template Register<TimesCommand>();
 
             // Navigation
             registry_.template Register<FrameCommand>();
@@ -127,6 +128,7 @@ namespace VtxCli {
             reg.template Register<SchemaCommand>();
             reg.template Register<ChunksCommand>();
             reg.template Register<EventsCommand>();
+            reg.template Register<TimesCommand>();
             reg.template Register<FrameCommand>();
             reg.template Register<BucketsCommand>();
             reg.template Register<EntitiesCommand>();

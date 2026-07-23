@@ -375,5 +375,48 @@ namespace VTX {
               << (ms >= 0 ? ms : ms + 1000) << " UTC";
             return s.str();
         }
+
+        /// Machine-readable ISO-8601 variant of FormatUtcTicks ("2026-07-23T14:03:22.123Z").
+        inline std::string FormatUtcTicksIso8601(int64 ticks) {
+            // Normalize: if ticks are in UE epoch (since 0001), convert to unix-relative
+            const int64 unix_ticks = (ticks >= TICKS_AT_UNIX_EPOCH) ? ticks - TICKS_AT_UNIX_EPOCH : ticks;
+            const int64 unix_seconds = unix_ticks / TICKS_PER_SECOND;
+            const int32_t ms = static_cast<int32_t>((unix_ticks % TICKS_PER_SECOND) / TICKS_PER_MILLISECOND);
+
+            const std::time_t time_val = static_cast<std::time_t>(unix_seconds);
+            std::tm utc_time {};
+#if defined(_WIN32)
+            if (gmtime_s(&utc_time, &time_val) != 0)
+                return "Invalid UTC";
+#else
+            if (gmtime_r(&time_val, &utc_time) == nullptr)
+                return "Invalid UTC";
+#endif
+            std::ostringstream s;
+            s << std::put_time(&utc_time, "%Y-%m-%dT%H:%M:%S") << "." << std::setw(3) << std::setfill('0')
+              << (ms >= 0 ? ms : ms + 1000) << "Z";
+            return s.str();
+        }
+
+        /// Normalize an absolute UTC stamp of unknown legacy unit to UE ticks
+        /// (100ns since year 0001).  The writer has historically stamped the file
+        /// header's recorded_utc_timestamp in unix seconds while the footer's
+        /// per-frame created_utc uses UE ticks; this maps either (plus unix
+        /// milliseconds and unix-relative ticks) onto the tick timeline.  The
+        /// unit bands are disjoint by many orders of magnitude, so detection is
+        /// unambiguous for any date between 1971 and ~5000 AD.
+        inline int64 NormalizeUtcToUeTicks(int64 value) {
+            if (value <= 0)
+                return 0;
+            if (value >= TICKS_AT_UNIX_EPOCH)
+                return value;                                     // already UE ticks
+            constexpr int64 kUnixSecondsMax = 100'000'000'000;    // unix seconds until ~5138 AD
+            constexpr int64 kUnixMillisMax = 100'000'000'000'000; // unix ms in the same range
+            if (value < kUnixSecondsMax)
+                return value * TICKS_PER_SECOND + TICKS_AT_UNIX_EPOCH;
+            if (value < kUnixMillisMax)
+                return value * TICKS_PER_MILLISECOND + TICKS_AT_UNIX_EPOCH;
+            return value + TICKS_AT_UNIX_EPOCH; // unix-relative ticks
+        }
     } // namespace TimeUtils
 } // namespace VTX
