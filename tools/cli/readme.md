@@ -108,6 +108,18 @@ All commands are case-sensitive.
 | `schema` | `schema` | Yes | Contextual schema |
 | `chunks` | `chunks` | Yes | Chunk seek table |
 | `events` | `events` | Yes | Timeline events |
+| `times` | `times [start] [end]` | Yes | Per-frame time table, wall-clock stats, discontinuity scan |
+
+Timing fields:
+
+- Absolute wall-clock values are reported as `<name>_ticks` plus `<name>_iso` (ISO-8601 UTC string). Both are `null` when the file did not record the value. `_ticks` carries the value exactly as stored in the file (so raw deltas stay diagnosable); `_iso` is derived after unit normalization. Exception: `events.utc_ticks` is synthetic (derived, not stored) and is always on the UE-tick timeline.
+- `header` keeps the raw `recorded_utc_timestamp` for compatibility and adds `recorded_utc_iso`.
+- `info` adds `recorded_utc_ticks` / `recorded_utc_iso` (recording start).
+- Unit normalization exists because the writer has historically stamped the header's `recorded_utc_timestamp` in unix seconds while per-frame `created_utc` uses ticks: `TimeUtils::NormalizeUtcToUeTicks` maps unix seconds / milliseconds / unix-relative ticks / UE ticks onto one timeline. Every `*_iso` string and the event UTC derivation use it; every stored `*_ticks` value is passed through raw.
+- `footer` adds `game_time_count`, `created_utc_count`, `gap_count`, `segment_count`.
+- `chunks` items include `checksum` (xxHash64 of the on-disk chunk payload, 0 = not set).
+- `events` items include derived `utc_ticks` / `utc_iso` (recording start + `game_time`).
+- `times` returns counts, `first_created_utc_*` / `last_created_utc_*`, `wall_duration_seconds`, `game_duration_seconds`, `median_created_utc_delta_*`, an `anomalies` list (wall-clock deltas that are negative or more than twice the median step; capped at 100 entries with `anomaly_count` / `anomalies_truncated`), raw `gaps` / `segments`, and — when a `[start] [end]` range is given — a per-frame `frames` slice with `game_time_ticks`, `created_utc_ticks`, `created_utc_iso`, and `delta_ticks`.
 
 ### Navigation
 
@@ -115,7 +127,7 @@ All commands are case-sensitive.
 | --- | --- | --- | --- |
 | `frame` | `frame [n]` | Yes | Show current frame or move to frame `n` |
 
-`frame` always includes: `current_frame`, `total_frames`, `bucket_count`, `entity_count`.
+`frame` always includes: `current_frame`, `total_frames`, `bucket_count`, `entity_count`, plus per-frame timing from the footer time table: `game_time_ticks` / `game_time_seconds` (relative) and `created_utc_ticks` / `created_utc_iso` (absolute wall clock). Timing fields are `null` when the file did not record them.
 
 ### Inspection Commands
 

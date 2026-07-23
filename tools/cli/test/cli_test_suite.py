@@ -58,6 +58,13 @@ def expect_error_with_hint_key(response, command, failures):
         fail(f"{command}: expected 'hint' key in error response", failures)
 
 
+def expect_keys(response, command, keys, failures):
+    data = response.get("data", {})
+    for key in keys:
+        if key not in data:
+            fail(f"{command}: expected '{key}' key in data", failures)
+
+
 def run_tests():
     failures = []
     print(f"Starting {VTX_CLI_PATH}...")
@@ -90,12 +97,72 @@ def run_tests():
 
         expect_ok(send_command(process, "help"), "help", failures)
         expect_ok(send_command(process, f"open {TEST_FILE} --json-only"), "open", failures)
-        expect_ok(send_command(process, "info"), "info", failures)
-        expect_ok(send_command(process, "header"), "header", failures)
-        expect_ok(send_command(process, "footer"), "footer", failures)
-        expect_ok(send_command(process, "chunks"), "chunks", failures)
-        expect_ok(send_command(process, "events"), "events", failures)
-        expect_ok(send_command(process, "frame"), "frame", failures)
+
+        info_resp = send_command(process, "info")
+        expect_ok(info_resp, "info", failures)
+        expect_keys(info_resp, "info", ["recorded_utc_ticks", "recorded_utc_iso"], failures)
+
+        header_resp = send_command(process, "header")
+        expect_ok(header_resp, "header", failures)
+        expect_keys(header_resp, "header", ["recorded_utc_timestamp", "recorded_utc_iso"], failures)
+
+        footer_resp = send_command(process, "footer")
+        expect_ok(footer_resp, "footer", failures)
+        expect_keys(
+            footer_resp,
+            "footer",
+            ["game_time_count", "created_utc_count", "gap_count", "segment_count"],
+            failures,
+        )
+
+        chunks_resp = send_command(process, "chunks")
+        expect_ok(chunks_resp, "chunks", failures)
+        chunk_items = chunks_resp.get("data", {}).get("chunks", [])
+        if chunk_items and "checksum" not in chunk_items[0]:
+            fail("chunks: expected 'checksum' key on chunk entries", failures)
+
+        events_resp = send_command(process, "events")
+        expect_ok(events_resp, "events", failures)
+        event_items = events_resp.get("data", {}).get("events", [])
+        if event_items and ("utc_ticks" not in event_items[0] or "utc_iso" not in event_items[0]):
+            fail("events: expected 'utc_ticks'/'utc_iso' keys on event entries", failures)
+
+        times_resp = send_command(process, "times")
+        expect_ok(times_resp, "times", failures)
+        expect_keys(
+            times_resp,
+            "times",
+            [
+                "game_time_count",
+                "created_utc_count",
+                "first_created_utc_ticks",
+                "last_created_utc_iso",
+                "wall_duration_seconds",
+                "median_created_utc_delta_ticks",
+                "anomalies",
+                "anomaly_count",
+                "gaps",
+                "segments",
+            ],
+            failures,
+        )
+
+        times_slice_resp = send_command(process, "times 0 2")
+        expect_ok(times_slice_resp, "times 0 2", failures)
+        slice_frames = times_slice_resp.get("data", {}).get("frames", None)
+        if slice_frames is None:
+            fail("times 0 2: expected 'frames' slice in data", failures)
+        elif len(slice_frames) != 3:
+            fail(f"times 0 2: expected 3 slice entries, got {len(slice_frames)}", failures)
+
+        frame_resp = send_command(process, "frame")
+        expect_ok(frame_resp, "frame", failures)
+        expect_keys(
+            frame_resp,
+            "frame",
+            ["game_time_ticks", "game_time_seconds", "created_utc_ticks", "created_utc_iso"],
+            failures,
+        )
         expect_ok(send_command(process, "frame 0"), "frame 0", failures)
 
         buckets_resp = send_command(process, "buckets")
@@ -135,6 +202,8 @@ def run_tests():
         )
         expect_error_with_hint_key(send_command(process, "types RLFrameData"), "types missing", failures)
         expect_error_with_hint_key(send_command(process, "unknowncmd"), "unknowncmd", failures)
+        expect_error_with_hint_key(send_command(process, "times 5 1"), "times bad range", failures)
+        expect_error_with_hint_key(send_command(process, "times 0"), "times single arg", failures)
 
         expect_ok(send_command(process, "close"), "close", failures)
         expect_ok(send_command(process, "exit"), "exit", failures)
