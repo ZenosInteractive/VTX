@@ -49,13 +49,15 @@ private:
 
     std::shared_ptr<InspectorSession> session_;
 
-    int range_mode_ = 0; // 0 = time, 1 = frame, 2 = UTC
+    int range_mode_ = 0; // 0 = time, 1 = frame, 2 = UTC (exact cuts); 3 = chunk (whole chunks)
     double time_start_seconds_ = 0.0;
     double time_end_seconds_ = 0.0;
     int frame_start_ = 0;
     int frame_end_ = 0;
     char utc_start_[64] = {};
     char utc_end_[64] = {};
+    int chunk_start_ = 0;
+    int chunk_end_ = 0;
     bool range_initialized_ = false;
 
     Phase phase_ = Phase::Idle;

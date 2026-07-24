@@ -110,6 +110,8 @@ void CutReplayWindow::ResetRangeToFullReplay() {
     const int total_frames = footer.total_frames;
     frame_start_ = 0;
     frame_end_ = std::max(total_frames - 1, 0);
+    chunk_start_ = 0;
+    chunk_end_ = std::max(static_cast<int>(footer.chunk_index.size()) - 1, 0);
     time_start_seconds_ = 0.0;
     time_end_seconds_ = static_cast<double>(footer.duration_seconds);
     utc_start_[0] = '\0';
@@ -220,15 +222,16 @@ void CutReplayWindow::DrawContent() {
     }
 
     const auto& footer = session_->GetFooter();
-    ImGui::TextWrapped("Write a new .vtx containing a sub-range of the loaded replay. The range snaps to "
-                       "whole chunks: chunks are copied verbatim, and the footer is rebuilt for the cut.");
+    ImGui::TextWrapped("Write a new .vtx containing a sub-range of the loaded replay. Time/Frame/UTC ranges cut "
+                       "exactly: partial edge chunks are rewritten with only the kept frames. Chunk ranges keep "
+                       "whole chunks verbatim. The footer is rebuilt either way.");
     ImGui::Spacing();
 
     const bool busy = (phase_ == Phase::Running);
     ImGui::BeginDisabled(busy);
 
-    ImGui::SetNextItemWidth(160.0f);
-    ImGui::Combo("Range mode", &range_mode_, "Time (elapsed seconds)\0Frame\0UTC\0");
+    ImGui::SetNextItemWidth(200.0f);
+    ImGui::Combo("Range mode", &range_mode_, "Time (elapsed seconds)\0Frame\0UTC\0Chunk (whole chunks)\0");
 
     if (range_mode_ == 0) {
         ImGui::SetNextItemWidth(120.0f);
@@ -246,12 +249,20 @@ void CutReplayWindow::DrawContent() {
         ImGui::SetNextItemWidth(120.0f);
         ImGui::InputInt("End frame", &frame_end_, 0, 0);
         ImGui::TextColored(kDim, "Replay frames: 0 .. %d", std::max(footer.total_frames - 1, 0));
-    } else {
+    } else if (range_mode_ == 2) {
         ImGui::SetNextItemWidth(260.0f);
         ImGui::InputText("Start UTC", utc_start_, sizeof(utc_start_));
         ImGui::SetNextItemWidth(260.0f);
         ImGui::InputText("End UTC", utc_end_, sizeof(utc_end_));
         ImGui::TextColored(kDim, "ISO-8601 (2026-07-24T09:50:29.195Z) or unix seconds / ms / 100ns ticks.");
+    } else {
+        ImGui::SetNextItemWidth(120.0f);
+        ImGui::InputInt("Start chunk", &chunk_start_, 0, 0);
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(120.0f);
+        ImGui::InputInt("End chunk", &chunk_end_, 0, 0);
+        ImGui::TextColored(kDim, "Replay chunks: 0 .. %d (kept whole, copied verbatim)",
+                           std::max(static_cast<int>(footer.chunk_index.size()) - 1, 0));
     }
 
     if (ImGui::Button("Reset to full replay")) {
@@ -262,14 +273,18 @@ void CutReplayWindow::DrawContent() {
     ImGui::Separator();
 
     // Live plan preview.
-    int requested_start = 0;
-    int requested_end = 0;
-    std::string input_error;
     VtxServices::ReplayCutPlan plan;
-    if (ResolveRequestedFrames(requested_start, requested_end, input_error)) {
-        plan = VtxServices::ReplayCutService::PlanCut(footer, requested_start, requested_end);
+    if (range_mode_ == 3) {
+        plan = VtxServices::ReplayCutService::PlanCutChunks(footer, chunk_start_, chunk_end_);
     } else {
-        plan.error = input_error;
+        int requested_start = 0;
+        int requested_end = 0;
+        std::string input_error;
+        if (ResolveRequestedFrames(requested_start, requested_end, input_error)) {
+            plan = VtxServices::ReplayCutService::PlanCutFrames(footer, requested_start, requested_end);
+        } else {
+            plan.error = input_error;
+        }
     }
 
     if (!plan.valid) {
@@ -279,11 +294,26 @@ void CutReplayWindow::DrawContent() {
             plan.first_frame, footer.times, footer.total_frames, footer.duration_seconds);
         const float end_sec = VtxServices::TimelineViewService::FrameToElapsedSeconds(
             plan.last_frame, footer.times, footer.total_frames, footer.duration_seconds);
-        ImGui::Text("Cut (snapped to chunks): frames %d .. %d  (%d frames)", plan.first_frame, plan.last_frame,
+        ImGui::Text("Cut: frames %d .. %d  (%d frames)", plan.first_frame, plan.last_frame,
                     plan.last_frame - plan.first_frame + 1);
         ImGui::Text("Time %s .. %s   |   chunks %d .. %d of %d   |   ~%.1f MB", FormatClock(start_sec).c_str(),
                     FormatClock(end_sec).c_str(), plan.first_chunk, plan.last_chunk,
                     static_cast<int>(footer.chunk_index.size()), plan.chunk_bytes / (1024.0 * 1024.0));
+        if (plan.trims_head || plan.trims_tail) {
+            const auto& head = footer.chunk_index[static_cast<size_t>(plan.first_chunk)];
+            const auto& tail = footer.chunk_index[static_cast<size_t>(plan.last_chunk)];
+            std::string edge = "Edge rewrite: ";
+            if (plan.trims_head) {
+                edge += "head chunk drops " + std::to_string(plan.first_frame - head.start_frame) + " frame(s)";
+            }
+            if (plan.trims_head && plan.trims_tail) {
+                edge += ", ";
+            }
+            if (plan.trims_tail) {
+                edge += "tail chunk drops " + std::to_string(tail.end_frame - plan.last_frame) + " frame(s)";
+            }
+            ImGui::TextColored(kDim, "%s", edge.c_str());
+        }
     }
 
     ImGui::Spacing();
