@@ -204,7 +204,6 @@ void TimelineWindow::DrawTimeAndFrameInfo(int total_frames, float duration) {
 
 // Renders main timeline slider and updates scrubbing state.
 void TimelineWindow::DrawTimelineSlider(int total_frames, float duration_seconds) {
-    (void)duration_seconds;
     ImGui::SetNextItemWidth(-1.0f);
 
     int current_frame = inspector_session_->GetCurrentFrame();
@@ -212,6 +211,26 @@ void TimelineWindow::DrawTimelineSlider(int total_frames, float duration_seconds
         inspector_session_->SetCurrentFrame(HandleGoToFrame(current_frame, total_frames));
     }
     inspector_session_->SetScrubbingTimeline(ImGui::IsItemActive());
+
+    // Overlay recording gaps on the slider track, positioned and sized by wall
+    // clock so a band's width reads as the gap's duration.
+    if (duration_seconds > 0.0f) {
+        const auto& dropped_map = GetDroppedFrameMap(total_frames);
+        if (!dropped_map.gaps.empty()) {
+            const ImVec2 rect_min = ImGui::GetItemRectMin();
+            const ImVec2 rect_max = ImGui::GetItemRectMax();
+            const float rect_width = rect_max.x - rect_min.x;
+            ImDrawList* draw_list = ImGui::GetWindowDrawList();
+            for (const auto& gap : dropped_map.gaps) {
+                const float t0 = std::clamp(gap.start_seconds / duration_seconds, 0.0f, 1.0f);
+                const float t1 =
+                    std::clamp((gap.start_seconds + gap.duration_ms / 1000.0f) / duration_seconds, 0.0f, 1.0f);
+                const float x0 = rect_min.x + t0 * rect_width;
+                const float x1 = std::max(rect_min.x + t1 * rect_width, x0 + 1.0f);
+                draw_list->AddRectFilled(ImVec2(x0, rect_min.y), ImVec2(x1, rect_max.y), IM_COL32(220, 60, 60, 150));
+            }
+        }
+    }
 }
 
 const VtxServices::DroppedFrameMap& TimelineWindow::GetDroppedFrameMap(int total_frames) {

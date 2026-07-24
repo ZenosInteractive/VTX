@@ -111,6 +111,7 @@ namespace VtxServices {
 
         const double expected_interval_ms = 1000.0 / static_cast<double>(expected_fps);
         const int last_index = std::min(total_frames, static_cast<int>(ticks.size())) - 1;
+        const uint64_t base_tick = FirstNonZeroTick(ticks);
 
         int prev_stamped = -1;
         for (int frame = 0; frame <= last_index; ++frame) {
@@ -133,6 +134,13 @@ namespace VtxServices {
                         map.gap_ms[static_cast<size_t>(i)] = static_cast<float>(actual_ms);
                         map.missing[static_cast<size_t>(i)] = missing;
                     }
+                    map.gaps.push_back(DroppedFrameGap {
+                        .first_frame = prev_stamped + 1,
+                        .last_frame = frame,
+                        .start_seconds = static_cast<float>(
+                            static_cast<double>(ticks[static_cast<size_t>(prev_stamped)] - base_tick) / 10'000'000.0),
+                        .duration_ms = static_cast<float>(actual_ms),
+                    });
                 }
             }
             prev_stamped = frame;
