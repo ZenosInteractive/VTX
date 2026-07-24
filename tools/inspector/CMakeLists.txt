@@ -32,6 +32,7 @@ target_include_directories(vtx_inspector PRIVATE
 target_link_libraries(vtx_inspector PRIVATE
     vtx_tool_shared
     vtx_reader
+    vtx_writer  # VTX::RepairReplayFile for File > Repair Replay
 )
 
 set_target_properties(vtx_inspector PROPERTIES
