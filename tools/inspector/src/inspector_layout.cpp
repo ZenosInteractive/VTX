@@ -11,6 +11,7 @@
 #include "gui/gui_types.h"
 #include "inspector_session.h"
 #include "windows/analysis_window_factory.h"
+#include "windows/cut_replay_window.h"
 #include "windows/repair_replay_window.h"
 
 namespace {
@@ -260,6 +261,15 @@ void InspectorLayout::OnRender() {
                 }
             }
 
+            // Cut a sub-range of the loaded replay into a new .vtx.
+            if (ImGui::MenuItem("Cut Replay...", nullptr, false, session_->HasLoadedReplay())) {
+                if (!cut_window_) {
+                    cut_window_ = std::make_shared<CutReplayWindow>(session_);
+                } else {
+                    cut_window_->SetOpen(true);
+                }
+            }
+
             ImGui::Separator();
 
             if (ImGui::MenuItem("Exit")) {
@@ -330,6 +340,14 @@ void InspectorLayout::OnRender() {
         repair_window_->OnRender();
         if (!repair_window_->IsOpen()) {
             repair_window_.reset();
+        }
+    }
+
+    // Cut-replay window (floating, single instance), same lifecycle as repair.
+    if (cut_window_) {
+        cut_window_->OnRender();
+        if (!cut_window_->IsOpen()) {
+            cut_window_.reset();
         }
     }
 }

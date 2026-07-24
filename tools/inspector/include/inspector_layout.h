@@ -3,6 +3,7 @@
 #include <vector>
 #include "gui/gui_layer.h"
 
+class CutReplayWindow;
 class GuiScaleController;
 class InspectorSession;
 class RepairReplayWindow;
@@ -28,4 +29,7 @@ protected:
     // File > Repair Replay: floating, independent of a loaded replay (it repairs a
     // possibly-unopenable .vtx from its ".recovery" sidecar). At most one at a time.
     std::shared_ptr<RepairReplayWindow> repair_window_;
+
+    // File > Cut Replay: floating, operates on the loaded replay. At most one.
+    std::shared_ptr<CutReplayWindow> cut_window_;
 };
