@@ -1,6 +1,7 @@
 #include "windows/timeline_window.h"
 
 #include <algorithm>
+#include <cstdio>
 #include <imgui.h>
 #include <vector>
 
@@ -8,6 +9,10 @@
 #include "inspector_session.h"
 
 namespace {
+
+    // Real captures never sustain their nominal rate; the entered Drop FPS is
+    // derated by this factor before gap detection.
+    constexpr float kDropFpsRealWorldFactor = 0.75f;
 
     struct TimelineHoverInfo {
         bool has_hover = false;
@@ -177,7 +182,10 @@ void TimelineWindow::DrawTimeAndFrameInfo(int total_frames, float duration) {
         // Expected capture rate for the recording-gap (red bar) detection.
         ImGui::SameLine();
         ImGui::SetNextItemWidth(70.0f);
-        if (ImGui::InputFloat("Drop FPS", &drop_detect_fps_, 0.0f, 0.0f, "%.1f",
+        char drop_fps_label[64];
+        std::snprintf(drop_fps_label, sizeof(drop_fps_label), "Drop FPS (x0.75 = %.1f)###DropFps",
+                      drop_detect_fps_ * kDropFpsRealWorldFactor);
+        if (ImGui::InputFloat(drop_fps_label, &drop_detect_fps_, 0.0f, 0.0f, "%.1f",
                               ImGuiInputTextFlags_EnterReturnsTrue)) {
             drop_detect_fps_ = std::clamp(drop_detect_fps_, 1.0f, 1000.0f);
         }
@@ -245,7 +253,8 @@ const VtxServices::DroppedFrameMap& TimelineWindow::GetDroppedFrameMap(int total
     const size_t stamp_count = times.created_utc.size() + times.game_time.size();
     if (dropped_map_fps_ != drop_detect_fps_ || dropped_map_frames_ != total_frames ||
         dropped_map_stamp_count_ != stamp_count) {
-        dropped_map_ = VtxServices::TimelineViewService::BuildDroppedFrameMap(times, total_frames, drop_detect_fps_);
+        dropped_map_ = VtxServices::TimelineViewService::BuildDroppedFrameMap(
+            times, total_frames, drop_detect_fps_ * kDropFpsRealWorldFactor);
         dropped_map_fps_ = drop_detect_fps_;
         dropped_map_frames_ = total_frames;
         dropped_map_stamp_count_ = stamp_count;
