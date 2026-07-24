@@ -11,6 +11,7 @@
 #include "gui/gui_types.h"
 #include "inspector_session.h"
 #include "windows/analysis_window_factory.h"
+#include "windows/repair_replay_window.h"
 
 namespace {
 
@@ -249,6 +250,18 @@ void InspectorLayout::OnRender() {
 
             ImGui::Separator();
 
+            // Repair a crashed .vtx from its ".recovery" sidecar. Independent of the
+            // currently loaded replay -- always available.
+            if (ImGui::MenuItem("Repair Replay...")) {
+                if (!repair_window_) {
+                    repair_window_ = std::make_shared<RepairReplayWindow>();
+                } else {
+                    repair_window_->SetOpen(true);
+                }
+            }
+
+            ImGui::Separator();
+
             if (ImGui::MenuItem("Exit")) {
                 if (GLFWwindow* current_window = glfwGetCurrentContext()) {
                     glfwSetWindowShouldClose(current_window, GLFW_TRUE);
@@ -310,4 +323,13 @@ void InspectorLayout::OnRender() {
     std::erase_if(analysis_windows_, [](const std::shared_ptr<IGuiLayer>& layer) {
         return !AnalysisWindowFactory::IsAnalysisWindowOpen(layer);
     });
+
+    // Repair-replay window (floating, single instance). Render while open; drop it
+    // once the user closes it (its destructor joins any in-flight repair).
+    if (repair_window_) {
+        repair_window_->OnRender();
+        if (!repair_window_->IsOpen()) {
+            repair_window_.reset();
+        }
+    }
 }
