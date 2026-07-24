@@ -93,6 +93,47 @@ namespace VtxServices {
             .current = ToClockTime(current_time_sec), .total = ToClockTime(duration_seconds), .fps = fps};
     }
 
+    int TimelineViewService::FrameAtElapsedSeconds(float seconds, const VTX::ReplayTimeData& times, int total_frames,
+                                                   float duration_seconds, float fallback_fps) {
+        if (total_frames <= 0) {
+            return 0;
+        }
+        const std::vector<uint64_t>& ticks =
+            FirstNonZeroTick(times.created_utc) != 0 ? times.created_utc : times.game_time;
+        const uint64_t base_tick = FirstNonZeroTick(ticks);
+        if (base_tick == 0) {
+            const float fps = ComputePlaybackFps(total_frames, duration_seconds, fallback_fps);
+            return ClampFrame(static_cast<int>(std::max(seconds, 0.0f) * fps), total_frames);
+        }
+
+        const uint64_t target_tick =
+            base_tick + static_cast<uint64_t>(std::max(0.0, static_cast<double>(seconds) * 10'000'000.0));
+
+        // Binary search for the greatest stamped frame with tick <= target.
+        // Zero (unstamped) entries are skipped by walking the probe left.
+        int low = 0;
+        int high = std::min(total_frames, static_cast<int>(ticks.size())) - 1;
+        int result = 0;
+        while (low <= high) {
+            const int mid = low + (high - low) / 2;
+            int probe = mid;
+            while (probe >= low && ticks[static_cast<size_t>(probe)] == 0) {
+                --probe;
+            }
+            if (probe < low) {
+                low = mid + 1;
+                continue;
+            }
+            if (ticks[static_cast<size_t>(probe)] <= target_tick) {
+                result = probe;
+                low = mid + 1;
+            } else {
+                high = probe - 1;
+            }
+        }
+        return ClampFrame(result, total_frames);
+    }
+
     DroppedFrameMap TimelineViewService::BuildDroppedFrameMap(const VTX::ReplayTimeData& times, int total_frames,
                                                               float expected_fps) {
         DroppedFrameMap map;

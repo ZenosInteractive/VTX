@@ -70,6 +70,13 @@ namespace VtxServices {
         static float FrameToElapsedSeconds(int frame, const VTX::ReplayTimeData& times, int total_frames,
                                            float duration_seconds, float fallback_fps = 30.0f);
 
+        // Inverse of FrameToElapsedSeconds: the last frame stamped at or before
+        // `seconds`, found by binary search over the footer time table (zero
+        // entries are skipped). Falls back to linear time*avg-fps mapping when
+        // the table is absent.
+        static int FrameAtElapsedSeconds(float seconds, const VTX::ReplayTimeData& times, int total_frames,
+                                         float duration_seconds, float fallback_fps = 30.0f);
+
         // Builds the recording-gap map for the whole replay from the footer time
         // table (created_utc preferred, game_time fallback). Returns an empty map
         // (no frames flagged) when the file carries no usable time table.

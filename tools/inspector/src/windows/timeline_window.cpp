@@ -202,13 +202,20 @@ void TimelineWindow::DrawTimeAndFrameInfo(int total_frames, float duration) {
     ImGui::EndChild();
 }
 
-// Renders main timeline slider and updates scrubbing state.
+// Renders the main timeline slider (wall-clock axis) and updates scrubbing
+// state. The grab position is the current frame's elapsed time; dragging
+// resolves the frame at the grabbed time via the footer time table, so equal
+// slider distance means equal wall-clock time even across recording gaps.
 void TimelineWindow::DrawTimelineSlider(int total_frames, float duration_seconds) {
     ImGui::SetNextItemWidth(-1.0f);
 
-    int current_frame = inspector_session_->GetCurrentFrame();
-    if (ImGui::SliderInt("##MainTimeline", &current_frame, 0, total_frames - 1, "")) {
-        inspector_session_->SetCurrentFrame(HandleGoToFrame(current_frame, total_frames));
+    const auto& times = inspector_session_->GetFooter().times;
+    float current_seconds = VtxServices::TimelineViewService::FrameToElapsedSeconds(
+        inspector_session_->GetCurrentFrame(), times, total_frames, duration_seconds);
+    if (ImGui::SliderFloat("##MainTimeline", &current_seconds, 0.0f, duration_seconds, "")) {
+        const int frame = VtxServices::TimelineViewService::FrameAtElapsedSeconds(current_seconds, times, total_frames,
+                                                                                  duration_seconds);
+        inspector_session_->SetCurrentFrame(HandleGoToFrame(frame, total_frames));
     }
     inspector_session_->SetScrubbingTimeline(ImGui::IsItemActive());
 
