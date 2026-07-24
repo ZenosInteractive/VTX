@@ -53,14 +53,15 @@ namespace {
     }
 
     // Builds hover payload (frame index + derived time labels) for tooltip rendering.
-    TimelineHoverInfo BuildHoverInfo(int hovered_frame, int total_frames, float duration_seconds) {
+    TimelineHoverInfo BuildHoverInfo(int hovered_frame, int total_frames, float duration_seconds,
+                                     const VTX::ReplayTimeData& times) {
         TimelineHoverInfo info;
         if (hovered_frame < 0) {
             return info;
         }
 
-        const float fps = VtxServices::TimelineViewService::ComputePlaybackFps(total_frames, duration_seconds);
-        const float frame_time_sec = static_cast<float>(hovered_frame) / fps;
+        const float frame_time_sec = VtxServices::TimelineViewService::FrameToElapsedSeconds(
+            hovered_frame, times, total_frames, duration_seconds);
         info.has_hover = true;
         info.frame_index = hovered_frame;
         info.frame_time_seconds = frame_time_sec;
@@ -70,10 +71,10 @@ namespace {
 
     // Builds strip bars, hover state, and optional scroll requests for current frame.
     TimelineStripViewModel BuildStripViewModel(VtxServices::TimelineBarState& timeline_bar_state, int total_frames,
-                                               int current_frame, float duration_seconds, float scroll_x,
-                                               float view_width, float origin_x, float origin_y, float timeline_height,
-                                               bool ctrl_down, float wheel, bool is_window_hovered, float mouse_x,
-                                               float mouse_y) {
+                                               int current_frame, float duration_seconds,
+                                               const VTX::ReplayTimeData& times, float scroll_x, float view_width,
+                                               float origin_x, float origin_y, float timeline_height, bool ctrl_down,
+                                               float wheel, bool is_window_hovered, float mouse_x, float mouse_y) {
         TimelineStripViewModel view_model;
         float working_scroll_x = scroll_x;
 
@@ -118,7 +119,7 @@ namespace {
             });
         }
 
-        view_model.hover_info = BuildHoverInfo(hovered_frame_idx, total_frames, duration_seconds);
+        view_model.hover_info = BuildHoverInfo(hovered_frame_idx, total_frames, duration_seconds, times);
         return view_model;
     }
 
@@ -151,7 +152,8 @@ void TimelineWindow::DrawTimeAndFrameInfo(int total_frames, float duration) {
     (void)duration;
     if (ImGui::BeginChild("InfoPanel", ImVec2(0, 45), true)) {
         const auto time_span = VtxServices::TimelineViewService::BuildTimelineClockSpan(
-            inspector_session_->GetCurrentFrame(), total_frames, inspector_session_->GetFooter().duration_seconds);
+            inspector_session_->GetCurrentFrame(), total_frames, inspector_session_->GetFooter().duration_seconds,
+            inspector_session_->GetFooter().times);
 
         ImGui::AlignTextToFramePadding();
         ImGui::Text("Time: %02d:%02d / %02d:%02d", time_span.current.minutes, time_span.current.seconds,
@@ -198,11 +200,11 @@ void TimelineWindow::DrawFrameStripTimeline(int total_frames) {
         // Step 1: Build strip model from current viewport + input state.
         const ImVec2 p = ImGui::GetCursorScreenPos();
         const auto mouse_pos = ImGui::GetMousePos();
-        const auto strip_vm =
-            BuildStripViewModel(timeline_bar_state_, total_frames, inspector_session_->GetCurrentFrame(),
-                                inspector_session_->GetFooter().duration_seconds, ImGui::GetScrollX(),
-                                ImGui::GetWindowWidth(), p.x, p.y, timeline_height, ImGui::GetIO().KeyCtrl,
-                                ImGui::GetIO().MouseWheel, ImGui::IsWindowHovered(), mouse_pos.x, mouse_pos.y);
+        const auto strip_vm = BuildStripViewModel(
+            timeline_bar_state_, total_frames, inspector_session_->GetCurrentFrame(),
+            inspector_session_->GetFooter().duration_seconds, inspector_session_->GetFooter().times,
+            ImGui::GetScrollX(), ImGui::GetWindowWidth(), p.x, p.y, timeline_height, ImGui::GetIO().KeyCtrl,
+            ImGui::GetIO().MouseWheel, ImGui::IsWindowHovered(), mouse_pos.x, mouse_pos.y);
         if (strip_vm.request_scroll) {
             ImGui::SetScrollX(strip_vm.desired_scroll_x);
             timeline_bar_state_.last_tracked_frame = inspector_session_->GetCurrentFrame();
