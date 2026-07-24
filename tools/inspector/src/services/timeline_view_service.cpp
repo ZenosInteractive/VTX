@@ -93,6 +93,53 @@ namespace VtxServices {
             .current = ToClockTime(current_time_sec), .total = ToClockTime(duration_seconds), .fps = fps};
     }
 
+    DroppedFrameMap TimelineViewService::BuildDroppedFrameMap(const VTX::ReplayTimeData& times, int total_frames,
+                                                              float expected_fps) {
+        DroppedFrameMap map;
+        if (total_frames <= 0 || expected_fps <= 0.0f) {
+            return map;
+        }
+        map.flagged.assign(static_cast<size_t>(total_frames), 0);
+        map.gap_ms.assign(static_cast<size_t>(total_frames), 0.0f);
+        map.missing.assign(static_cast<size_t>(total_frames), 0);
+
+        const std::vector<uint64_t>& ticks =
+            FirstNonZeroTick(times.created_utc) != 0 ? times.created_utc : times.game_time;
+        if (FirstNonZeroTick(ticks) == 0) {
+            return map;
+        }
+
+        const double expected_interval_ms = 1000.0 / static_cast<double>(expected_fps);
+        const int last_index = std::min(total_frames, static_cast<int>(ticks.size())) - 1;
+
+        int prev_stamped = -1;
+        for (int frame = 0; frame <= last_index; ++frame) {
+            if (ticks[static_cast<size_t>(frame)] == 0) {
+                continue;
+            }
+            if (prev_stamped >= 0) {
+                const int span_frames = frame - prev_stamped;
+                const double actual_ms =
+                    static_cast<double>(ticks[static_cast<size_t>(frame)] - ticks[static_cast<size_t>(prev_stamped)]) /
+                    10'000.0;
+                const double expected_ms = expected_interval_ms * span_frames;
+                if (actual_ms > expected_ms * 1.5) {
+                    const int missing =
+                        std::max(1, static_cast<int>(actual_ms / expected_interval_ms + 0.5) - span_frames);
+                    ++map.gap_count;
+                    map.total_missing += missing;
+                    for (int i = prev_stamped + 1; i <= frame; ++i) {
+                        map.flagged[static_cast<size_t>(i)] = 1;
+                        map.gap_ms[static_cast<size_t>(i)] = static_cast<float>(actual_ms);
+                        map.missing[static_cast<size_t>(i)] = missing;
+                    }
+                }
+            }
+            prev_stamped = frame;
+        }
+        return map;
+    }
+
     TimelineClockSpan TimelineViewService::BuildTimelineClockSpan(int current_frame, int total_frames,
                                                                   float duration_seconds,
                                                                   const VTX::ReplayTimeData& times,
