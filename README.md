@@ -153,7 +153,7 @@ Four static libraries. Enable or disable each with a CMake option. Full module b
 
 ## Tools
 
-- **`vtx_inspector`** — ImGui-based visual inspector for browsing replay files. Requires OpenGL.
+- **`vtx_inspector`** — ImGui-based visual inspector for browsing replay files: wall-clock timeline with recording-gap highlighting, plus file operations to **repair** a crashed recording from its `.recovery` sidecar and **cut** a sub-range into a new `.vtx`. Requires OpenGL.
 - **`vtx_cli`** — Headless, JSON-based command-line inspector. Designed for scripting and AI-agent consumption.
 - **`vtx_schema_creator`** — GUI tool for authoring the `schema.json` the writer consumes.
 

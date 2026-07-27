@@ -298,6 +298,26 @@ Durability knobs on the file sink (`ChunkedFileSink::Config`; facade users curre
 | `enable_recovery_journal` | `true` | Maintain the `.recovery` sidecar. Opting out removes any stale sidecar at session start; a crash then leaves an unrecoverable (footerless) file. |
 | `journal_compact_threshold_bytes` | `0` (64 MB) | How many superseded journal bytes accrue before the sidecar is compacted (rewritten via an atomic rename). |
 
+### Sink performance observer
+
+To see where write time goes, attach a perf observer — it receives per-stage timings synchronously from the writer thread (implementations must be cheap; leave null for a zero-cost no-op):
+
+```cpp
+VTX::FileSinkAtomicPerfObserver perf;   // default thread-safe collector
+
+VTX::WriterFacadeConfig config;
+config.perf_observer = &perf;           // or ChunkedFileSink::Config::perf_observer
+// ... record frames, Stop() ...
+
+VTX::FileSinkPerformanceStats s = perf.Snapshot();
+// s.serialization_us  — SerializeHeader/Chunk/Footer
+// s.compression_us    — zstd
+// s.disk_write_us     — writes INCLUDING the durability flush (fsync/fflush),
+//                       which is the dominant disk cost
+```
+
+`IFileSinkPerfObserver` (`OnSerialize` / `OnCompress` / `OnDiskWrite`) is the interface if you want your own collector; `FileSinkAtomicPerfObserver` aggregates atomically, so one instance can be shared across sinks or `Reset()` between measurements. The observer must outlive the writer.
+
 ### One call: `WriteReplay`
 
 When you already have an `IFrameDataSource` and just want a finished `.vtx`, `WriteReplay` runs the whole pipeline in one call -- create the writer, initialize the source, drain every frame through `TryRecordFrame`, finalize, and report:

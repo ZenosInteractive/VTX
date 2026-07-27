@@ -84,8 +84,9 @@ The footer's seek table stores metadata for each chunk:
 | `chunk_index` | `int32_t` | Sequential chunk number |
 | `start_frame` | `int32_t` | First frame index in this chunk |
 | `end_frame` | `int32_t` | Last frame index in this chunk |
-| `file_offset` | `uint64_t` | Byte offset from file start |
-| `chunk_size_bytes` | `uint32_t` | Compressed size on disk |
+| `file_offset` | `uint64_t` | Byte offset from file start (points at the chunk's `uint32_t` size prefix) |
+| `chunk_size_bytes` | `uint32_t` | Size on disk including the 4-byte size prefix |
+| `checksum` | `uint64_t` | xxHash64 of the on-disk chunk payload (after the size prefix); `0` = not recorded (pre-checksum files) |
 
 ## Footer
 
@@ -126,6 +127,26 @@ The footer is stored at the end of the file, before the footer-size sentinel.
 | `created_utc` | `vector<int64_t>` | Per-frame UTC timestamps |
 | `gaps` | `vector<int32_t>` | Frame indices where recording gaps occurred |
 | `segments` | `vector<int32_t>` | Frame indices marking segment boundaries |
+
+## Recovery Sidecar (`<file>.vtx.recovery`)
+
+While a recording is in progress, the file sink maintains a write-ahead sidecar next to the `.vtx` (opt-out via `enable_recovery_journal`). On a clean `Stop()` the sidecar is **deleted** — its presence at open time signals an unclean shutdown, and `VTX::RepairReplayFile()` can reconstruct a valid `.vtx` from it (see `docs/SDK_API.md`, "Crash recovery"). A `.vtx` alone is never affected: the sidecar is a separate file the reader ignores.
+
+**Layout** — a 12-byte header followed by an append-only stream of self-validating records:
+
+```
+[ "VTXR" (4) ][ uint32 version ][ format magic (4, e.g. "VTXF") ]
+[ record ]*     where record = [ uint8 type ][ uint32 payload_len ][ payload ][ uint64 xxHash64 of type+len+payload ]
+```
+
+| Record | Payload | Purpose |
+|---|---|---|
+| `S` | `float fps`, `uint8 is_increasing`, `uint8 use_compression`, `int8 compression_level` | Written once after the header; lets repair reconstruct the footer's derived time data and compression byte-exactly |
+| `C` | chunk index entry (32 bytes: index, start/end frame, offset, size, checksum) | Commits a chunk **after** its bytes are durable in the `.vtx` (data-before-journal) |
+| `T` | `int32 frame_index`, `int64 game_time`, `int64 created_utc` | Exact per-frame times of a committed chunk's frames |
+| `F` | `int32 frame_index`, `int64 game_time`, `int64 created_utc`, serialized 1-frame chunk payload | An in-flight (not yet flushed) frame — recoverable even if its chunk never lands |
+
+A torn or corrupt record fails its per-record checksum and terminates the parse at that point; superseded `F` records are reclaimed by periodic compaction (rewrite into a temp file + atomic rename). Byte order is little-endian host, matching the rest of the format.
 
 ## Frame, Bucket & PropertyContainer Data Model
 

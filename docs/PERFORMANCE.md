@@ -27,7 +27,9 @@ A one-screen view of which areas of the SDK are fast, which are slow, and which 
 
 | Task | Result | Plain-language reading |
 |---|---|---|
-| Writing a replay | ~82 000 frames/s | A 30-minute match at 60 fps (~108 k frames) costs ~1.3 s of CPU. |
+| Writing a replay (default: crash journal + fsync) | ~3 500 frames/s | ~290 µs/frame on NVMe — 1.7 % of a 60 fps frame budget buys power-loss-safe recording. |
+| Writing a replay (flush-only journal) | ~33 000 frames/s | Process-crash safe and effectively free (~30 µs/frame). |
+| Writing a replay (journal off) | ~52 000 frames/s | The raw pipeline cost (~19 µs/frame); the pre-0.4.0 "~82 k" headline measured this path. |
 | Reading the full CS2 fixture (92 MB, median) | ~5.6 s | Comparable to opening a long video in an editor. |
 | Preview (first 1 000 frames) | ~1 s | Thumbnails + file-browse UI have no perceptible lag. |
 | Seek to 50 % + play 300 frames | ~0.9 s | Timeline scrubbing is fluid. |
@@ -90,6 +92,20 @@ The differ fingerprints two frames (xxHash) before falling back to the full stru
 | CS2 (big) | 66 µs | 131 µs | **~2×** |
 
 Ratio shrinks on big frames because hashing itself becomes non-trivial — but the shortcut is still a clear win.
+
+### 4. Crash-safety has three price points — pick per medium
+
+`BM_WriterDurabilityTier` (200 small frames/iteration, NVMe) measures what the recovery defaults cost on the recording thread:
+
+| Sink configuration | Per frame | Survives |
+|---|---:|---|
+| Journal **off** | ~19 µs | nothing (a crash loses the recording) |
+| Journal + **flush-only** (`durable_writes = false`) | ~30 µs | process crash |
+| Journal + **fsync** (the **default**) | ~290 µs | process crash **and** power loss |
+
+Guidance: on SSD/NVMe the default is comfortably affordable (~1.7 % of a 60 fps budget). On spinning disks a single fsync can cost 5–20 ms — use flush-only there; it was validated against real process kills. Note the writer is synchronous: the frame that triggers a chunk flush pays the whole chunk write inline (several ms), so latency-sensitive integrations should record from a dedicated thread.
+
+Related salvage cost (`BM_ReaderRecoveredTail`): a repaired file's in-flight frames come back as one-frame chunks, which read sequentially **~3× slower** than clean chunking — transcode a salvaged file (open → re-record) for hot-path use.
 
 ## What these numbers do *not* prove
 
