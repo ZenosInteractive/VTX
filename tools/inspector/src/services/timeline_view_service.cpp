@@ -1,6 +1,53 @@
 #include "services/timeline_view_service.h"
 
 #include <algorithm>
+#include <cstdint>
+#include <vector>
+
+namespace {
+
+    constexpr double kTicksPerSecond = 10'000'000.0;
+
+    // First nonzero tick in the table; 0 when the table has no usable entries.
+    uint64_t FirstNonZeroTick(const std::vector<uint64_t>& ticks) {
+        for (const uint64_t tick : ticks) {
+            if (tick != 0) {
+                return tick;
+            }
+        }
+        return 0;
+    }
+
+    // Tick for `frame`, walking back to the nearest earlier stamped frame when
+    // the entry is missing/zero (frames without a recorded value store 0).
+    uint64_t TickAtOrBefore(const std::vector<uint64_t>& ticks, int frame) {
+        if (ticks.empty() || frame < 0) {
+            return 0;
+        }
+        int index = std::min(frame, static_cast<int>(ticks.size()) - 1);
+        for (; index >= 0; --index) {
+            if (ticks[index] != 0) {
+                return ticks[index];
+            }
+        }
+        return 0;
+    }
+
+    // Elapsed seconds for `frame` from a per-frame tick table (100ns ticks).
+    // Returns a negative value when the table cannot answer for this frame.
+    float ElapsedFromTickTable(const std::vector<uint64_t>& ticks, int frame) {
+        const uint64_t base_tick = FirstNonZeroTick(ticks);
+        if (base_tick == 0) {
+            return -1.0f;
+        }
+        const uint64_t frame_tick = TickAtOrBefore(ticks, frame);
+        if (frame_tick == 0 || frame_tick < base_tick) {
+            return -1.0f;
+        }
+        return static_cast<float>(static_cast<double>(frame_tick - base_tick) / kTicksPerSecond);
+    }
+
+} // namespace
 
 namespace VtxServices {
 
@@ -24,10 +71,131 @@ namespace VtxServices {
         return DurationSplit {.minutes = minutes, .seconds = seconds};
     }
 
+    float TimelineViewService::FrameToElapsedSeconds(int frame, const VTX::ReplayTimeData& times, int total_frames,
+                                                     float duration_seconds, float fallback_fps) {
+        const float utc_elapsed = ElapsedFromTickTable(times.created_utc, frame);
+        if (utc_elapsed >= 0.0f) {
+            return utc_elapsed;
+        }
+        const float game_elapsed = ElapsedFromTickTable(times.game_time, frame);
+        if (game_elapsed >= 0.0f) {
+            return game_elapsed;
+        }
+        const float fps = ComputePlaybackFps(total_frames, duration_seconds, fallback_fps);
+        return static_cast<float>(frame) / fps;
+    }
+
     TimelineClockSpan TimelineViewService::BuildTimelineClockSpan(int current_frame, int total_frames,
                                                                   float duration_seconds, float fallback_fps) {
         const float fps = ComputePlaybackFps(total_frames, duration_seconds, fallback_fps);
         const float current_time_sec = static_cast<float>(current_frame) / fps;
+        return TimelineClockSpan {
+            .current = ToClockTime(current_time_sec), .total = ToClockTime(duration_seconds), .fps = fps};
+    }
+
+    int TimelineViewService::FrameAtElapsedSeconds(float seconds, const VTX::ReplayTimeData& times, int total_frames,
+                                                   float duration_seconds, float fallback_fps) {
+        if (total_frames <= 0) {
+            return 0;
+        }
+        const std::vector<uint64_t>& ticks =
+            FirstNonZeroTick(times.created_utc) != 0 ? times.created_utc : times.game_time;
+        const uint64_t base_tick = FirstNonZeroTick(ticks);
+        if (base_tick == 0) {
+            const float fps = ComputePlaybackFps(total_frames, duration_seconds, fallback_fps);
+            return ClampFrame(static_cast<int>(std::max(seconds, 0.0f) * fps), total_frames);
+        }
+
+        const uint64_t target_tick =
+            base_tick + static_cast<uint64_t>(std::max(0.0, static_cast<double>(seconds) * 10'000'000.0));
+
+        // Binary search for the greatest stamped frame with tick <= target.
+        // Zero (unstamped) entries are skipped by walking the probe left.
+        int low = 0;
+        int high = std::min(total_frames, static_cast<int>(ticks.size())) - 1;
+        int result = 0;
+        while (low <= high) {
+            const int mid = low + (high - low) / 2;
+            int probe = mid;
+            while (probe >= low && ticks[static_cast<size_t>(probe)] == 0) {
+                --probe;
+            }
+            if (probe < low) {
+                low = mid + 1;
+                continue;
+            }
+            if (ticks[static_cast<size_t>(probe)] <= target_tick) {
+                result = probe;
+                low = mid + 1;
+            } else {
+                high = probe - 1;
+            }
+        }
+        return ClampFrame(result, total_frames);
+    }
+
+    DroppedFrameMap TimelineViewService::BuildDroppedFrameMap(const VTX::ReplayTimeData& times, int total_frames,
+                                                              float expected_fps) {
+        DroppedFrameMap map;
+        if (total_frames <= 0 || expected_fps <= 0.0f) {
+            return map;
+        }
+        map.flagged.assign(static_cast<size_t>(total_frames), 0);
+        map.gap_ms.assign(static_cast<size_t>(total_frames), 0.0f);
+        map.missing.assign(static_cast<size_t>(total_frames), 0);
+
+        const std::vector<uint64_t>& ticks =
+            FirstNonZeroTick(times.created_utc) != 0 ? times.created_utc : times.game_time;
+        if (FirstNonZeroTick(ticks) == 0) {
+            return map;
+        }
+
+        const double expected_interval_ms = 1000.0 / static_cast<double>(expected_fps);
+        const int last_index = std::min(total_frames, static_cast<int>(ticks.size())) - 1;
+        const uint64_t base_tick = FirstNonZeroTick(ticks);
+
+        int prev_stamped = -1;
+        for (int frame = 0; frame <= last_index; ++frame) {
+            if (ticks[static_cast<size_t>(frame)] == 0) {
+                continue;
+            }
+            if (prev_stamped >= 0) {
+                const int span_frames = frame - prev_stamped;
+                const double actual_ms =
+                    static_cast<double>(ticks[static_cast<size_t>(frame)] - ticks[static_cast<size_t>(prev_stamped)]) /
+                    10'000.0;
+                const double expected_ms = expected_interval_ms * span_frames;
+                if (actual_ms > expected_ms * 1.5) {
+                    const int missing =
+                        std::max(1, static_cast<int>(actual_ms / expected_interval_ms + 0.5) - span_frames);
+                    ++map.gap_count;
+                    map.total_missing += missing;
+                    for (int i = prev_stamped + 1; i <= frame; ++i) {
+                        map.flagged[static_cast<size_t>(i)] = 1;
+                        map.gap_ms[static_cast<size_t>(i)] = static_cast<float>(actual_ms);
+                        map.missing[static_cast<size_t>(i)] = missing;
+                    }
+                    map.gaps.push_back(DroppedFrameGap {
+                        .first_frame = prev_stamped + 1,
+                        .last_frame = frame,
+                        .start_seconds = static_cast<float>(
+                            static_cast<double>(ticks[static_cast<size_t>(prev_stamped)] - base_tick) / 10'000'000.0),
+                        .duration_ms = static_cast<float>(actual_ms),
+                    });
+                }
+            }
+            prev_stamped = frame;
+        }
+        return map;
+    }
+
+    TimelineClockSpan TimelineViewService::BuildTimelineClockSpan(int current_frame, int total_frames,
+                                                                  float duration_seconds,
+                                                                  const VTX::ReplayTimeData& times,
+                                                                  float fallback_fps) {
+        const float fps = ComputePlaybackFps(total_frames, duration_seconds, fallback_fps);
+        const float current_time_sec =
+            FrameToElapsedSeconds(current_frame, times, total_frames, duration_seconds, fallback_fps);
         return TimelineClockSpan {
             .current = ToClockTime(current_time_sec), .total = ToClockTime(duration_seconds), .fps = fps};
     }
