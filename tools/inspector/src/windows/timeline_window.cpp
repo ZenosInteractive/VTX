@@ -1,6 +1,7 @@
 #include "windows/timeline_window.h"
 
 #include <algorithm>
+#include <cstdio>
 #include <imgui.h>
 #include <vector>
 
@@ -9,11 +10,18 @@
 
 namespace {
 
+    // Real captures never sustain their nominal rate; the entered Drop FPS is
+    // derated by this factor before gap detection.
+    constexpr float kDropFpsRealWorldFactor = 0.75f;
+
     struct TimelineHoverInfo {
         bool has_hover = false;
         int frame_index = -1;
         float frame_time_seconds = 0.0f;
         VtxServices::ClockTime frame_time_clock;
+        bool in_gap = false;
+        float gap_ms = 0.0f;
+        int gap_missing = 0;
     };
 
     struct TimelineFrameBarView {
@@ -24,6 +32,7 @@ namespace {
         float y_bottom = 0.0f;
         bool is_current = false;
         bool is_hovered = false;
+        bool is_dropped = false;
     };
 
     struct TimelineStripViewModel {
@@ -53,24 +62,34 @@ namespace {
     }
 
     // Builds hover payload (frame index + derived time labels) for tooltip rendering.
-    TimelineHoverInfo BuildHoverInfo(int hovered_frame, int total_frames, float duration_seconds) {
+    TimelineHoverInfo BuildHoverInfo(int hovered_frame, int total_frames, float duration_seconds,
+                                     const VTX::ReplayTimeData& times,
+                                     const VtxServices::DroppedFrameMap& dropped_map) {
         TimelineHoverInfo info;
         if (hovered_frame < 0) {
             return info;
         }
 
-        const float fps = VtxServices::TimelineViewService::ComputePlaybackFps(total_frames, duration_seconds);
-        const float frame_time_sec = static_cast<float>(hovered_frame) / fps;
+        const float frame_time_sec = VtxServices::TimelineViewService::FrameToElapsedSeconds(
+            hovered_frame, times, total_frames, duration_seconds);
         info.has_hover = true;
         info.frame_index = hovered_frame;
         info.frame_time_seconds = frame_time_sec;
         info.frame_time_clock = VtxServices::TimelineViewService::ToClockTime(frame_time_sec);
+        const size_t idx = static_cast<size_t>(hovered_frame);
+        if (idx < dropped_map.flagged.size() && dropped_map.flagged[idx] != 0) {
+            info.in_gap = true;
+            info.gap_ms = dropped_map.gap_ms[idx];
+            info.gap_missing = dropped_map.missing[idx];
+        }
         return info;
     }
 
     // Builds strip bars, hover state, and optional scroll requests for current frame.
     TimelineStripViewModel BuildStripViewModel(VtxServices::TimelineBarState& timeline_bar_state, int total_frames,
-                                               int current_frame, float duration_seconds, float scroll_x,
+                                               int current_frame, float duration_seconds,
+                                               const VTX::ReplayTimeData& times,
+                                               const VtxServices::DroppedFrameMap& dropped_map, float scroll_x,
                                                float view_width, float origin_x, float origin_y, float timeline_height,
                                                bool ctrl_down, float wheel, bool is_window_hovered, float mouse_x,
                                                float mouse_y) {
@@ -115,10 +134,12 @@ namespace {
                 .y_bottom = y_bottom,
                 .is_current = i == current_frame,
                 .is_hovered = i == hovered_frame_idx,
+                .is_dropped = static_cast<size_t>(i) < dropped_map.flagged.size() &&
+                              dropped_map.flagged[static_cast<size_t>(i)] != 0,
             });
         }
 
-        view_model.hover_info = BuildHoverInfo(hovered_frame_idx, total_frames, duration_seconds);
+        view_model.hover_info = BuildHoverInfo(hovered_frame_idx, total_frames, duration_seconds, times, dropped_map);
         return view_model;
     }
 
@@ -151,11 +172,29 @@ void TimelineWindow::DrawTimeAndFrameInfo(int total_frames, float duration) {
     (void)duration;
     if (ImGui::BeginChild("InfoPanel", ImVec2(0, 45), true)) {
         const auto time_span = VtxServices::TimelineViewService::BuildTimelineClockSpan(
-            inspector_session_->GetCurrentFrame(), total_frames, inspector_session_->GetFooter().duration_seconds);
+            inspector_session_->GetCurrentFrame(), total_frames, inspector_session_->GetFooter().duration_seconds,
+            inspector_session_->GetFooter().times);
 
         ImGui::AlignTextToFramePadding();
         ImGui::Text("Time: %02d:%02d / %02d:%02d", time_span.current.minutes, time_span.current.seconds,
                     time_span.total.minutes, time_span.total.seconds);
+
+        // Expected capture rate for the recording-gap (red bar) detection.
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(70.0f);
+        char drop_fps_label[64];
+        std::snprintf(drop_fps_label, sizeof(drop_fps_label), "Drop FPS (x0.75 = %.1f)###DropFps",
+                      drop_detect_fps_ * kDropFpsRealWorldFactor);
+        if (ImGui::InputFloat(drop_fps_label, &drop_detect_fps_, 0.0f, 0.0f, "%.1f",
+                              ImGuiInputTextFlags_EnterReturnsTrue)) {
+            drop_detect_fps_ = std::clamp(drop_detect_fps_, 1.0f, 1000.0f);
+        }
+        const auto& dropped_map = GetDroppedFrameMap(total_frames);
+        if (dropped_map.gap_count > 0) {
+            ImGui::SameLine();
+            ImGui::TextColored(ImVec4(0.9f, 0.35f, 0.35f, 1.0f), "%d gaps, ~%lld frames missing", dropped_map.gap_count,
+                               static_cast<long long>(dropped_map.total_missing));
+        }
 
         ImGui::SameLine(ImGui::GetWindowWidth() - 320.0f);
         ImGui::Text("Frame: %d / %d", inspector_session_->GetCurrentFrame(), total_frames);
@@ -171,16 +210,56 @@ void TimelineWindow::DrawTimeAndFrameInfo(int total_frames, float duration) {
     ImGui::EndChild();
 }
 
-// Renders main timeline slider and updates scrubbing state.
+// Renders the main timeline slider (wall-clock axis) and updates scrubbing
+// state. The grab position is the current frame's elapsed time; dragging
+// resolves the frame at the grabbed time via the footer time table, so equal
+// slider distance means equal wall-clock time even across recording gaps.
 void TimelineWindow::DrawTimelineSlider(int total_frames, float duration_seconds) {
-    (void)duration_seconds;
     ImGui::SetNextItemWidth(-1.0f);
 
-    int current_frame = inspector_session_->GetCurrentFrame();
-    if (ImGui::SliderInt("##MainTimeline", &current_frame, 0, total_frames - 1, "")) {
-        inspector_session_->SetCurrentFrame(HandleGoToFrame(current_frame, total_frames));
+    const auto& times = inspector_session_->GetFooter().times;
+    float current_seconds = VtxServices::TimelineViewService::FrameToElapsedSeconds(
+        inspector_session_->GetCurrentFrame(), times, total_frames, duration_seconds);
+    if (ImGui::SliderFloat("##MainTimeline", &current_seconds, 0.0f, duration_seconds, "")) {
+        const int frame = VtxServices::TimelineViewService::FrameAtElapsedSeconds(current_seconds, times, total_frames,
+                                                                                  duration_seconds);
+        inspector_session_->SetCurrentFrame(HandleGoToFrame(frame, total_frames));
     }
     inspector_session_->SetScrubbingTimeline(ImGui::IsItemActive());
+
+    // Overlay recording gaps on the slider track, positioned and sized by wall
+    // clock so a band's width reads as the gap's duration.
+    if (duration_seconds > 0.0f) {
+        const auto& dropped_map = GetDroppedFrameMap(total_frames);
+        if (!dropped_map.gaps.empty()) {
+            const ImVec2 rect_min = ImGui::GetItemRectMin();
+            const ImVec2 rect_max = ImGui::GetItemRectMax();
+            const float rect_width = rect_max.x - rect_min.x;
+            ImDrawList* draw_list = ImGui::GetWindowDrawList();
+            for (const auto& gap : dropped_map.gaps) {
+                const float t0 = std::clamp(gap.start_seconds / duration_seconds, 0.0f, 1.0f);
+                const float t1 =
+                    std::clamp((gap.start_seconds + gap.duration_ms / 1000.0f) / duration_seconds, 0.0f, 1.0f);
+                const float x0 = rect_min.x + t0 * rect_width;
+                const float x1 = std::max(rect_min.x + t1 * rect_width, x0 + 1.0f);
+                draw_list->AddRectFilled(ImVec2(x0, rect_min.y), ImVec2(x1, rect_max.y), IM_COL32(220, 60, 60, 150));
+            }
+        }
+    }
+}
+
+const VtxServices::DroppedFrameMap& TimelineWindow::GetDroppedFrameMap(int total_frames) {
+    const auto& times = inspector_session_->GetFooter().times;
+    const size_t stamp_count = times.created_utc.size() + times.game_time.size();
+    if (dropped_map_fps_ != drop_detect_fps_ || dropped_map_frames_ != total_frames ||
+        dropped_map_stamp_count_ != stamp_count) {
+        dropped_map_ = VtxServices::TimelineViewService::BuildDroppedFrameMap(
+            times, total_frames, drop_detect_fps_ * kDropFpsRealWorldFactor);
+        dropped_map_fps_ = drop_detect_fps_;
+        dropped_map_frames_ = total_frames;
+        dropped_map_stamp_count_ = stamp_count;
+    }
+    return dropped_map_;
 }
 
 // Renders zoomable frame bars and hover/click seek interactions.
@@ -198,11 +277,11 @@ void TimelineWindow::DrawFrameStripTimeline(int total_frames) {
         // Step 1: Build strip model from current viewport + input state.
         const ImVec2 p = ImGui::GetCursorScreenPos();
         const auto mouse_pos = ImGui::GetMousePos();
-        const auto strip_vm =
-            BuildStripViewModel(timeline_bar_state_, total_frames, inspector_session_->GetCurrentFrame(),
-                                inspector_session_->GetFooter().duration_seconds, ImGui::GetScrollX(),
-                                ImGui::GetWindowWidth(), p.x, p.y, timeline_height, ImGui::GetIO().KeyCtrl,
-                                ImGui::GetIO().MouseWheel, ImGui::IsWindowHovered(), mouse_pos.x, mouse_pos.y);
+        const auto strip_vm = BuildStripViewModel(
+            timeline_bar_state_, total_frames, inspector_session_->GetCurrentFrame(),
+            inspector_session_->GetFooter().duration_seconds, inspector_session_->GetFooter().times,
+            GetDroppedFrameMap(total_frames), ImGui::GetScrollX(), ImGui::GetWindowWidth(), p.x, p.y, timeline_height,
+            ImGui::GetIO().KeyCtrl, ImGui::GetIO().MouseWheel, ImGui::IsWindowHovered(), mouse_pos.x, mouse_pos.y);
         if (strip_vm.request_scroll) {
             ImGui::SetScrollX(strip_vm.desired_scroll_x);
             timeline_bar_state_.last_tracked_frame = inspector_session_->GetCurrentFrame();
@@ -215,7 +294,7 @@ void TimelineWindow::DrawFrameStripTimeline(int total_frames) {
                                        IM_COL32(30, 30, 30, 255));
 
         for (const auto& bar : strip_vm.bars) {
-            ImU32 bar_color = IM_COL32(128, 128, 128, 255);
+            ImU32 bar_color = bar.is_dropped ? IM_COL32(220, 60, 60, 255) : IM_COL32(128, 128, 128, 255);
             if (bar.is_current) {
                 child_draw_list->AddRectFilled(ImVec2(bar.x_start - 1.0f, p.y), ImVec2(bar.x_end + 1.0f, bar.y_bottom),
                                                IM_COL32(255, 255, 255, 100));
@@ -232,6 +311,10 @@ void TimelineWindow::DrawFrameStripTimeline(int total_frames) {
             ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), "Frame: %d", hover_info.frame_index);
             ImGui::Text("Time: %02d:%02d (%.2fs)", hover_info.frame_time_clock.minutes,
                         hover_info.frame_time_clock.seconds, hover_info.frame_time_seconds);
+            if (hover_info.in_gap) {
+                ImGui::TextColored(ImVec4(0.9f, 0.35f, 0.35f, 1.0f), "Gap: %.2fs (~%d frames missing)",
+                                   hover_info.gap_ms / 1000.0f, hover_info.gap_missing);
+            }
             ImGui::Separator();
             ImGui::TextDisabled("(Click to seek)");
             ImGui::EndTooltip();
