@@ -74,7 +74,7 @@ namespace VTX {
             int8_t compression_level = 10;
             bool durable_writes = true;          ///< fsync each chunk to physical disk (crash/power-loss safe).
             bool enable_recovery_journal = true; ///< maintain a ".recovery" sidecar for crash recovery.
-            uint64_t journal_compact_threshold_bytes = 0; ///< journal compaction trigger; 0 = journal default.
+            uint64_t journal_compact_threshold_bytes = 0;   ///< journal compaction trigger; 0 = journal default.
             IFileSinkPerfObserver* perf_observer = nullptr; ///< optional perf timings; null = no-op.
         };
 
@@ -96,10 +96,7 @@ namespace VTX {
             uint32_t final_size = static_cast<uint32_t>(header_payload.size());
             TimedWrite(&final_size, sizeof(final_size));
             TimedWrite(header_payload.data(), final_size);
-            if (config_.durable_writes)
-                file_.Sync();
-            else
-                file_.Flush(); // process-crash safe (reaches the OS) even without fsync
+            TimedSyncOrFlush();
 
             // Start the crash-recovery journal only once the header is durable. If it
             // cannot be opened cleanly (or its own header write failed), disable it and
@@ -147,10 +144,7 @@ namespace VTX {
 
             TimedWrite(&final_size, sizeof(final_size));
             TimedWrite(payload.data(), final_size);
-            if (config_.durable_writes)
-                file_.Sync();
-            else
-                file_.Flush(); // process-crash safe (reaches the OS) even without fsync
+            TimedSyncOrFlush();
 
             ChunkIndexData indexEntry;
             indexEntry.chunk_index = chunkIndex_++;
@@ -195,10 +189,7 @@ namespace VTX {
             uint32_t final_size = static_cast<uint32_t>(footer_payload.size());
             TimedWrite(&final_size, sizeof(final_size));
             WriteBlob(SerializerPolicy::GetMagicBytes());
-            if (config_.durable_writes)
-                file_.Sync();
-            else
-                file_.Flush(); // process-crash safe (reaches the OS) even without fsync
+            TimedSyncOrFlush();
 
             // Clean shutdown: the footer is durable, so the recovery journal is no
             // longer needed. Its absence signals a clean file to the repair path.
@@ -227,6 +218,18 @@ namespace VTX {
         void TimedWrite(const void* data, size_t size) {
             const auto start = std::chrono::steady_clock::now();
             file_.Write(data, size);
+            NotifyDiskWrite(start);
+        }
+        // Getting bytes durable (fsync, or fflush to the OS) IS the disk write and is
+        // the dominant, reliably-measurable cost -- so it counts toward disk_write_us.
+        // (Timing only the buffered fwrite above rounds to 0 us for small writes on a
+        // fast disk, which is both misleading and CI-flaky.)
+        void TimedSyncOrFlush() {
+            const auto start = std::chrono::steady_clock::now();
+            if (config_.durable_writes)
+                file_.Sync(); // fsync -> survives power loss
+            else
+                file_.Flush(); // fflush -> reaches the OS, survives a process crash
             NotifyDiskWrite(start);
         }
         void WriteBlob(const std::string& data) { TimedWrite(data.data(), data.size()); }
