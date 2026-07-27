@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-07-27
+
 ### Added
 
 - **tools/cli**: the CLI now exposes the file's timing data, which was previously unreachable from the command surface:
