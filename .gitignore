@@ -67,4 +67,7 @@ __pycache__/
 # OS
 Thumbs.db
 Desktop.ini
-.DS_Storebuild-inspector/
+.DS_Store
+
+# Local inspector build tree
+build-inspector/
