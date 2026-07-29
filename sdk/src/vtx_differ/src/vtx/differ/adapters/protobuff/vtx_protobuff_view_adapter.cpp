@@ -182,12 +182,12 @@ namespace VtxDiff::Protobuf {
     static inline bool IsKnownStructMsg(const Descriptor* md) {
         if (!md)
             return false;
-        const std::string& n = md->name();
+        const std::string_view n = md->name();
         return n == "Vector" || n == "Quat" || n == "Transform" || n == "FloatRange";
     }
 
     static bool PackKnownStruct(const Message& m, std::vector<std::byte>& out) {
-        const std::string& n = m.GetDescriptor()->name();
+        const std::string_view n = m.GetDescriptor()->name();
         if (n == "Vector")
             return PackVector(m, out);
         if (n == "Quat")
