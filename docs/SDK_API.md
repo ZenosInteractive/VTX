@@ -298,6 +298,31 @@ Durability knobs on the file sink (`ChunkedFileSink::Config`; facade users curre
 | `enable_recovery_journal` | `true` | Maintain the `.recovery` sidecar. Opting out removes any stale sidecar at session start; a crash then leaves an unrecoverable (footerless) file. |
 | `journal_compact_threshold_bytes` | `0` (64 MB) | How many superseded journal bytes accrue before the sidecar is compacted (rewritten via an atomic rename). |
 
+### Filtering entities into a new replay
+
+`FilterReplayFile` writes a copy of a replay with some entities removed -- a blacklist (`Drop`: entities matching any rule go) or a whitelist (`Keep`: only matching entities stay). Rules select by **unique id glob**, **schema struct name glob**, or the **string form of one scalar property**; several rules combine as a union. Every frame survives: the header block is copied byte for byte, each chunk is re-serialized with the surviving entities (same frame range, same per-chunk compression, fresh xxHash64 checksums), and the footer keeps `total_frames`, `duration_seconds` and the per-frame time table -- only the seek table is rebuilt. Timeline events ride along and are, by default, pruned to the entities that still appear somewhere in the output.
+
+```cpp
+#include "vtx/writer/core/vtx_replay_filter.h"
+
+VTX::ReplayFilterSpec spec;
+spec.mode = VTX::ReplayFilterMode::Drop;                                       // or Keep (whitelist)
+spec.rules.push_back(VTX::ReplayFilterRule::StructName("SystemHealth*"));      // glob on the struct name
+spec.rules.push_back(VTX::ReplayFilterRule::UniqueId("keyboard"));             // glob on the unique id
+spec.rules.push_back(VTX::ReplayFilterRule::Property("Vehicles", "Team", "2")); // one scalar field, as text
+
+VTX::ReplayFilterResult r = VTX::FilterReplayFile("capture.vtx", "capture_filtered.vtx", spec,
+    [](int32_t done, int32_t total) { return true; });                         // optional; false cancels
+if (r.ok()) {
+    // r.total_frames, r.chunks_rewritten, r.entities_kept / r.entities_dropped,
+    // r.dropped_by_struct (struct name -> count), r.events_kept / r.events_dropped, r.output_bytes
+} else {
+    // r.error -- the destination is removed on any failure or cancel
+}
+```
+
+A `Property` rule with an empty struct name means "every struct declaring that field". Matchable field types are Bool (`true`/`false`), Int32, Int64, Float, Double (shortest round-trip decimal) and String; arrays, maps, nested structs and the compound value types cannot be matched, and unresolvable rules (unknown struct or field, empty pattern) fail before anything is written. Only top-level bucket entities are filtered -- nested containers inside a kept entity are never touched -- and a bucket that ends up empty stays in place, since bucket index is positional. The schema is never pruned: dropping every instance of a struct leaves the struct declared. Both backends are supported and the output keeps the source format. `ReplayFilterMatcher` exposes the same rule resolution for previews on in-memory frames (`Keeps(bucket, index)`, `Apply(bucket)`), and `GlobMatch` is the pattern primitive (`*` any run, `?` one character). Requires the reader module (`VTX_BUILD_READER`).
+
 ### Sink performance observer
 
 To see where write time goes, attach a perf observer — it receives per-stage timings synchronously from the writer thread (implementations must be cheap; leave null for a zero-cost no-op):

@@ -4,6 +4,7 @@
 #include "gui/gui_layer.h"
 
 class CutReplayWindow;
+class FilterEntitiesWindow;
 class GuiScaleController;
 class InspectorSession;
 class RepairReplayWindow;
@@ -32,4 +33,7 @@ protected:
 
     // File > Cut Replay: floating, operates on the loaded replay. At most one.
     std::shared_ptr<CutReplayWindow> cut_window_;
+
+    // File > Filter Entities: floating, operates on the loaded replay. At most one.
+    std::shared_ptr<FilterEntitiesWindow> filter_window_;
 };

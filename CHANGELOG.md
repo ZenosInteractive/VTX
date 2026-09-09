@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **writer**: **`FilterReplayFile`** (`vtx/writer/core/vtx_replay_filter.h`) -- writes a copy of a replay with entities dropped (blacklist) or exclusively kept (whitelist) by **unique id glob**, **struct name glob** or **scalar property value** (`struct.field` resolved through the file's schema; empty struct = any struct with that field); rules combine as a union.  Every frame survives: the header block is copied verbatim, every chunk is re-serialized with the surviving entities (same frame ranges, same per-chunk compression, fresh xxHash64 checksums), and the footer is rebuilt with the same `total_frames`, duration and per-frame time table -- only the seek table changes.  Timeline events are carried over and (by default) pruned to entities that still exist.  Progress callback with cancel (the partial destination is removed); `ReplayFilterResult` reports kept/dropped counts, per-struct drops, event counts and sizes.  `ReplayFilterMatcher` / `GlobMatch` expose the rule engine for previews on in-memory frames.  Both backends, output keeps the source format.  `vtx_writer` now links `vtx_reader` privately; the entry point is compiled only when `VTX_BUILD_READER` is on.  Covered by `ReplayFilterTest.*` (both backends: struct / unique id / property / numeric / case-insensitive rules, keep-nothing, events carried + pruned, error paths, cancel) plus `ReplayFilterGlob` / `ReplayFilterMatcher` unit tests
+- **writer/serialization**: `SessionFooter::events` -- both footer serializers now write timeline events when the pointer is set.  The writer facade still writes none; the replay filter uses it to carry a source file's events into the rewritten footer
+- **tools/inspector**: **File > Filter Entities** -- rewrite the loaded replay into a new `.vtx` without the selected entities (or with only them).  Struct checklist with per-struct counts for the current frame, unique id globs (one per line), property rules (struct / field / value glob), case-insensitive and event-pruning toggles; a live preview shows how many entities of the current frame the rules keep per bucket and reports unresolvable rules before anything runs.  The rewrite runs on a worker thread (`VTX::FilterReplayFile`) with a chunk progress bar and Cancel, then reports frames, kept/dropped entities, per-struct drops, event counts and sizes
+
+### Fixed
+
+- **reader**: `GetFooter().chunk_index[i].checksum` was always 0 on both backends -- the footer-to-native conversions copied every seek-table field except the xxHash64 checksum (the internal seek table used for chunk loading did carry it).  Visible as `checksum: 0` for every chunk in the CLI's `chunks` command, and the inspector's cut copied 0 into the seek-table entries of verbatim chunks.  The FlatBuffers footer conversion also dropped each timeline event's `entity_unique_id` and `location`.  All three conversions now carry the fields; `ReplayFilterTest.DropByStructName` asserts the footer checksums of a freshly written file match the bytes on disk and `ReplayFilterTest.EventsCarriedAndPruned` reads events back with their entity id and location on both backends
+
 ## [0.5.0] - 2026-07-27
 
 ### Added

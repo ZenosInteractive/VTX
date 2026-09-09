@@ -16,6 +16,12 @@ file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS
 # 2. Target and deps
 # ==============================================================================
 # Library type (STATIC/SHARED) follows BUILD_SHARED_LIBS (VTX_BUILD_SHARED).
+# vtx_replay_filter reads the source replay through the reader module, so it is
+# only part of the writer when vtx_reader is built (VTX_BUILD_READER).
+if(NOT VTX_BUILD_READER)
+    list(FILTER SOURCES EXCLUDE REGEX "vtx_replay_filter\\.cpp$")
+endif()
+
 add_library(vtx_writer ${SOURCES} ${HEADERS})
 
 target_include_directories(vtx_writer
@@ -42,6 +48,10 @@ target_link_libraries(vtx_writer
 
 # See note in vtx_reader/CMakeLists.txt -- Windows shared DLLs duplicate the
 # generated protobuf/flatbuffers objects into every module that references them.
+if(VTX_BUILD_READER)
+    target_link_libraries(vtx_writer PRIVATE vtx_reader) # VTX::FilterReplayFile opens the source replay
+endif()
+
 if(BUILD_SHARED_LIBS AND WIN32)
     target_link_libraries(vtx_writer PRIVATE $<BUILD_INTERFACE:vtx_generated_code>)
 endif()
