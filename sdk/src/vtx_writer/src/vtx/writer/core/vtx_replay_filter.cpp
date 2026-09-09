@@ -119,6 +119,8 @@ namespace VTX {
                 return "struct";
             case ReplayFilterRuleKind::Property:
                 return "property";
+            case ReplayFilterRuleKind::Bucket:
+                return "bucket";
             }
             return "rule";
         }
@@ -320,14 +322,22 @@ namespace VTX {
                         return;
                     }
                     Frame frame(*source_frame);
-                    for (Bucket& bucket : frame.GetMutableBuckets()) {
+                    std::vector<Bucket>& buckets = frame.GetMutableBuckets();
+                    for (size_t b = 0; b < buckets.size(); ++b) {
+                        Bucket& bucket = buckets[b];
+                        const int32_t bucket_index = static_cast<int32_t>(b);
                         const size_t before = bucket.entities.size();
-                        const size_t dropped = matcher.Apply(bucket, [&](const Bucket& b, size_t index) {
-                            ++result.dropped_by_struct[matcher.TypeName(b.entities[index].entity_type_id)];
-                        });
+                        const size_t dropped =
+                            matcher.Apply(bucket_index, bucket, [&](const Bucket& dropped_from, size_t index) {
+                                ++result
+                                      .dropped_by_struct[matcher.TypeName(dropped_from.entities[index].entity_type_id)];
+                            });
                         result.entities_seen += before;
                         result.entities_dropped += dropped;
                         result.entities_kept += before - dropped;
+                        if (dropped > 0) {
+                            result.dropped_by_bucket[matcher.BucketName(bucket_index)] += dropped;
+                        }
                         if (track_survivors) {
                             for (const std::string& id : bucket.unique_ids) {
                                 survivors.insert(id);
@@ -454,6 +464,14 @@ namespace VTX {
         return rule;
     }
 
+    ReplayFilterRule ReplayFilterRule::Bucket(std::string pattern, bool case_insensitive) {
+        ReplayFilterRule rule;
+        rule.kind = ReplayFilterRuleKind::Bucket;
+        rule.pattern = std::move(pattern);
+        rule.case_insensitive = case_insensitive;
+        return rule;
+    }
+
     bool GlobMatch(std::string_view pattern, std::string_view text, bool case_insensitive) {
         size_t p = 0;
         size_t t = 0;
@@ -488,8 +506,9 @@ namespace VTX {
         for (const auto& [type_id, struct_cache] : cache.structs) {
             type_names_[type_id] = struct_cache.name;
         }
+        bucket_names_ = cache.bucket_names;
         if (spec.rules.empty()) {
-            error_ = "The filter has no rules; add at least one unique id, struct or property rule.";
+            error_ = "The filter has no rules; add at least one bucket, unique id, struct or property rule.";
             return;
         }
         for (const ReplayFilterRule& rule : spec.rules) {
@@ -538,6 +557,36 @@ namespace VTX {
                         return;
                     }
                 }
+            } else if (rule.kind == ReplayFilterRuleKind::Bucket) {
+                const bool numeric = std::all_of(rule.pattern.begin(), rule.pattern.end(),
+                                                 [](unsigned char c) { return std::isdigit(c) != 0; });
+                if (numeric) {
+                    // A digits-only pattern addresses the bucket by index, named or not.
+                    int32_t ordinal = -1;
+                    const auto parsed =
+                        std::from_chars(rule.pattern.data(), rule.pattern.data() + rule.pattern.size(), ordinal);
+                    if (parsed.ec != std::errc {} || ordinal < 0) {
+                        error_ = "Bucket rule: '" + rule.pattern + "' is not a valid bucket index.";
+                        return;
+                    }
+                    resolved.bucket_ordinal = ordinal;
+                } else {
+                    for (size_t b = 0; b < bucket_names_.size(); ++b) {
+                        if (GlobMatch(rule.pattern, bucket_names_[b], rule.case_insensitive)) {
+                            resolved.bucket_indices.push_back(static_cast<int32_t>(b));
+                        }
+                    }
+                    if (resolved.bucket_indices.empty()) {
+                        std::string names;
+                        for (const std::string& name : bucket_names_) {
+                            names += (names.empty() ? "'" : ", '") + name + "'";
+                        }
+                        error_ = "Bucket rule: no schema bucket matches '" + rule.pattern + "'" +
+                                 (names.empty() ? std::string(" (the schema names no buckets).")
+                                                : " (buckets: " + names + ").");
+                        return;
+                    }
+                }
             }
             rules_.push_back(std::move(resolved));
         }
@@ -551,8 +600,37 @@ namespace VTX {
         return "type#" + std::to_string(type_id);
     }
 
-    bool ReplayFilterMatcher::RuleMatches(const ResolvedRule& rule, const Bucket& bucket, size_t index) const {
+    std::string ReplayFilterMatcher::BucketName(int32_t bucket_index) const {
+        if (bucket_index >= 0 && static_cast<size_t>(bucket_index) < bucket_names_.size() &&
+            !bucket_names_[static_cast<size_t>(bucket_index)].empty()) {
+            return bucket_names_[static_cast<size_t>(bucket_index)];
+        }
+        return "bucket#" + std::to_string(bucket_index);
+    }
+
+    bool ReplayFilterMatcher::BucketMatches(int32_t bucket_index) const {
+        if (bucket_index < 0) {
+            return false;
+        }
+        for (const ResolvedRule& rule : rules_) {
+            if (rule.kind != ReplayFilterRuleKind::Bucket) {
+                continue;
+            }
+            if (bucket_index == rule.bucket_ordinal || std::find(rule.bucket_indices.begin(), rule.bucket_indices.end(),
+                                                                 bucket_index) != rule.bucket_indices.end()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    bool ReplayFilterMatcher::RuleMatches(const ResolvedRule& rule, int32_t bucket_index, const Bucket& bucket,
+                                          size_t index) const {
         switch (rule.kind) {
+        case ReplayFilterRuleKind::Bucket:
+            return bucket_index >= 0 && (bucket_index == rule.bucket_ordinal ||
+                                         std::find(rule.bucket_indices.begin(), rule.bucket_indices.end(),
+                                                   bucket_index) != rule.bucket_indices.end());
         case ReplayFilterRuleKind::UniqueId: {
             const std::string_view id =
                 index < bucket.unique_ids.size() ? std::string_view(bucket.unique_ids[index]) : std::string_view();
@@ -581,23 +659,24 @@ namespace VTX {
         return false;
     }
 
-    bool ReplayFilterMatcher::Matches(const Bucket& bucket, size_t index) const {
+    bool ReplayFilterMatcher::Matches(int32_t bucket_index, const Bucket& bucket, size_t index) const {
         if (index >= bucket.entities.size()) {
             return false;
         }
         for (const ResolvedRule& rule : rules_) {
-            if (RuleMatches(rule, bucket, index)) {
+            if (RuleMatches(rule, bucket_index, bucket, index)) {
                 return true;
             }
         }
         return false;
     }
 
-    size_t ReplayFilterMatcher::Apply(Bucket& bucket, const std::function<void(const Bucket&, size_t)>& on_drop) const {
+    size_t ReplayFilterMatcher::Apply(int32_t bucket_index, Bucket& bucket,
+                                      const std::function<void(const Bucket&, size_t)>& on_drop) const {
         const size_t count = bucket.entities.size();
         size_t write = 0;
         for (size_t read = 0; read < count; ++read) {
-            if (!Keeps(bucket, read)) {
+            if (!Keeps(bucket_index, bucket, read)) {
                 if (on_drop) {
                     on_drop(bucket, read);
                 }
@@ -641,7 +720,7 @@ namespace VTX {
         };
 
         if (spec.rules.empty()) {
-            return fail("The filter has no rules; add at least one unique id, struct or property rule.");
+            return fail("The filter has no rules; add at least one bucket, unique id, struct or property rule.");
         }
         if (source_path.empty() || dest_path.empty()) {
             return fail("Source and destination paths are required.");

@@ -71,6 +71,9 @@ FilterEntitiesWindow::FilterEntitiesWindow(std::shared_ptr<InspectorSession> ses
             }
             std::sort(structs_.begin(), structs_.end(),
                       [](const StructRow& a, const StructRow& b) { return a.name < b.name; });
+            for (size_t b = 0; b < schema_cache_.bucket_names.size(); ++b) {
+                buckets_.push_back(BucketRow {schema_cache_.bucket_names[b], static_cast<int32_t>(b), false});
+            }
         }
     }
 }
@@ -103,6 +106,11 @@ VTX::ReplayFilterSpec FilterEntitiesWindow::BuildSpec() const {
     VTX::ReplayFilterSpec spec;
     spec.mode = mode_ == 1 ? VTX::ReplayFilterMode::Keep : VTX::ReplayFilterMode::Drop;
     spec.prune_events = prune_events_;
+    for (const BucketRow& row : buckets_) {
+        if (row.selected) {
+            spec.rules.push_back(VTX::ReplayFilterRule::Bucket(std::to_string(row.index)));
+        }
+    }
     for (const StructRow& row : structs_) {
         if (row.selected) {
             spec.rules.push_back(VTX::ReplayFilterRule::StructName(row.name, case_insensitive_));
@@ -142,6 +150,7 @@ void FilterEntitiesWindow::RefreshPreview(const VTX::ReplayFilterSpec& spec, con
     preview_ = Preview {};
     preview_.key = key;
     preview_.per_struct_seen.assign(structs_.size(), 0);
+    preview_.per_bucket_seen.assign(buckets_.size(), 0);
 
     VTX::IVtxReaderFacade* reader = session_ ? session_->GetReader() : nullptr;
     if (!reader) {
@@ -171,13 +180,16 @@ void FilterEntitiesWindow::RefreshPreview(const VTX::ReplayFilterSpec& spec, con
     const auto& buckets = frame->GetBuckets();
     for (size_t b = 0; b < buckets.size(); ++b) {
         const VTX::Bucket& bucket = buckets[b];
+        if (b < preview_.per_bucket_seen.size()) {
+            preview_.per_bucket_seen[b] = bucket.entities.size();
+        }
         uint64_t kept = 0;
         for (size_t i = 0; i < bucket.entities.size(); ++i) {
             const auto row = struct_rows.find(bucket.entities[i].entity_type_id);
             if (row != struct_rows.end()) {
                 ++preview_.per_struct_seen[row->second];
             }
-            if (matcher && matcher->Keeps(bucket, i)) {
+            if (matcher && matcher->Keeps(static_cast<int32_t>(b), bucket, i)) {
                 ++kept;
             }
         }
@@ -237,8 +249,10 @@ void FilterEntitiesWindow::DrawContent() {
     const std::filesystem::path source(session_->current_file_path_);
     ImGui::TextWrapped("Source: %s", source.filename().string().c_str());
     ImGui::TextColored(kDim,
-                       "%d frames, %d structs in the schema. Every frame is kept; only the entity payload changes.",
-                       session_->GetTotalFrames(), static_cast<int>(structs_.size()));
+                       "%d frames, %d buckets, %d structs in the schema. Every frame is kept; only the entity "
+                       "payload changes.",
+                       session_->GetTotalFrames(), static_cast<int>(buckets_.size()),
+                       static_cast<int>(structs_.size()));
     ImGui::Separator();
 
     const bool busy = phase_ == Phase::Running;
@@ -261,6 +275,35 @@ void FilterEntitiesWindow::DrawContent() {
 }
 
 void FilterEntitiesWindow::DrawRules() {
+    if (ImGui::CollapsingHeader("Buckets", ImGuiTreeNodeFlags_DefaultOpen)) {
+        if (ImGui::SmallButton("Select all##buckets")) {
+            for (BucketRow& row : buckets_) {
+                row.selected = true;
+            }
+        }
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Clear##buckets")) {
+            for (BucketRow& row : buckets_) {
+                row.selected = false;
+            }
+        }
+        ImGui::SameLine();
+        ImGui::TextColored(kDim, "(a dropped bucket is emptied in every frame; its slot stays)");
+        if (buckets_.empty()) {
+            ImGui::TextColored(kDim, "The schema names no buckets.");
+        }
+        for (size_t i = 0; i < buckets_.size(); ++i) {
+            BucketRow& row = buckets_[i];
+            ImGui::PushID(static_cast<int>(i) + 2000);
+            const uint64_t count = i < preview_.per_bucket_seen.size() ? preview_.per_bucket_seen[i] : 0;
+            char label[256];
+            std::snprintf(label, sizeof(label), "%d: %s  (%llu)", row.index, row.name.c_str(),
+                          static_cast<unsigned long long>(count));
+            ImGui::Checkbox(label, &row.selected);
+            ImGui::PopID();
+        }
+    }
+
     if (ImGui::CollapsingHeader("Structs", ImGuiTreeNodeFlags_DefaultOpen)) {
         if (ImGui::SmallButton("Select all")) {
             for (StructRow& row : structs_) {
@@ -342,8 +385,8 @@ void FilterEntitiesWindow::DrawPreview(const VTX::ReplayFilterSpec& spec) {
     }
 
     if (spec.rules.empty()) {
-        ImGui::TextColored(kWarn,
-                           "Add at least one rule: tick a struct, enter a unique id pattern or add a property rule.");
+        ImGui::TextColored(kWarn, "Add at least one rule: tick a bucket or struct, enter a unique id pattern or add a "
+                                  "property rule.");
         return;
     }
     if (!preview_.error.empty()) {
@@ -432,6 +475,12 @@ void FilterEntitiesWindow::DrawOutcome() {
     }
     ImGui::Text("Size: %s -> %s", FormatBytes(outcome_.source_bytes).c_str(),
                 FormatBytes(outcome_.output_bytes).c_str());
+    if (!outcome_.dropped_by_bucket.empty()) {
+        ImGui::TextColored(kDim, "Dropped by bucket:");
+        for (const auto& [name, count] : outcome_.dropped_by_bucket) {
+            ImGui::TextColored(kDim, "  %s: %llu", name.c_str(), static_cast<unsigned long long>(count));
+        }
+    }
     if (!outcome_.dropped_by_struct.empty()) {
         ImGui::TextColored(kDim, "Dropped by struct:");
         for (const auto& [name, count] : outcome_.dropped_by_struct) {

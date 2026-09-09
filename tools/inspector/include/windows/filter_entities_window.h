@@ -38,6 +38,12 @@ public:
 private:
     enum class Phase { Idle, Running, Done };
 
+    struct BucketRow {
+        std::string name;
+        int32_t index = -1; ///< Bucket number within a frame (schema order).
+        bool selected = false;
+    };
+
     struct StructRow {
         std::string name;
         int32_t type_id = -1;
@@ -67,6 +73,7 @@ private:
         uint64_t kept = 0;
         std::vector<std::pair<std::string, std::pair<uint64_t, uint64_t>>> buckets; ///< name -> (kept, seen)
         std::vector<uint64_t> per_struct_seen;                                      ///< indexed like structs_
+        std::vector<uint64_t> per_bucket_seen;                                      ///< indexed by bucket number
     };
 
     void DrawContent();
@@ -82,6 +89,7 @@ private:
 
     std::shared_ptr<InspectorSession> session_;
     VTX::PropertyAddressCache schema_cache_;
+    std::vector<BucketRow> buckets_;
     std::vector<StructRow> structs_;
     std::vector<PropertyRow> property_rules_;
     char unique_id_patterns_[4096] = {};

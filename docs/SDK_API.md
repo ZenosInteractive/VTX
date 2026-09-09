@@ -300,14 +300,15 @@ Durability knobs on the file sink (`ChunkedFileSink::Config`; facade users curre
 
 ### Filtering entities into a new replay
 
-`FilterReplayFile` writes a copy of a replay with some entities removed -- a blacklist (`Drop`: entities matching any rule go) or a whitelist (`Keep`: only matching entities stay). Rules select by **unique id glob**, **schema struct name glob**, or the **string form of one scalar property**; several rules combine as a union. Every frame survives: the header block is copied byte for byte, each chunk is re-serialized with the surviving entities (same frame range, same per-chunk compression, fresh xxHash64 checksums), and the footer keeps `total_frames`, `duration_seconds` and the per-frame time table -- only the seek table is rebuilt. Timeline events ride along and are, by default, pruned to the entities that still appear somewhere in the output.
+`FilterReplayFile` writes a copy of a replay with some entities removed -- a blacklist (`Drop`: entities matching any rule go) or a whitelist (`Keep`: only matching entities stay). Rules select **whole buckets** (schema bucket name glob, or the bucket index as digits), **unique id globs**, **schema struct name globs**, or the **string form of one scalar property**; several rules combine as a union. Every frame survives: the header block is copied byte for byte, each chunk is re-serialized with the surviving entities (same frame range, same per-chunk compression, fresh xxHash64 checksums), and the footer keeps `total_frames`, `duration_seconds` and the per-frame time table -- only the seek table is rebuilt. Timeline events ride along and are, by default, pruned to the entities that still appear somewhere in the output.
 
 ```cpp
 #include "vtx/writer/core/vtx_replay_filter.h"
 
 VTX::ReplayFilterSpec spec;
 spec.mode = VTX::ReplayFilterMode::Drop;                                       // or Keep (whitelist)
-spec.rules.push_back(VTX::ReplayFilterRule::StructName("SystemHealth*"));      // glob on the struct name
+spec.rules.push_back(VTX::ReplayFilterRule::Bucket("SystemHealth"));            // every entity of that bucket
+spec.rules.push_back(VTX::ReplayFilterRule::StructName("Vehicle*"));            // glob on the struct name
 spec.rules.push_back(VTX::ReplayFilterRule::UniqueId("keyboard"));             // glob on the unique id
 spec.rules.push_back(VTX::ReplayFilterRule::Property("Vehicles", "Team", "2")); // one scalar field, as text
 
@@ -315,13 +316,13 @@ VTX::ReplayFilterResult r = VTX::FilterReplayFile("capture.vtx", "capture_filter
     [](int32_t done, int32_t total) { return true; });                         // optional; false cancels
 if (r.ok()) {
     // r.total_frames, r.chunks_rewritten, r.entities_kept / r.entities_dropped,
-    // r.dropped_by_struct (struct name -> count), r.events_kept / r.events_dropped, r.output_bytes
+    // r.dropped_by_struct / r.dropped_by_bucket (name -> count), r.events_kept / r.events_dropped, r.output_bytes
 } else {
     // r.error -- the destination is removed on any failure or cancel
 }
 ```
 
-A `Property` rule with an empty struct name means "every struct declaring that field". Matchable field types are Bool (`true`/`false`), Int32, Int64, Float, Double (shortest round-trip decimal) and String; arrays, maps, nested structs and the compound value types cannot be matched, and unresolvable rules (unknown struct or field, empty pattern) fail before anything is written. Only top-level bucket entities are filtered -- nested containers inside a kept entity are never touched -- and a bucket that ends up empty stays in place, since bucket index is positional. The schema is never pruned: dropping every instance of a struct leaves the struct declared. Both backends are supported and the output keeps the source format. `ReplayFilterMatcher` exposes the same rule resolution for previews on in-memory frames (`Keeps(bucket, index)`, `Apply(bucket)`), and `GlobMatch` is the pattern primitive (`*` any run, `?` one character). Requires the reader module (`VTX_BUILD_READER`).
+A `Property` rule with an empty struct name means "every struct declaring that field". Matchable field types are Bool (`true`/`false`), Int32, Int64, Float, Double (shortest round-trip decimal) and String; arrays, maps, nested structs and the compound value types cannot be matched, and unresolvable rules (unknown struct or field, empty pattern) fail before anything is written. A `Bucket` rule that matches no schema bucket is an error too, and it lists the available names. Only top-level bucket entities are filtered -- nested containers inside a kept entity are never touched -- and a bucket that ends up empty (including a dropped bucket) stays in place, since bucket index is positional: readers still see the bucket, with no entities. The schema is never pruned: dropping every instance of a struct leaves the struct declared. Both backends are supported and the output keeps the source format. `ReplayFilterMatcher` exposes the same rule resolution for previews on in-memory frames (`Keeps(bucket_index, bucket, entity_index)`, `Apply(bucket_index, bucket)`, `BucketMatches(bucket_index)`), and `GlobMatch` is the pattern primitive (`*` any run, `?` one character). Requires the reader module (`VTX_BUILD_READER`).
 
 ### Sink performance observer
 

@@ -40,6 +40,23 @@ namespace {
     constexpr int64_t kBaseUtc = 17'000'000'000'000'000LL; // unix-relative 100 ns ticks
     constexpr int64_t kFrameTicks = 166'666;
 
+    std::string ReadFileText(const std::string& path) {
+        std::ifstream in(path, std::ios::binary);
+        return std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    }
+
+    // The fixture schema with three buckets instead of one; the struct definitions
+    // are unchanged so the entity builders below stay valid.
+    std::string MultiBucketSchemaJson() {
+        std::string json = ReadFileText(VtxTest::FixturePath("test_schema.json"));
+        const std::string single = "\"buckets\": [\"entity\"]";
+        const size_t at = json.find(single);
+        if (at != std::string::npos) {
+            json.replace(at, single.size(), "\"buckets\": [\"entity\", \"fx\", \"telemetry\"]");
+        }
+        return json;
+    }
+
     const char* FormatName(VTX::VtxFormat f) {
         return f == VTX::VtxFormat::FlatBuffers ? "FlatBuffers" : "Protobuf";
     }
@@ -103,6 +120,20 @@ namespace {
             MakeProjectile(ProjectileId(frame), frame % 2 ? "player_1" : "player_0", frame % 2 ? "rocket" : "bullet",
                            frame));
         Add(bucket, "match", MakeMatch(frame));
+        return f;
+    }
+
+    // Same entities spread over three buckets: players in "entity" (0), the
+    // projectile in "fx" (1), the match state in "telemetry" (2).
+    VTX::Frame BuildMultiBucketFrame(int frame) {
+        VTX::Frame f;
+        auto& entity = f.CreateBucket("entity");
+        Add(entity, "player_0", MakePlayer("player_0", "Alpha", 1, frame));
+        Add(entity, "player_1", MakePlayer("player_1", "Bravo", 2, frame));
+        auto& fx = f.CreateBucket("fx");
+        Add(fx, ProjectileId(frame), MakeProjectile(ProjectileId(frame), "player_0", "bullet", frame));
+        auto& telemetry = f.CreateBucket("telemetry");
+        Add(telemetry, "match", MakeMatch(frame));
         return f;
     }
 
@@ -198,6 +229,22 @@ namespace {
             for (size_t b = 0; b < sb.size(); ++b) {
                 ExpectBucketFiltered(sb[b], ob[b], dropped,
                                      "frame " + std::to_string(f) + " bucket " + std::to_string(b));
+            }
+        }
+    }
+
+    // Like ExpectFramesFiltered, with the predicate also given the bucket index.
+    template <typename DropPredicate>
+    void ExpectFramesFilteredByBucket(const Snapshot& source, const Snapshot& output, DropPredicate dropped) {
+        ASSERT_EQ(output.frames.size(), source.frames.size());
+        for (size_t f = 0; f < source.frames.size(); ++f) {
+            const auto& sb = source.frames[f].GetBuckets();
+            const auto& ob = output.frames[f].GetBuckets();
+            ASSERT_EQ(ob.size(), sb.size()) << "frame " << f;
+            for (size_t b = 0; b < sb.size(); ++b) {
+                ExpectBucketFiltered(
+                    sb[b], ob[b], [&](const VTX::Bucket& bucket, size_t i) { return dropped(b, bucket, i); },
+                    "frame " + std::to_string(f) + " bucket " + std::to_string(b));
             }
         }
     }
@@ -357,6 +404,33 @@ protected:
         }
         for (int i = 0; i < kFrames; ++i) {
             auto frame = BuildFrame(i);
+            VTX::GameTime::GameTimeRegister t;
+            t.game_time = float(i) / kFps;
+            t.created_utc_time = kBaseUtc + int64_t(i) * kFrameTicks;
+            writer->RecordFrame(frame, t);
+        }
+        writer->Stop();
+        return cfg.output_filepath;
+    }
+
+    std::string WriteMultiBucketSource(const std::string& suffix) const {
+        VTX::WriterFacadeConfig cfg;
+        cfg.output_filepath = Path(suffix + "_src");
+        cfg.schema_json_content = MultiBucketSchemaJson();
+        cfg.replay_name = "ReplayFilterTest";
+        cfg.replay_uuid = "uuid-filter-" + suffix;
+        cfg.default_fps = kFps;
+        cfg.chunk_max_frames = kChunkFrames;
+        cfg.use_compression = true;
+
+        auto writer = GetParam() == VTX::VtxFormat::FlatBuffers ? VTX::CreateFlatBuffersWriterFacade(cfg)
+                                                                : VTX::CreateProtobufWriterFacade(cfg);
+        EXPECT_TRUE(writer);
+        if (!writer) {
+            return {};
+        }
+        for (int i = 0; i < kFrames; ++i) {
+            auto frame = BuildMultiBucketFrame(i);
             VTX::GameTime::GameTimeRegister t;
             t.game_time = float(i) / kFps;
             t.created_utc_time = kBaseUtc + int64_t(i) * kFrameTicks;
@@ -685,6 +759,109 @@ TEST_P(ReplayFilterTest, CancelRemovesDestination) {
     EXPECT_FALSE(std::filesystem::exists(dst));
 }
 
+// ---------------------------------------------------------------------------
+// Bucket rules: a dropped bucket is emptied in every frame and keeps its slot.
+// ---------------------------------------------------------------------------
+TEST_P(ReplayFilterTest, DropByBucketName) {
+    const std::string src = WriteMultiBucketSource("dropbucket");
+    ASSERT_FALSE(src.empty());
+    const std::string dst = Path("dropbucket_out");
+
+    VTX::ReplayFilterSpec spec;
+    spec.rules.push_back(VTX::ReplayFilterRule::Bucket("fx"));
+    const auto r = VTX::FilterReplayFile(src, dst, spec);
+    ASSERT_TRUE(r.ok()) << r.error;
+    EXPECT_EQ(r.entities_seen, 4u * kFrames);
+    EXPECT_EQ(r.entities_dropped, 1u * kFrames);
+    EXPECT_EQ(r.entities_kept, 3u * kFrames);
+    ASSERT_EQ(r.dropped_by_bucket.size(), 1u);
+    EXPECT_EQ(r.dropped_by_bucket.at("fx"), 1u * kFrames);
+    EXPECT_EQ(r.dropped_by_struct.at("Projectile"), 1u * kFrames);
+
+    const Snapshot source = ReadReplay(src);
+    const Snapshot output = ReadReplay(dst);
+    ASSERT_TRUE(source.ok);
+    ASSERT_TRUE(output.ok);
+    ExpectSameHeaderFooterFraming(source, output);
+    ExpectFramesFilteredByBucket(source, output, [](size_t bucket, const VTX::Bucket&, size_t) { return bucket == 1; });
+    for (const VTX::Frame& frame : output.frames) {
+        ASSERT_EQ(frame.GetBuckets().size(), 3u); // the emptied bucket keeps its slot
+        EXPECT_TRUE(frame.GetBuckets()[1].entities.empty());
+        EXPECT_TRUE(frame.GetBuckets()[1].unique_ids.empty());
+        EXPECT_EQ(frame.GetBuckets()[0].unique_ids, (std::vector<std::string> {"player_0", "player_1"}));
+        EXPECT_EQ(frame.GetBuckets()[2].unique_ids, (std::vector<std::string> {"match"}));
+    }
+    ExpectSeekTableMatchesFile(dst, output.footer);
+}
+
+// A whitelisted bucket keeps all of its entities; other rules still apply elsewhere.
+TEST_P(ReplayFilterTest, KeepBucketCombinesWithOtherRules) {
+    const std::string src = WriteMultiBucketSource("keepbucket");
+    ASSERT_FALSE(src.empty());
+    const std::string dst = Path("keepbucket_out");
+
+    VTX::ReplayFilterSpec spec;
+    spec.mode = VTX::ReplayFilterMode::Keep;
+    spec.rules.push_back(VTX::ReplayFilterRule::Bucket("telemetry"));
+    spec.rules.push_back(VTX::ReplayFilterRule::StructName("Player"));
+    const auto r = VTX::FilterReplayFile(src, dst, spec);
+    ASSERT_TRUE(r.ok()) << r.error;
+    EXPECT_EQ(r.entities_kept, 3u * kFrames);
+    EXPECT_EQ(r.entities_dropped, 1u * kFrames);
+    EXPECT_EQ(r.dropped_by_bucket.at("fx"), 1u * kFrames);
+
+    const Snapshot source = ReadReplay(src);
+    const Snapshot output = ReadReplay(dst);
+    ASSERT_TRUE(source.ok);
+    ASSERT_TRUE(output.ok);
+    ExpectSameHeaderFooterFraming(source, output);
+    ExpectFramesFilteredByBucket(source, output, [](size_t bucket, const VTX::Bucket& b, size_t i) {
+        return bucket != 2 && b.entities[i].entity_type_id != kPlayer;
+    });
+    for (const VTX::Frame& frame : output.frames) {
+        ASSERT_EQ(frame.GetBuckets().size(), 3u);
+        EXPECT_EQ(frame.GetBuckets()[0].entities.size(), 2u);
+        EXPECT_TRUE(frame.GetBuckets()[1].entities.empty());
+        EXPECT_EQ(frame.GetBuckets()[2].unique_ids, (std::vector<std::string> {"match"}));
+    }
+}
+
+// Buckets can be addressed by index or by (case-insensitive) name glob; a rule
+// that matches no schema bucket is an error rather than a silent no-op.
+TEST_P(ReplayFilterTest, BucketByIndexAndGlob) {
+    const std::string src = WriteMultiBucketSource("bucketidx");
+    ASSERT_FALSE(src.empty());
+    const std::string dst = Path("bucketidx_out");
+
+    VTX::ReplayFilterSpec spec;
+    spec.rules.push_back(VTX::ReplayFilterRule::Bucket("2"));
+    spec.rules.push_back(VTX::ReplayFilterRule::Bucket("F?", /*case_insensitive=*/true));
+    const auto r = VTX::FilterReplayFile(src, dst, spec);
+    ASSERT_TRUE(r.ok()) << r.error;
+    EXPECT_EQ(r.entities_dropped, 2u * kFrames);
+    EXPECT_EQ(r.dropped_by_bucket.at("fx"), 1u * kFrames);
+    EXPECT_EQ(r.dropped_by_bucket.at("telemetry"), 1u * kFrames);
+
+    const Snapshot source = ReadReplay(src);
+    const Snapshot output = ReadReplay(dst);
+    ASSERT_TRUE(source.ok);
+    ASSERT_TRUE(output.ok);
+    ExpectFramesFilteredByBucket(source, output, [](size_t bucket, const VTX::Bucket&, size_t) { return bucket >= 1; });
+
+    VTX::ReplayFilterSpec strict;
+    strict.rules.push_back(VTX::ReplayFilterRule::Bucket("F?")); // case-sensitive: matches nothing
+    const auto r2 = VTX::FilterReplayFile(src, Path("bucketidx_strict_out"), strict);
+    EXPECT_FALSE(r2.ok());
+    EXPECT_NE(r2.error.find("no schema bucket"), std::string::npos) << r2.error;
+    EXPECT_NE(r2.error.find("'telemetry'"), std::string::npos) << r2.error; // lists the available names
+
+    VTX::ReplayFilterSpec bad_index;
+    bad_index.rules.push_back(VTX::ReplayFilterRule::Bucket("99999999999"));
+    const auto r3 = VTX::FilterReplayFile(src, Path("bucketidx_bad_out"), bad_index);
+    EXPECT_FALSE(r3.ok());
+    EXPECT_NE(r3.error.find("not a valid bucket index"), std::string::npos) << r3.error;
+}
+
 INSTANTIATE_TEST_SUITE_P(Formats, ReplayFilterTest,
                          ::testing::Values(VTX::VtxFormat::FlatBuffers, VTX::VtxFormat::Protobuf),
                          [](const ::testing::TestParamInfo<VTX::VtxFormat>& info) { return FormatName(info.param); });
@@ -732,15 +909,15 @@ TEST(ReplayFilterMatcher, ApplyRemovesRejectedEntitiesInPlace) {
     VTX::Frame frame = BuildFrame(5); // player_0, player_1, proj_2, match
     VTX::Bucket& bucket = frame.GetBucket("entity");
     ASSERT_EQ(bucket.entities.size(), 4u);
-    EXPECT_TRUE(matcher.Keeps(bucket, 0));
-    EXPECT_FALSE(matcher.Keeps(bucket, 1));
-    EXPECT_FALSE(matcher.Keeps(bucket, 2));
-    EXPECT_TRUE(matcher.Keeps(bucket, 3));
-    EXPECT_FALSE(matcher.Matches(bucket, 42)); // out of range never matches
+    EXPECT_TRUE(matcher.Keeps(0, bucket, 0));
+    EXPECT_FALSE(matcher.Keeps(0, bucket, 1));
+    EXPECT_FALSE(matcher.Keeps(0, bucket, 2));
+    EXPECT_TRUE(matcher.Keeps(0, bucket, 3));
+    EXPECT_FALSE(matcher.Matches(0, bucket, 42)); // out of range never matches
 
     std::vector<std::string> dropped_ids;
-    const size_t dropped =
-        matcher.Apply(bucket, [&](const VTX::Bucket& b, size_t index) { dropped_ids.push_back(b.unique_ids[index]); });
+    const size_t dropped = matcher.Apply(
+        0, bucket, [&](const VTX::Bucket& b, size_t index) { dropped_ids.push_back(b.unique_ids[index]); });
     EXPECT_EQ(dropped, 2u);
     EXPECT_EQ(dropped_ids, (std::vector<std::string> {"player_1", "proj_2"}));
     EXPECT_EQ(bucket.unique_ids, (std::vector<std::string> {"player_0", "match"}));
@@ -750,7 +927,7 @@ TEST(ReplayFilterMatcher, ApplyRemovesRejectedEntitiesInPlace) {
     EXPECT_TRUE(bucket.type_ranges.empty());
 
     // Nothing left to remove: the bucket is untouched and 0 is reported.
-    EXPECT_EQ(matcher.Apply(bucket), 0u);
+    EXPECT_EQ(matcher.Apply(0, bucket), 0u);
     EXPECT_EQ(bucket.entities.size(), 2u);
 
     // Keep mode with a property rule resolved against the schema.
@@ -761,9 +938,9 @@ TEST(ReplayFilterMatcher, ApplyRemovesRejectedEntitiesInPlace) {
     ASSERT_TRUE(keeper.valid()) << keeper.error();
     VTX::Frame early = BuildFrame(5); // Phase = warmup
     VTX::Frame late = BuildFrame(75); // Phase = live
-    EXPECT_EQ(keeper.Apply(early.GetBucket("entity")), 3u);
+    EXPECT_EQ(keeper.Apply(0, early.GetBucket("entity")), 3u);
     EXPECT_EQ(early.GetBucket("entity").unique_ids, (std::vector<std::string> {"match"}));
-    EXPECT_EQ(keeper.Apply(late.GetBucket("entity")), 4u);
+    EXPECT_EQ(keeper.Apply(0, late.GetBucket("entity")), 4u);
     EXPECT_TRUE(late.GetBucket("entity").entities.empty());
 
     // Unresolvable rules are reported, not silently ignored.
@@ -772,4 +949,41 @@ TEST(ReplayFilterMatcher, ApplyRemovesRejectedEntitiesInPlace) {
     const VTX::ReplayFilterMatcher invalid(bad, cache);
     EXPECT_FALSE(invalid.valid());
     EXPECT_NE(invalid.error().find("NoSuchField"), std::string::npos) << invalid.error();
+}
+
+TEST(ReplayFilterMatcher, BucketRulesResolveAgainstSchemaBuckets) {
+    VTX::SchemaRegistry registry;
+    ASSERT_TRUE(registry.LoadFromRawString(MultiBucketSchemaJson()));
+    const VTX::PropertyAddressCache& cache = registry.GetPropertyCache();
+    ASSERT_EQ(cache.bucket_names, (std::vector<std::string> {"entity", "fx", "telemetry"}));
+
+    VTX::ReplayFilterSpec spec;
+    spec.rules.push_back(VTX::ReplayFilterRule::Bucket("tele*"));
+    spec.rules.push_back(VTX::ReplayFilterRule::Bucket("7")); // by index, beyond the named ones
+    const VTX::ReplayFilterMatcher matcher(spec, cache);
+    ASSERT_TRUE(matcher.valid()) << matcher.error();
+    EXPECT_FALSE(matcher.BucketMatches(0));
+    EXPECT_FALSE(matcher.BucketMatches(1));
+    EXPECT_TRUE(matcher.BucketMatches(2));
+    EXPECT_TRUE(matcher.BucketMatches(7));
+    EXPECT_FALSE(matcher.BucketMatches(-1));
+    EXPECT_EQ(matcher.BucketName(1), "fx");
+    EXPECT_EQ(matcher.BucketName(7), "bucket#7");
+
+    VTX::Frame frame = BuildMultiBucketFrame(3);
+    VTX::Bucket& telemetry = frame.GetBucket("telemetry");
+    VTX::Bucket& fx = frame.GetBucket("fx");
+    EXPECT_TRUE(matcher.Matches(2, telemetry, 0));
+    EXPECT_FALSE(matcher.Matches(1, fx, 0));
+    EXPECT_FALSE(matcher.Keeps(2, telemetry, 0)); // Drop mode
+    EXPECT_TRUE(matcher.Keeps(1, fx, 0));
+    EXPECT_EQ(matcher.Apply(2, telemetry), 1u);
+    EXPECT_TRUE(telemetry.entities.empty());
+    EXPECT_EQ(matcher.Apply(1, fx), 0u);
+
+    VTX::ReplayFilterSpec unknown;
+    unknown.rules.push_back(VTX::ReplayFilterRule::Bucket("nope"));
+    const VTX::ReplayFilterMatcher invalid(unknown, cache);
+    EXPECT_FALSE(invalid.valid());
+    EXPECT_NE(invalid.error().find("no schema bucket"), std::string::npos) << invalid.error();
 }
