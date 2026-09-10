@@ -46,6 +46,19 @@ if(BUILD_SHARED_LIBS AND WIN32)
     target_link_libraries(vtx_writer PRIVATE $<BUILD_INTERFACE:vtx_generated_code>)
 endif()
 
+# Linux + shared build: IXWebSocket and mbedTLS are linked into this .so from static
+# archives.  GNU ld would export their symbols with default visibility, so a consumer
+# that links its own copy of the same archives (vtx_tests does, for its in-process
+# WebSocket server) ends up with ONE interposed set of their globals -- constructed
+# by both images and destroyed twice: `free(): double free detected` at exit.
+# Hiding every archive keeps the .so self-contained with a private copy, which is
+# what the Windows DLL already does (a DLL never exports the symbols of static
+# libraries it links).  Nothing here is public API: consumers get zstd/flatbuffers
+# through vtx_common's link interface, never through vtx_writer.
+if(BUILD_SHARED_LIBS AND UNIX AND NOT APPLE)
+    target_link_options(vtx_writer PRIVATE "LINKER:--exclude-libs,ALL")
+endif()
+
 # ==============================================================================
 # 3. VS filters
 # ==============================================================================

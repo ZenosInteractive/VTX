@@ -243,6 +243,7 @@ Shared-build caveats:
 1. Windows still uses `CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS`.
 2. If your process also links another protobuf runtime, ABI duplication is your problem.
 3. Installed Linux binaries rely on `$ORIGIN/../lib` RPATH.
+4. On Linux, `libvtx_writer.so` hides the symbols of the static archives it links (IXWebSocket, mbedTLS, zstd, flatbuffers) with `--exclude-libs,ALL`, exactly as the Windows DLL does implicitly. A process can therefore link its own copy of those libraries without symbol interposition -- two visible copies of a global with a destructor would otherwise be constructed and destroyed twice (a double free at exit). Consumers get zstd/flatbuffers through `vtx_common`'s link interface, never through `vtx_writer`.
 
 ## Outputs
 
