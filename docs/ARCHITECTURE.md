@@ -3,16 +3,19 @@
 ## Module Dependency Graph
 
 ```
-vtx_common          Core types, compression, schema, serialization adapters
+vtx_common             Core types, compression, on-disk framing, schema, serialization adapters
    |
-   +--- vtx_writer  Writes .vtx replay files (frame recording, chunking, flushing)
+   +--- vtx_writer     Writes .vtx replay files (frame recording, chunking, flushing)
    |
-   +--- vtx_reader  Reads .vtx replay files (chunk-based caching, random access)
+   +--- vtx_reader     Reads .vtx replay files (chunk-based caching, random access)
    |
-   +--- vtx_differ  Structural diff between frames (binary tree-diff engine)
+   +--- vtx_differ     Structural diff between frames (binary tree-diff engine)
+   |
+   +--- vtx_transform  Modifies existing replays (repair a crashed one, cut a frame range, filter entities)
+                       -- the one module that links both vtx_reader and vtx_writer
 ```
 
-All four modules are built as static libraries. Each can be toggled independently via CMake options (`VTX_BUILD_WRITER`, `VTX_BUILD_READER`, `VTX_BUILD_DIFFER`). `vtx_common` is always built as the shared foundation.
+All five modules are built as static libraries. Each can be toggled via CMake options (`VTX_BUILD_WRITER`, `VTX_BUILD_READER`, `VTX_BUILD_DIFFER`, `VTX_BUILD_TRANSFORM`); writer, reader and differ are independent siblings on `vtx_common`, while `vtx_transform` requires reader and writer. `vtx_common` is always built as the shared foundation.
 
 ## Module Overview
 
@@ -30,6 +33,7 @@ Provides the shared type system, serialization infrastructure, and utilities use
 | Diagnostics | `vtx_diagnostics.h` | One SDK-wide error model: `Severity`, `VtxErrorCode`, `VtxDiagnostic` (`VtxError`/`VtxWarning`), `VtxResult<T>`, `ValidationReport` |
 | Validation | `vtx_validation.h`, `vtx_frame_accessor.h` | `ValidateSchema` / `ValidateEntity` / `ValidateFrame`; strict accessors `FrameAccessor::TryResolve`, `EntityView::TryGet`, `EntityMutator::TrySet` |
 | Compression | `vtx_deserializer_service.h` | zstd-based chunk compression/decompression |
+| On-disk framing | `vtx_replay_framing.h` | Single definition of the `.vtx` block layout: size prefixes, footer trailer, the zstd-if-beneficial rule, xxHash64 chunk checksums, and a layout probe for rewriters. Shared by both sinks and the `vtx_transform` tools (`RepairReplayFile`, `CutReplayFile`, `FilterReplayFile`), so their output is byte-identical by construction |
 | Logger | `vtx_logger.h` | Thread-safe singleton logger with `VTX_INFO`, `VTX_WARN`, `VTX_ERROR`, `VTX_DEBUG` macros using `std::format` syntax |
 | Hashing | `vtx_types_helpers.h` | xxHash64 content hashing for fast entity comparison |
 | Generated code | `src/generated/` | Protobuf (`.pb.h/.cc`) and FlatBuffers (`_generated.h`) schemas, auto-generated from `schemas/` |
@@ -45,7 +49,7 @@ Records live frame data into `.vtx` replay files (or streams the same bytes over
 - **Config**: `WriterFacadeConfig` (file path) or `NetworkWriterFacadeConfig` (host + port) — chunk size, compression, and the schema supplied as a JSON path, an in-memory JSON string (`schema_json_content`), or a pre-built `SchemaRegistry` (`schema_registry`); `create_output_dirs` (default on) auto-creates missing parent directories of the output file
 - **Policy**: Template-parameterized writer policies select FlatBuffers or Protobuf serialization at compile time
 - **Sinks**: `ChunkedFileSink<Policy>` (file), `ChunkedNetworkSink<Policy>` (TCP stream) — both produce the **same `.vtx` byte sequence**, so a socket receiver only has to concatenate incoming bytes into a file to get a valid replay
-- **Crash durability & recovery** (file sink only): `DurableFile` (FILE* wrapper with real `fsync`; `durable_writes` on by default) makes every chunk power-loss durable, each chunk carries an xxHash64 checksum in the seek table, and `RecoveryJournal` maintains an append-only `.vtx.recovery` write-ahead sidecar (chunk commits, exact per-frame times, in-flight frames) that is deleted on clean `Stop()`. `RepairReplayFile()` (`vtx_replay_recovery.h`) reconstructs a valid file from a crashed recording — footer, seek table, and derived time data byte-exact — with `ReplayNeedsRecovery()` / `RecoveryJournalPath()` as the user-driven detection helpers (never automatic on open). `IFileSinkPerfObserver` (`Config::perf_observer` / `WriterFacadeConfig::perf_observer`) exposes per-stage sink timings (serialize / compress / disk write incl. the durability flush)
+- **Crash durability & recovery** (file sink only): `DurableFile` (FILE* wrapper with real `fsync`; `durable_writes` on by default) makes every chunk power-loss durable, each chunk carries an xxHash64 checksum in the seek table, and `RecoveryJournal` maintains an append-only `.vtx.recovery` write-ahead sidecar (chunk commits, exact per-frame times, in-flight frames) that is deleted on clean `Stop()`. Reconstructing a crashed recording from that sidecar is `RepairReplayFile()` in `vtx_transform` (below) — the writer only produces new recordings. `IFileSinkPerfObserver` (`Config::perf_observer` / `WriterFacadeConfig::perf_observer`) exposes per-stage sink timings (serialize / compress / disk write incl. the durability flush)
 - **Data-source interface**: `IFrameDataSource` (`Initialize()` / `GetNextFrame()` / `GetExpectedTotalFrames()`). Concrete implementations: `samples/advance_write.cpp` (JSON / Protobuf / FlatBuffers from disk); `PipeFrameDataSource<Adapter>` (stdin, Windows named pipes, POSIX FIFOs — including a **server mode** that creates the pipe and waits, for independent game-injector-style external producers); `WebSocketFrameDataSource<Adapter>` (`ws://` + `wss://` with TLS). Both streaming sources share the `IFramePayloadAdapter` concept, so a single adapter plugs into either transport. A `SharedMemoryFrameDataSource` (zero-copy SPSC ring, pluggable `ISharedMemoryTransport`) is present in-tree but **experimental / WIP and not yet functional** — landed unintentionally, not a supported input path
 - **Dependencies**: protobuf + flatbuffers (serialization), zstd (chunk compression), xxHash/xxh3 (chunk + journal-record checksums), IXWebSocket + mbedTLS (WebSocket transport; hidden behind a PIMPL boundary in `websocket_client.cpp` — never leak into the public SDK headers)
 
@@ -71,6 +75,15 @@ Computes structural diffs between two serialized frames.
 - **Engine**: `DefaultTreeDiff<TNodeView>` — recursive binary tree-diff constrained by `CBinaryNodeView` concept
 - **Adapters**: `FlatbufferViewAdapter`, `FProtobufViewAdapter` — zero-copy binary node views into serialized buffers
 - **Output**: `PatchIndex` — list of `DiffIndexOp` operations (Add, Remove, Replace, ReplaceRange) with binary paths
+
+### vtx_transform
+
+Every tool that modifies an existing `.vtx` lives here — the writer only produces new recordings, the reader only consumes them. It sits above `vtx_reader` and `vtx_writer`: cut and filter read the source through the reader facade and re-serialize chunks through the writer's formatter policies, repair rebuilds a crashed file from its journal through the writer's `RecoveryJournal`, and every byte is framed via `vtx_replay_framing.h` — which is what lets reader and writer stay independent siblings. Requires both (`VTX_BUILD_TRANSFORM`, on by default; skipped automatically when either is off).
+
+- **Repair** (`vtx_replay_recovery.h`): `RepairReplayFile` reconstructs a recording that died before `Stop()` from its `.vtx.recovery` sidecar — drops a torn tail chunk, verifies each surviving chunk's checksum, re-appends the in-flight frames and synthesizes the footer with the exact per-frame times (at a chunk boundary the result is byte-identical to a clean `Stop()`). `ReplayNeedsRecovery` / `RecoveryJournalPath` are the user-driven detection helpers — never automatic on open. Needs no reader: it works from the journal and the raw bytes
+- **Cut** (`vtx_replay_cut.h`): `PlanCutFrames` / `PlanCutChunks` resolve a frame or chunk range against a footer (cheap, for previews); `CutReplayFile` executes the plan — header copied verbatim, whole chunks copied verbatim with rebased seek entries, edge chunks re-serialized with only the kept frames, footer rebuilt with frames renumbered from 0 and the time table sliced (tick values stay absolute). Both backends; the output keeps the source format
+- **Entity filter** (`vtx_replay_filter.h`): `FilterReplayFile` rewrites every chunk with entities dropped (blacklist) or exclusively kept (whitelist) by bucket, unique-id glob, struct-name glob or scalar property value. Every frame survives; header, frame count and time table are preserved and only the seek table changes. `ReplayFilterMatcher` / `GlobMatch` expose the rule engine for in-memory previews
+- These are the SDK entry points behind the inspector's **File > Repair Replay**, **File > Cut Replay** and **File > Filter Entities** (`vtx_inspector` links `vtx_reader` + `vtx_transform`, not `vtx_writer`)
 
 ## Design Patterns
 
@@ -107,7 +120,8 @@ Each module exposes a single abstract interface (`IVtxReaderFacade`, `IVtxWriter
 
 | Namespace | Module | Contents |
 |---|---|---|
-| `VTX` | vtx_common, vtx_reader, vtx_writer | Core types, reader/writer facades, format detection, integration primitives (`JsonMapping<T>`, `ProtoBinding<T>`, `FlatBufferBinding<T>`, `IFrameDataSource`) |
+| `VTX` | vtx_common, vtx_reader, vtx_writer, vtx_transform | Core types, reader/writer facades, format detection, replay tools (`RepairReplayFile`, `CutReplayFile`, `FilterReplayFile`), integration primitives (`JsonMapping<T>`, `ProtoBinding<T>`, `FlatBufferBinding<T>`, `IFrameDataSource`) |
+| `VTX::Framing` | vtx_common | The `.vtx` on-disk framing helpers (`vtx_replay_framing.h`) |
 | `VtxDiff` | vtx_differ | Diff engine, patch types, binary view adapters |
 | `VtxDiff::Flatbuffers` | vtx_differ | FlatBuffers binary view adapter |
 | `VtxDiff::Protobuf` | vtx_differ | Protobuf binary view adapter |

@@ -74,6 +74,7 @@ target_link_libraries(vtx_benchmarks PRIVATE
     vtx_reader
     vtx_writer
     vtx_differ
+    vtx_transform  # bench_crash_recovery.cpp: VTX::RepairReplayFile
 )
 
 target_include_directories(vtx_benchmarks PRIVATE

@@ -18,7 +18,7 @@
 #include "vtx/common/vtx_logger.h"
 #include "vtx/common/vtx_types.h"
 #include "vtx/reader/core/vtx_reader_facade.h"
-#include "vtx/writer/core/vtx_replay_recovery.h"
+#include "vtx/transform/vtx_replay_recovery.h"
 #include "vtx/writer/core/vtx_writer_facade.h" // brings SchemaRegistry/SchemaSanitizer for writer.h
 #include "vtx/writer/core/writer.h"
 #include "vtx/writer/policies/formatters/flatbuffers_vtx_policy.h"

@@ -204,6 +204,7 @@ cmake --build --preset windows-release
 | `VTX_BUILD_WRITER` | `ON` | Build the writer module |
 | `VTX_BUILD_READER` | `ON` | Build the reader module |
 | `VTX_BUILD_DIFFER` | `ON` | Build the differ module |
+| `VTX_BUILD_TRANSFORM` | `ON` | Build the transform module (repair / cut / entity filter of existing replays); needs reader + writer, skipped otherwise |
 | `BUILD_VTX_TOOL` | `ON` | Build tools |
 | `BUILD_VTX_SAMPLES` | `ON` | Build sample programs |
 | `VTX_BUILD_TESTS` | `ON` | Build the unit test suite |
@@ -255,6 +256,7 @@ dist/
     vtx_writer.lib
     vtx_reader.lib
     vtx_differ.lib
+    vtx_transform.lib
     cmake/VTX/
   bin/
     vtx_inspector.exe
@@ -303,6 +305,7 @@ Imported targets:
 | `VTX::vtx_writer` | Replay writer |
 | `VTX::vtx_reader` | Replay reader |
 | `VTX::vtx_differ` | Frame differ |
+| `VTX::vtx_transform` | Tools that modify an existing replay (repair, cut, entity filter) |
 
 ## Project Structure
 

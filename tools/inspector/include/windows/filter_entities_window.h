@@ -10,7 +10,7 @@
 
 #include "gui/gui_layer.h"
 #include "vtx/common/vtx_property_cache.h"
-#include "vtx/writer/core/vtx_replay_filter.h"
+#include "vtx/transform/vtx_replay_filter.h"
 
 class InspectorSession;
 

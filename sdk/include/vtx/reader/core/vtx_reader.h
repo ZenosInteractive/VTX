@@ -19,6 +19,7 @@
 
 #include "vtx_deserializer_service.h"
 #include "vtx/common/vtx_diagnostics.h"
+#include "vtx/common/vtx_replay_framing.h"
 #include "vtx/common/vtx_types.h"
 #include "vtx/common/vtx_types_helpers.h"
 #include "vtx/common/vtx_concepts.h"
@@ -760,9 +761,9 @@ namespace VTX {
                     return {};
                 }
 
-                if (raw_buffer.size() <= 4)
+                if (raw_buffer.size() <= Framing::kSizePrefixSize)
                     return {};
-                compressed_blob = raw_buffer.substr(4);
+                compressed_blob = raw_buffer.substr(Framing::kSizePrefixSize);
             }
 
             if (stop_token.stop_requested())

@@ -17,22 +17,27 @@
 #include <utility>
 #include <vector>
 
-#include <xxh3.h>
-
 #include "vtx_schema_generated.h" // complete fbsvtx/cppvtx types before the policy headers
 #include "vtx_schema.pb.h"
 
 #include "vtx/common/readers/schema_reader/schema_registry.h"
 #include "vtx/common/vtx_types.h"
 #include "vtx/reader/core/vtx_reader_facade.h"
-#include "vtx/writer/core/vtx_replay_filter.h"
+#include "vtx/transform/vtx_replay_filter.h"
 #include "vtx/writer/core/vtx_writer_facade.h"
 #include "vtx/writer/policies/formatters/flatbuffers_vtx_policy.h"
 #include "vtx/writer/policies/formatters/protobuff_vtx_policy.h"
 
+#include "util/replay_snapshot.h"
 #include "util/test_fixtures.h"
 
 namespace {
+
+    // Read-back helpers shared with the cut / framing tests.
+    using Snapshot = VtxTest::ReplaySnapshot;
+    using VtxTest::ExpectEntityEqual;
+    using VtxTest::ExpectSeekTableMatchesFile;
+    using VtxTest::ReadReplay;
 
     constexpr int kFrames = 100; // 3 chunks: [0,39] [40,79] [80,99]
     constexpr int kChunkFrames = 40;
@@ -137,68 +142,6 @@ namespace {
         return f;
     }
 
-    struct Snapshot {
-        bool ok = false;
-        VTX::VtxFormat format = VTX::VtxFormat::Unknown;
-        VTX::FileHeader header;
-        VTX::ContextualSchema schema;
-        VTX::FileFooter footer;
-        std::vector<VTX::Frame> frames;
-    };
-
-    Snapshot ReadReplay(const std::string& path) {
-        Snapshot s;
-        VTX::ReaderContext ctx = VTX::OpenReplayFile(path);
-        if (!ctx.Loaded()) {
-            ADD_FAILURE() << "open failed for " << path << ": " << ctx.GetError().message;
-            return s;
-        }
-        if (!ctx.WaitUntilReady()) {
-            ADD_FAILURE() << "load failed for " << path << ": " << ctx.GetReadyError().message;
-            return s;
-        }
-        s.format = ctx.format;
-        s.header = ctx->GetHeader();
-        s.schema = ctx->GetContextualSchema();
-        s.footer = ctx->GetFooter();
-        const int32_t total = ctx->GetTotalFrames();
-        s.frames.reserve(static_cast<size_t>(total));
-        for (int32_t i = 0; i < total; ++i) {
-            const VTX::Frame* frame = ctx->GetFrameSync(i);
-            if (!frame) {
-                ADD_FAILURE() << "frame " << i << " unreadable in " << path;
-                return s;
-            }
-            s.frames.push_back(*frame);
-        }
-        s.ok = true;
-        return s;
-    }
-
-    void ExpectEntityEqual(const VTX::PropertyContainer& a, const VTX::PropertyContainer& b, const std::string& what) {
-        EXPECT_EQ(a.entity_type_id, b.entity_type_id) << what;
-        EXPECT_EQ(a.content_hash, b.content_hash) << what;
-        EXPECT_EQ(a.bool_properties, b.bool_properties) << what;
-        EXPECT_EQ(a.int32_properties, b.int32_properties) << what;
-        EXPECT_EQ(a.int64_properties, b.int64_properties) << what;
-        EXPECT_EQ(a.float_properties, b.float_properties) << what;
-        EXPECT_EQ(a.double_properties, b.double_properties) << what;
-        EXPECT_EQ(a.string_properties, b.string_properties) << what;
-        EXPECT_EQ(a.transform_properties, b.transform_properties) << what;
-        EXPECT_EQ(a.vector_properties, b.vector_properties) << what;
-        EXPECT_EQ(a.quat_properties, b.quat_properties) << what;
-        EXPECT_EQ(a.range_properties, b.range_properties) << what;
-        EXPECT_EQ(a.int32_arrays.data, b.int32_arrays.data) << what;
-        EXPECT_EQ(a.int32_arrays.offsets, b.int32_arrays.offsets) << what;
-        EXPECT_EQ(a.float_arrays.data, b.float_arrays.data) << what;
-        EXPECT_EQ(a.float_arrays.offsets, b.float_arrays.offsets) << what;
-        EXPECT_EQ(a.string_arrays.data, b.string_arrays.data) << what;
-        EXPECT_EQ(a.string_arrays.offsets, b.string_arrays.offsets) << what;
-        EXPECT_EQ(a.vector_arrays.data, b.vector_arrays.data) << what;
-        EXPECT_EQ(a.any_struct_properties.size(), b.any_struct_properties.size()) << what;
-        EXPECT_EQ(a.map_properties.size(), b.map_properties.size()) << what;
-    }
-
     // The output bucket must be exactly the source bucket minus the entities `dropped`
     // rejects, in the original order, with every survivor unchanged.
     template <typename DropPredicate>
@@ -276,31 +219,6 @@ namespace {
             EXPECT_EQ(output.footer.chunk_index[i].chunk_index, source.footer.chunk_index[i].chunk_index) << i;
             EXPECT_EQ(output.footer.chunk_index[i].start_frame, source.footer.chunk_index[i].start_frame) << i;
             EXPECT_EQ(output.footer.chunk_index[i].end_frame, source.footer.chunk_index[i].end_frame) << i;
-        }
-    }
-
-    // Every seek-table entry must describe the bytes actually on disk: the length
-    // prefix equals chunk_size_bytes - 4 and the xxHash64 of the payload matches.
-    void ExpectSeekTableMatchesFile(const std::string& path, const VTX::FileFooter& footer) {
-        std::ifstream in(path, std::ios::binary);
-        ASSERT_TRUE(in) << path;
-        in.seekg(0, std::ios::end);
-        const uint64_t file_size = static_cast<uint64_t>(in.tellg());
-        ASSERT_FALSE(footer.chunk_index.empty());
-        for (const VTX::ChunkIndexEntry& entry : footer.chunk_index) {
-            ASSERT_LE(entry.file_offset + entry.chunk_size_bytes, file_size) << "chunk " << entry.chunk_index;
-            in.seekg(static_cast<std::streamoff>(entry.file_offset));
-            uint32_t payload_size = 0;
-            ASSERT_TRUE(in.read(reinterpret_cast<char*>(&payload_size), sizeof(payload_size)));
-            ASSERT_EQ(payload_size + sizeof(uint32_t), entry.chunk_size_bytes) << "chunk " << entry.chunk_index;
-            std::string payload(payload_size, '\0');
-            ASSERT_TRUE(in.read(payload.data(), payload_size));
-            EXPECT_EQ(XXH3_64bits(payload.data(), payload.size()), entry.checksum) << "chunk " << entry.chunk_index;
-        }
-        // Chunks are contiguous from the first chunk to the footer block.
-        for (size_t i = 1; i < footer.chunk_index.size(); ++i) {
-            EXPECT_EQ(footer.chunk_index[i].file_offset,
-                      footer.chunk_index[i - 1].file_offset + footer.chunk_index[i - 1].chunk_size_bytes);
         }
     }
 

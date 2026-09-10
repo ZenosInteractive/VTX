@@ -6,8 +6,7 @@
 #include <vector>
 #include <atomic>
 #include <chrono>
-#include <zstd.h>
-#include <xxh3.h>
+#include "vtx/common/vtx_replay_framing.h"
 #include "vtx/common/vtx_types.h"
 #include "vtx/common/vtx_concepts.h"
 #include "vtx/writer/policies/sinks/durable_file.h"
@@ -93,9 +92,10 @@ namespace VTX {
             std::string header_payload = SerializerPolicy::SerializeHeader(config_.header_config, schema);
             NotifySerialize(serialize_start);
             header_payload = CompressIfBeneficial(std::move(header_payload));
-            uint32_t final_size = static_cast<uint32_t>(header_payload.size());
-            TimedWrite(&final_size, sizeof(final_size));
-            TimedWrite(header_payload.data(), final_size);
+            const Framing::SizePrefix header_prefix =
+                Framing::EncodeSizePrefix(static_cast<uint32_t>(header_payload.size()));
+            TimedWrite(header_prefix.data(), header_prefix.size());
+            TimedWrite(header_payload.data(), header_payload.size());
             TimedSyncOrFlush();
 
             // Start the crash-recovery journal only once the header is durable. If it
@@ -140,10 +140,10 @@ namespace VTX {
             payload = CompressIfBeneficial(std::move(payload));
 
             uint64_t current_offset = file_.Tell();
-            uint32_t final_size = static_cast<uint32_t>(payload.size());
+            const Framing::SizePrefix prefix = Framing::EncodeSizePrefix(static_cast<uint32_t>(payload.size()));
 
-            TimedWrite(&final_size, sizeof(final_size));
-            TimedWrite(payload.data(), final_size);
+            TimedWrite(prefix.data(), prefix.size());
+            TimedWrite(payload.data(), payload.size());
             TimedSyncOrFlush();
 
             ChunkIndexData indexEntry;
@@ -151,8 +151,8 @@ namespace VTX {
             indexEntry.file_offset = current_offset;
             indexEntry.start_frame = start_frame;
             indexEntry.end_frame = total_frames - 1;
-            indexEntry.chunk_size_bytes = final_size + sizeof(uint32_t);
-            indexEntry.checksum = XXH3_64bits(payload.data(), payload.size());
+            indexEntry.chunk_size_bytes = Framing::ChunkSizeOnDisk(payload.size());
+            indexEntry.checksum = Framing::PayloadChecksum(payload);
             seek_table_.push_back(indexEntry);
 
             // Commit the chunk to the journal AFTER its bytes are durable on disk
@@ -186,9 +186,8 @@ namespace VTX {
             footer_payload = CompressIfBeneficial(std::move(footer_payload));
 
             TimedWrite(footer_payload.data(), footer_payload.size());
-            uint32_t final_size = static_cast<uint32_t>(footer_payload.size());
-            TimedWrite(&final_size, sizeof(final_size));
-            WriteBlob(SerializerPolicy::GetMagicBytes());
+            WriteBlob(Framing::FooterTrailer(static_cast<uint32_t>(footer_payload.size()),
+                                             SerializerPolicy::GetMagicBytes()));
             TimedSyncOrFlush();
 
             // Clean shutdown: the footer is durable, so the recovery journal is no
@@ -234,29 +233,16 @@ namespace VTX {
         }
         void WriteBlob(const std::string& data) { TimedWrite(data.data(), data.size()); }
 
+        // The shared zstd-if-beneficial rule (vtx_replay_framing.h); only the actual
+        // zstd call is timed for the perf observer.
         std::string CompressIfBeneficial(std::string payload) {
-            if (!config_.b_use_compression || payload.size() < 512) {
+            if (!Framing::ShouldCompress(payload.size(), config_.b_use_compression)) {
                 return payload;
             }
-
             const auto compression_start = std::chrono::steady_clock::now();
-            size_t const max_size = ZSTD_compressBound(payload.size());
-            std::string compressed_blob(max_size, '\0');
-
-            size_t const compressed_size = ZSTD_compress(compressed_blob.data(), max_size, payload.data(),
-                                                         payload.size(), config_.compression_level);
+            payload = Framing::Compress(std::move(payload), config_.compression_level);
             NotifyCompress(compression_start);
-
-            if (ZSTD_isError(compressed_size)) {
-                return payload;
-            }
-
-            if (compressed_size >= payload.size()) {
-                return payload;
-            }
-
-            compressed_blob.resize(compressed_size);
-            return compressed_blob;
+            return payload;
         }
 
         Config config_;

@@ -23,9 +23,11 @@ VTX files store frame-based replay data in a chunked binary format. Each file co
 +------------------+
 | Footer Size (4B) |   uint32_t — compressed footer size
 +------------------+
-| Sentinel  (4B)   |   Padding / alignment
+| Magic (4 bytes)  |   "VTXF" or "VTXP" again — the footer trailer
 +------------------+
 ```
+
+The framing itself — the size prefixes, the footer trailer, the zstd-if-beneficial rule and the chunk checksums — is defined once in `sdk/include/vtx/common/vtx_replay_framing.h`. Every producer goes through it: the file and network sinks while recording, and the `vtx_transform` tools that modify an existing file (`RepairReplayFile`, `CutReplayFile`, `FilterReplayFile`). Readers locate the blocks the same way (`Framing::ProbeLayout`).
 
 ## Magic Bytes
 
@@ -66,8 +68,8 @@ The **property schema** embedded in the header defines the layout of `PropertyCo
 Each chunk contains a batch of serialized frames. Chunks are the unit of I/O and caching.
 
 **On disk:**
-1. `uint32_t` — chunk marker / padding (4 bytes, skipped on read)
-2. Compressed blob — zstd-compressed serialized chunk data
+1. `uint32_t` — size in bytes of the payload that follows
+2. Payload — serialized chunk data, zstd-compressed when that shrinks it and left raw otherwise (readers sniff the zstd magic rather than trusting a flag)
 
 **Chunk contents (after decompression):**
 - Array of serialized frames, each containing:

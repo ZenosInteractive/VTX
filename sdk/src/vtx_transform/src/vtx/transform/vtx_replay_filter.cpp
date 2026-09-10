@@ -1,12 +1,10 @@
-#include "vtx/writer/core/vtx_replay_filter.h"
+#include "vtx/transform/vtx_replay_filter.h"
 
 #include <algorithm>
 #include <cctype>
 #include <charconv>
 #include <chrono>
 #include <cstdint>
-#include <cstdio>
-#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <memory>
@@ -15,12 +13,10 @@
 #include <utility>
 #include <vector>
 
-#include <xxh3.h>
-#include <zstd.h>
-
 #include "vtx_schema_generated.h" // complete fbsvtx/cppvtx types before the policy headers
 #include "vtx_schema.pb.h"
 
+#include "vtx/common/vtx_replay_framing.h"
 #include "vtx/common/vtx_types.h"
 #include "vtx/reader/core/vtx_reader_facade.h"
 #include "vtx/writer/policies/formatters/flatbuffers_vtx_policy.h"
@@ -29,13 +25,6 @@
 namespace VTX {
 
     namespace {
-
-        // Mirrors ChunkedFileSink::CompressIfBeneficial with the writer defaults:
-        // level 10, tiny payloads left raw, raw kept when zstd does not shrink it.
-        constexpr int kCompressionLevel = 10;
-        constexpr size_t kCompressMinBytes = 512;
-        // zstd frame magic, little-endian on disk: 28 B5 2F FD.
-        constexpr unsigned char kZstdMagic[4] = {0x28, 0xB5, 0x2F, 0xFD};
 
         char ToLowerAscii(char c) {
             return static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
@@ -126,117 +115,9 @@ namespace VTX {
         }
 
         // ------------------------------------------------------------------
-        // File plumbing (mirrors ChunkedFileSink framing: [magic][u32 header]
-        // [u32 chunk]* [footer][u32][magic]; xxHash64 over the on-disk payload).
+        // Rewrite. File framing (size prefixes, footer trailer, zstd rule, chunk
+        // checksums, layout probe) is the shared vtx_replay_framing.h.
         // ------------------------------------------------------------------
-
-        struct SourceLayout {
-            uint64_t file_size = 0;
-            uint64_t header_end = 0; ///< First byte after the header block.
-            uint64_t footer_offset = 0;
-            bool footer_compressed = false;
-        };
-
-        bool ReadBytesAt(std::ifstream& in, uint64_t offset, void* dst, size_t size) {
-            in.clear();
-            in.seekg(static_cast<std::streamoff>(offset));
-            return static_cast<bool>(in.read(static_cast<char*>(dst), static_cast<std::streamsize>(size)));
-        }
-
-        bool IsZstdAt(std::ifstream& in, uint64_t offset, uint64_t available) {
-            unsigned char magic[4];
-            if (available < sizeof(magic) || !ReadBytesAt(in, offset, magic, sizeof(magic))) {
-                return false;
-            }
-            return std::memcmp(magic, kZstdMagic, sizeof(magic)) == 0;
-        }
-
-        bool ProbeSource(std::ifstream& in, const std::string& expected_magic, SourceLayout& layout,
-                         std::string& error) {
-            in.clear();
-            in.seekg(0, std::ios::end);
-            const std::streamoff end = in.tellg();
-            if (end < 0) {
-                error = "Could not determine the source replay size.";
-                return false;
-            }
-            layout.file_size = static_cast<uint64_t>(end);
-            const size_t magic_size = expected_magic.size();
-            // magic + header size + footer size + trailing magic.
-            if (layout.file_size < magic_size * 2 + sizeof(uint32_t) * 2) {
-                error = "The source replay is too small to be a valid .vtx file.";
-                return false;
-            }
-
-            std::string magic(magic_size, '\0');
-            if (!ReadBytesAt(in, 0, magic.data(), magic_size) || magic != expected_magic) {
-                error = "The source replay does not start with the expected magic bytes.";
-                return false;
-            }
-            uint32_t header_size = 0;
-            if (!ReadBytesAt(in, magic_size, &header_size, sizeof(header_size))) {
-                error = "Could not read the header size of the source replay.";
-                return false;
-            }
-            layout.header_end = magic_size + sizeof(uint32_t) + header_size;
-
-            std::string trailing(magic_size, '\0');
-            if (!ReadBytesAt(in, layout.file_size - magic_size, trailing.data(), magic_size) ||
-                trailing != expected_magic) {
-                error = "The source replay has no footer (incomplete recording?). Repair it first.";
-                return false;
-            }
-            uint32_t footer_size = 0;
-            if (!ReadBytesAt(in, layout.file_size - magic_size - sizeof(uint32_t), &footer_size, sizeof(footer_size))) {
-                error = "Could not read the footer size of the source replay.";
-                return false;
-            }
-            const uint64_t footer_block = static_cast<uint64_t>(footer_size) + sizeof(uint32_t) + magic_size;
-            if (footer_block > layout.file_size || layout.file_size - footer_block < layout.header_end) {
-                error = "The source replay header and footer overlap; the file is corrupt.";
-                return false;
-            }
-            layout.footer_offset = layout.file_size - footer_block;
-            layout.footer_compressed = IsZstdAt(in, layout.footer_offset, footer_size);
-            return true;
-        }
-
-        bool CopyRange(std::ifstream& in, std::ofstream& out, uint64_t offset, uint64_t bytes, std::string& error) {
-            constexpr size_t kBufferSize = 4 * 1024 * 1024;
-            std::vector<char> buffer(
-                static_cast<size_t>(std::min<uint64_t>(std::max<uint64_t>(bytes, 1), kBufferSize)));
-            in.clear();
-            in.seekg(static_cast<std::streamoff>(offset));
-            uint64_t remaining = bytes;
-            while (remaining > 0) {
-                const size_t step = static_cast<size_t>(std::min<uint64_t>(remaining, buffer.size()));
-                if (!in.read(buffer.data(), static_cast<std::streamsize>(step))) {
-                    error = "Read failed at offset " + std::to_string(offset + (bytes - remaining)) + ".";
-                    return false;
-                }
-                if (!out.write(buffer.data(), static_cast<std::streamsize>(step))) {
-                    error = "Write failed while copying the header block.";
-                    return false;
-                }
-                remaining -= step;
-            }
-            return true;
-        }
-
-        std::string CompressIfBeneficial(std::string payload) {
-            if (payload.size() < kCompressMinBytes) {
-                return payload;
-            }
-            const size_t max_size = ZSTD_compressBound(payload.size());
-            std::string compressed(max_size, '\0');
-            const size_t compressed_size =
-                ZSTD_compress(compressed.data(), max_size, payload.data(), payload.size(), kCompressionLevel);
-            if (ZSTD_isError(compressed_size) || compressed_size >= payload.size()) {
-                return payload;
-            }
-            compressed.resize(compressed_size);
-            return compressed;
-        }
 
         template <typename Policy>
         void RunFilter(const std::string& source_path, const std::string& dest_path, IVtxReaderFacade& reader,
@@ -253,8 +134,8 @@ namespace VTX {
                 fail("Could not open the source replay: " + source_path);
                 return;
             }
-            SourceLayout layout;
-            if (!ProbeSource(in, Policy::GetMagicBytes(), layout, error)) {
+            Framing::FileLayout layout;
+            if (!Framing::ProbeLayout(in, Policy::GetMagicBytes(), layout, error)) {
                 fail(error);
                 return;
             }
@@ -265,7 +146,7 @@ namespace VTX {
             std::sort(chunks.begin(), chunks.end(),
                       [](const ChunkIndexEntry& a, const ChunkIndexEntry& b) { return a.start_frame < b.start_frame; });
             for (const ChunkIndexEntry& chunk : chunks) {
-                if (chunk.end_frame < chunk.start_frame || chunk.chunk_size_bytes <= sizeof(uint32_t) ||
+                if (chunk.end_frame < chunk.start_frame || chunk.chunk_size_bytes <= Framing::kSizePrefixSize ||
                     chunk.file_offset < layout.header_end ||
                     chunk.file_offset + chunk.chunk_size_bytes > layout.footer_offset) {
                     fail("The source replay seek table is inconsistent with the file layout (chunk " +
@@ -292,7 +173,7 @@ namespace VTX {
 
             // 1) Header block, verbatim (schema, uuid, name, recording timestamp,
             // metadata). Nothing in it depends on the entity payload.
-            if (!CopyRange(in, out, 0, layout.header_end, error)) {
+            if (!Framing::CopyRange(in, out, 0, layout.header_end, error)) {
                 abort_output(error);
                 return;
             }
@@ -347,24 +228,23 @@ namespace VTX {
                     frames.push_back(Policy::FromNative(std::move(frame)));
                 }
 
-                const bool compress =
-                    IsZstdAt(in, chunk.file_offset + sizeof(uint32_t), chunk.chunk_size_bytes - sizeof(uint32_t));
+                // Per-chunk zstd decision mirrored from the source chunk's bytes.
+                const bool compress = Framing::IsZstdAt(in, chunk.file_offset + Framing::kSizePrefixSize,
+                                                        chunk.chunk_size_bytes - Framing::kSizePrefixSize);
                 std::string payload = Policy::SerializeChunk(frames, i, compress);
-                if (compress) {
-                    payload = CompressIfBeneficial(std::move(payload));
-                }
+                payload =
+                    Framing::CompressIfBeneficial(std::move(payload), compress, Framing::kDefaultCompressionLevel);
 
                 ChunkIndexData entry;
                 entry.chunk_index = i;
                 entry.file_offset = static_cast<int64_t>(out.tellp());
-                entry.chunk_size_bytes = static_cast<uint32_t>(payload.size() + sizeof(uint32_t));
+                entry.chunk_size_bytes = Framing::ChunkSizeOnDisk(payload.size());
                 entry.start_frame = chunk.start_frame;
                 entry.end_frame = chunk.end_frame;
-                entry.checksum = XXH3_64bits(payload.data(), payload.size());
+                entry.checksum = Framing::PayloadChecksum(payload);
 
-                const uint32_t payload_size = static_cast<uint32_t>(payload.size());
-                if (!out.write(reinterpret_cast<const char*>(&payload_size), sizeof(payload_size)) ||
-                    !out.write(payload.data(), static_cast<std::streamsize>(payload.size()))) {
+                const std::string block = Framing::ChunkBlock(payload);
+                if (!out.write(block.data(), static_cast<std::streamsize>(block.size()))) {
                     abort_output("Write failed for chunk " + std::to_string(i) + ".");
                     return;
                 }
@@ -408,14 +288,10 @@ namespace VTX {
             session_footer.events = &events;
 
             std::string footer_payload = Policy::SerializeFooter(seek_table, session_footer);
-            if (layout.footer_compressed) {
-                footer_payload = CompressIfBeneficial(std::move(footer_payload));
-            }
-            const uint32_t footer_size = static_cast<uint32_t>(footer_payload.size());
-            const std::string magic = Policy::GetMagicBytes();
-            if (!out.write(footer_payload.data(), static_cast<std::streamsize>(footer_payload.size())) ||
-                !out.write(reinterpret_cast<const char*>(&footer_size), sizeof(footer_size)) ||
-                !out.write(magic.data(), static_cast<std::streamsize>(magic.size()))) {
+            footer_payload = Framing::CompressIfBeneficial(std::move(footer_payload), layout.footer_compressed,
+                                                           Framing::kDefaultCompressionLevel);
+            const std::string footer_block = Framing::FooterBlock(footer_payload, Policy::GetMagicBytes());
+            if (!out.write(footer_block.data(), static_cast<std::streamsize>(footer_block.size()))) {
                 abort_output("Write failed while finishing the footer.");
                 return;
             }

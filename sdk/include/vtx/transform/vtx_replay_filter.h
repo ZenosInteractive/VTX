@@ -24,8 +24,10 @@
  * emptied in every frame rather than removed: readers still see it, with no
  * entities.
  *
- * Requires the reader module (VTX_BUILD_READER): the source replay is read through
- * the standard reader, so the function is only compiled when vtx_reader is built.
+ * Part of vtx_transform (VTX_BUILD_TRANSFORM): the source is read through the
+ * standard reader and re-serialized through the writer's formatter policies, so the
+ * module needs both vtx_reader and vtx_writer. Its sibling CutReplayFile() slices
+ * *when* (a frame range) instead of *what*.
  *
  * @author Zenos Interactive
  */

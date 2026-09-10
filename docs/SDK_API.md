@@ -267,10 +267,10 @@ If the facade is destroyed without an explicit `Stop()`, its destructor finalize
 
 A recording that dies before `Stop()` -- process crash or power loss, mid-chunk or mid-frame -- is **recoverable up to the last recorded frame**. While recording, the file sink maintains a write-ahead sidecar **`<file>.vtx.recovery`**: every recorded frame is journaled before it joins the pending batch, and every flushed chunk is committed to the journal *after* its bytes are durable in the `.vtx` (data-before-journal ordering, append-only log, per-record checksums). On a clean `Stop()` the sidecar is deleted -- its presence at open time is the signal of an unclean shutdown.
 
-Recovery is **never automatic**; the flow is user-driven:
+Recovery is **never automatic**; the flow is user-driven. The repair entry point lives in `vtx_transform` (link `VTX::vtx_transform`): the writer only produces new recordings, and every tool that modifies an existing `.vtx` sits in that module (see "Rewriting Replays" below):
 
 ```cpp
-#include "vtx/writer/core/vtx_replay_recovery.h"
+#include "vtx/transform/vtx_replay_recovery.h"
 
 if (VTX::ReplayNeedsRecovery(path)) {          // cheap: does "<path>.recovery" exist?
     VTX::RepairResult r = VTX::RepairReplayFile(path);
@@ -297,32 +297,6 @@ Durability knobs on the file sink (`ChunkedFileSink::Config`; facade users curre
 | `durable_writes` | `true` | fsync every chunk and journal record to physical media -- survives **power loss**. Set `false` to only flush to the OS: cheaper, still survives a **process crash**. |
 | `enable_recovery_journal` | `true` | Maintain the `.recovery` sidecar. Opting out removes any stale sidecar at session start; a crash then leaves an unrecoverable (footerless) file. |
 | `journal_compact_threshold_bytes` | `0` (64 MB) | How many superseded journal bytes accrue before the sidecar is compacted (rewritten via an atomic rename). |
-
-### Filtering entities into a new replay
-
-`FilterReplayFile` writes a copy of a replay with some entities removed -- a blacklist (`Drop`: entities matching any rule go) or a whitelist (`Keep`: only matching entities stay). Rules select **whole buckets** (schema bucket name glob, or the bucket index as digits), **unique id globs**, **schema struct name globs**, or the **string form of one scalar property**; several rules combine as a union. Every frame survives: the header block is copied byte for byte, each chunk is re-serialized with the surviving entities (same frame range, same per-chunk compression, fresh xxHash64 checksums), and the footer keeps `total_frames`, `duration_seconds` and the per-frame time table -- only the seek table is rebuilt. Timeline events ride along and are, by default, pruned to the entities that still appear somewhere in the output.
-
-```cpp
-#include "vtx/writer/core/vtx_replay_filter.h"
-
-VTX::ReplayFilterSpec spec;
-spec.mode = VTX::ReplayFilterMode::Drop;                                       // or Keep (whitelist)
-spec.rules.push_back(VTX::ReplayFilterRule::Bucket("SystemHealth"));            // every entity of that bucket
-spec.rules.push_back(VTX::ReplayFilterRule::StructName("Vehicle*"));            // glob on the struct name
-spec.rules.push_back(VTX::ReplayFilterRule::UniqueId("keyboard"));             // glob on the unique id
-spec.rules.push_back(VTX::ReplayFilterRule::Property("Vehicles", "Team", "2")); // one scalar field, as text
-
-VTX::ReplayFilterResult r = VTX::FilterReplayFile("capture.vtx", "capture_filtered.vtx", spec,
-    [](int32_t done, int32_t total) { return true; });                         // optional; false cancels
-if (r.ok()) {
-    // r.total_frames, r.chunks_rewritten, r.entities_kept / r.entities_dropped,
-    // r.dropped_by_struct / r.dropped_by_bucket (name -> count), r.events_kept / r.events_dropped, r.output_bytes
-} else {
-    // r.error -- the destination is removed on any failure or cancel
-}
-```
-
-A `Property` rule with an empty struct name means "every struct declaring that field". Matchable field types are Bool (`true`/`false`), Int32, Int64, Float, Double (shortest round-trip decimal) and String; arrays, maps, nested structs and the compound value types cannot be matched, and unresolvable rules (unknown struct or field, empty pattern) fail before anything is written. A `Bucket` rule that matches no schema bucket is an error too, and it lists the available names. Only top-level bucket entities are filtered -- nested containers inside a kept entity are never touched -- and a bucket that ends up empty (including a dropped bucket) stays in place, since bucket index is positional: readers still see the bucket, with no entities. The schema is never pruned: dropping every instance of a struct leaves the struct declared. Both backends are supported and the output keeps the source format. `ReplayFilterMatcher` exposes the same rule resolution for previews on in-memory frames (`Keeps(bucket_index, bucket, entity_index)`, `Apply(bucket_index, bucket)`, `BucketMatches(bucket_index)`), and `GlobMatch` is the pattern primitive (`*` any run, `?` one character). Requires the reader module (`VTX_BUILD_READER`).
 
 ### Sink performance observer
 
@@ -393,6 +367,63 @@ auto writer = VTX::CreateFlatBuffersNetworkWriterFacade(config);
 ```
 
 The writer behaves identically behind the `IVtxWriterFacade` abstraction -- the same wire bytes that a `.vtx` file holds are sent over the socket in order, so the receiver just appends the incoming message bytes to a file and gets a valid `.vtx` parseable by `VTX::OpenReplayFile`.
+
+---
+
+## Rewriting Replays (`vtx_transform`)
+
+`vtx_transform` is where every tool that modifies an existing `.vtx` lives -- the writer only produces new recordings. Three entry points: **repair** a crashed recording (`RepairReplayFile`, documented above under *Crash recovery* next to the journal that feeds it), **cut** a frame range and **filter** entities. Cut and filter read the source through the reader and re-serialize through the writer's formatter policies, so it is the one module that links both (`VTX_BUILD_TRANSFORM`, on by default; skipped automatically when reader or writer is off). Both rewrites copy the header block byte for byte, frame every output block through the shared `vtx/common/vtx_replay_framing.h`, support both backends and keep the source format. Neither touches the source -- `dest_path` must be a different file, and a failed or cancelled rewrite removes its partial destination.
+
+### Cutting a frame range
+
+`CutReplayFile` writes the frames of a range into a new replay. Plan first -- the plan is cheap, computed from the footer, and is what a UI previews -- then execute it against the same footer:
+
+```cpp
+#include "vtx/transform/vtx_replay_cut.h"
+
+const VTX::FileFooter footer = reader->GetFooter();
+
+VTX::ReplayCutPlan plan = VTX::PlanCutFrames(footer, 1200, 1799); // exact frames, inclusive
+// or: VTX::PlanCutChunks(footer, 3, 5);                            // whole chunks, copied verbatim
+if (!plan.valid) { /* plan.error */ }
+// plan.first_frame / last_frame, first_chunk / last_chunk, trims_head / trims_tail,
+// chunk_bytes (source bytes involved), FrameCount()
+
+VTX::ReplayCutResult r = VTX::CutReplayFile("match.vtx", footer, plan, "match_round2.vtx");
+if (r.ok()) {
+    // r.total_frames, r.chunks_written, r.chunks_rewritten (edge chunks re-serialized: 0, 1 or 2), r.output_bytes
+} else {
+    // r.error
+}
+```
+
+Whole chunks inside the range are copied verbatim (same bytes, same checksum; only their seek entry is rebased). When a bound falls inside a chunk, that edge chunk is re-serialized with only the kept frames -- the per-chunk zstd decision is mirrored from the source and the entry gets a fresh xxHash64 -- so exact cuts never decode more than the two edge chunks and whole-chunk cuts never decode a frame. The footer is rebuilt: frames renumbered from 0, the per-frame time table sliced with **absolute** tick values, gaps and segments filtered and rebased, duration recomputed from the kept stamps. Timeline events are not carried over. Bounds are clamped to the replay; a start that falls between chunks snaps to the next covered frame.
+
+### Filtering entities
+
+`FilterReplayFile` writes a copy of a replay with some entities removed -- a blacklist (`Drop`: entities matching any rule go) or a whitelist (`Keep`: only matching entities stay). Rules select **whole buckets** (schema bucket name glob, or the bucket index as digits), **unique id globs**, **schema struct name globs**, or the **string form of one scalar property**; several rules combine as a union. Every frame survives: each chunk is re-serialized with the surviving entities (same frame range, same per-chunk compression, fresh xxHash64 checksums), and the footer keeps `total_frames`, `duration_seconds` and the per-frame time table -- only the seek table is rebuilt. Timeline events ride along and are, by default, pruned to the entities that still appear somewhere in the output.
+
+```cpp
+#include "vtx/transform/vtx_replay_filter.h"
+
+VTX::ReplayFilterSpec spec;
+spec.mode = VTX::ReplayFilterMode::Drop;                                       // or Keep (whitelist)
+spec.rules.push_back(VTX::ReplayFilterRule::Bucket("SystemHealth"));            // every entity of that bucket
+spec.rules.push_back(VTX::ReplayFilterRule::StructName("Vehicle*"));            // glob on the struct name
+spec.rules.push_back(VTX::ReplayFilterRule::UniqueId("keyboard"));             // glob on the unique id
+spec.rules.push_back(VTX::ReplayFilterRule::Property("Vehicles", "Team", "2")); // one scalar field, as text
+
+VTX::ReplayFilterResult r = VTX::FilterReplayFile("capture.vtx", "capture_filtered.vtx", spec,
+    [](int32_t done, int32_t total) { return true; });                         // optional; false cancels
+if (r.ok()) {
+    // r.total_frames, r.chunks_rewritten, r.entities_kept / r.entities_dropped,
+    // r.dropped_by_struct / r.dropped_by_bucket (name -> count), r.events_kept / r.events_dropped, r.output_bytes
+} else {
+    // r.error -- the destination is removed on any failure or cancel
+}
+```
+
+A `Property` rule with an empty struct name means "every struct declaring that field". Matchable field types are Bool (`true`/`false`), Int32, Int64, Float, Double (shortest round-trip decimal) and String; arrays, maps, nested structs and the compound value types cannot be matched, and unresolvable rules (unknown struct or field, empty pattern) fail before anything is written. A `Bucket` rule that matches no schema bucket is an error too, and it lists the available names. Only top-level bucket entities are filtered -- nested containers inside a kept entity are never touched -- and a bucket that ends up empty (including a dropped bucket) stays in place, since bucket index is positional: readers still see the bucket, with no entities. The schema is never pruned: dropping every instance of a struct leaves the struct declared. `ReplayFilterMatcher` exposes the same rule resolution for previews on in-memory frames (`Keeps(bucket_index, bucket, entity_index)`, `Apply(bucket_index, bucket)`, `BucketMatches(bucket_index)`), and `GlobMatch` is the pattern primitive (`*` any run, `?` one character).
 
 ---
 

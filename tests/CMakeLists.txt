@@ -49,6 +49,7 @@ include(GoogleTest)
 add_executable(vtx_tests
     util/test_main.cpp
     util/test_fixtures.h
+    util/replay_snapshot.h
 
     common/test_flat_array.cpp
     common/test_flat_array_edges.cpp
@@ -67,6 +68,7 @@ add_executable(vtx_tests
     common/test_native_loader.cpp
     common/test_binary_loader.cpp
     common/test_diagnostics.cpp
+    common/test_replay_framing.cpp
 
     writer/test_writer_basic.cpp
     writer/test_writer_edges.cpp
@@ -76,8 +78,6 @@ add_executable(vtx_tests
     writer/test_schema_in_memory.cpp
     writer/test_frame_post_processor.cpp
     writer/test_frame_finalization.cpp
-    writer/test_crash_recovery.cpp
-    writer/test_replay_filter.cpp
     writer/test_network_sink.cpp
     writer/test_pipe_source.cpp
     writer/test_websocket_source.cpp
@@ -105,6 +105,18 @@ target_link_libraries(vtx_tests PRIVATE
     # behind its PIMPL boundary, so the test target needs the dep directly.
     $<BUILD_INTERFACE:VTX::deps::ixwebsocket>
 )
+
+# The tools that modify an existing replay (repair / cut / filter) live in
+# vtx_transform, which only exists when reader + writer are built; their tests join
+# the executable only then.
+if(TARGET vtx_transform)
+    target_sources(vtx_tests PRIVATE
+        transform/test_crash_recovery.cpp
+        transform/test_replay_cut.cpp
+        transform/test_replay_filter.cpp
+    )
+    target_link_libraries(vtx_tests PRIVATE vtx_transform)
+endif()
 
 target_include_directories(vtx_tests PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}"
@@ -135,6 +147,7 @@ source_group("common"  REGULAR_EXPRESSION "common/.*")
 source_group("writer"  REGULAR_EXPRESSION "writer/.*")
 source_group("reader"  REGULAR_EXPRESSION "reader/.*")
 source_group("differ"  REGULAR_EXPRESSION "differ/.*")
+source_group("transform" REGULAR_EXPRESSION "transform/.*")
 
 # Register every TEST(suite, name) with ctest
 gtest_discover_tests(vtx_tests

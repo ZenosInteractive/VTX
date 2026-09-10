@@ -5,7 +5,8 @@
 #include <string>
 
 #include "gui/gui_layer.h"
-#include "services/replay_cut_service.h"
+#include "vtx/common/vtx_types.h"
+#include "vtx/transform/vtx_replay_cut.h"
 
 class InspectorSession;
 
@@ -43,8 +44,8 @@ private:
     // Resolves the current inputs to an inclusive frame range; false when the
     // inputs cannot be parsed (error_out explains why).
     bool ResolveRequestedFrames(int& start_frame, int& end_frame, std::string& error_out) const;
-    void StartCut(const VtxServices::ReplayCutPlan& plan, const std::string& dest_path);
-    static Outcome RunCut(std::string source_path, VTX::FileFooter footer, VtxServices::ReplayCutPlan plan,
+    void StartCut(const VTX::ReplayCutPlan& plan, const std::string& dest_path);
+    static Outcome RunCut(std::string source_path, VTX::FileFooter footer, VTX::ReplayCutPlan plan,
                           std::string dest_path);
 
     std::shared_ptr<InspectorSession> session_;
