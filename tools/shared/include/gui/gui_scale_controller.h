@@ -33,10 +33,13 @@ public:
     bool HasOverride() const { return scale_adjustment_.has_value(); }
     float GetScaleAdjustment() const;
 
+    // Live DPI change of the bound window. Dispatched by the window owner
+    // (GuiApplication holds the GLFW user pointer); also used by RefreshAutoScale().
+    void OnWindowContentScaleChanged(float x_scale, float y_scale);
+
 private:
     void CaptureBaseStyle();
     void RefreshAutoScale();
-    void OnWindowContentScaleChanged(float x_scale, float y_scale);
     void ApplyScale();
     void LoadSettings();
     void SaveSettings() const;

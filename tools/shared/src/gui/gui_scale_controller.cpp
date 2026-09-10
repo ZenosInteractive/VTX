@@ -63,21 +63,14 @@ GuiScaleController::GuiScaleController(std::string tool_id)
     LoadSettings();
 }
 
-// Binds the active GLFW window and subscribes to live content-scale changes.
+// Binds the active GLFW window. Live content-scale changes arrive through
+// OnWindowContentScaleChanged(), dispatched by GuiApplication: the window owner holds
+// the single GLFW user pointer and routes every window callback.
 void GuiScaleController::BindWindow(GLFWwindow* window) {
     window_ = window;
     if (!window_) {
         return;
     }
-
-    glfwSetWindowUserPointer(window_, this);
-    glfwSetWindowContentScaleCallback(window_, [](GLFWwindow* glfw_window, float x_scale, float y_scale) {
-        auto* controller = static_cast<GuiScaleController*>(glfwGetWindowUserPointer(glfw_window));
-        if (!controller) {
-            return;
-        }
-        controller->OnWindowContentScaleChanged(x_scale, y_scale);
-    });
 
     RefreshAutoScale();
 }
