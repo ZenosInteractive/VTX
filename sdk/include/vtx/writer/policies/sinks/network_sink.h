@@ -40,9 +40,9 @@ using vtx_socklen_t = socklen_t;
 #include <stdexcept>
 #include <string>
 #include <vector>
-#include <zstd.h>
 
 #include "vtx/common/vtx_concepts.h"
+#include "vtx/common/vtx_replay_framing.h"
 #include "vtx/common/vtx_types.h"
 
 namespace VTX {
@@ -103,8 +103,9 @@ namespace VTX {
 
             std::string header_payload = SerializerPolicy::SerializeHeader(config_.header_config, schema);
             header_payload = CompressIfBeneficial(std::move(header_payload));
-            uint32_t final_size = static_cast<uint32_t>(header_payload.size());
-            SendAll(reinterpret_cast<const char*>(&final_size), sizeof(final_size));
+            const Framing::SizePrefix header_prefix =
+                Framing::EncodeSizePrefix(static_cast<uint32_t>(header_payload.size()));
+            SendAll(header_prefix.data(), header_prefix.size());
             SendAll(header_payload);
         }
 
@@ -117,8 +118,8 @@ namespace VTX {
             payload = CompressIfBeneficial(std::move(payload));
 
             uint64_t current_offset = bytes_sent_;
-            uint32_t final_size = static_cast<uint32_t>(payload.size());
-            SendAll(reinterpret_cast<const char*>(&final_size), sizeof(final_size));
+            const Framing::SizePrefix prefix = Framing::EncodeSizePrefix(static_cast<uint32_t>(payload.size()));
+            SendAll(prefix.data(), prefix.size());
             SendAll(payload);
 
             ChunkIndexData entry;
@@ -126,7 +127,8 @@ namespace VTX {
             entry.file_offset = current_offset;
             entry.start_frame = start_frame;
             entry.end_frame = total_frames - 1;
-            entry.chunk_size_bytes = final_size + static_cast<uint32_t>(sizeof(uint32_t));
+            entry.chunk_size_bytes = Framing::ChunkSizeOnDisk(payload.size());
+            entry.checksum = Framing::PayloadChecksum(payload); // same seek-table contract as the file sink
             seek_table_.push_back(entry);
         }
 
@@ -143,9 +145,8 @@ namespace VTX {
             std::string footer_payload = SerializerPolicy::SerializeFooter(seek_table_, footerData);
             footer_payload = CompressIfBeneficial(std::move(footer_payload));
             SendAll(footer_payload);
-            uint32_t final_size = static_cast<uint32_t>(footer_payload.size());
-            SendAll(reinterpret_cast<const char*>(&final_size), sizeof(final_size));
-            SendAll(SerializerPolicy::GetMagicBytes());
+            SendAll(Framing::FooterTrailer(static_cast<uint32_t>(footer_payload.size()),
+                                           SerializerPolicy::GetMagicBytes()));
 
             vtx_close_socket(socket_);
             socket_ = kVtxInvalidSocket;
@@ -166,19 +167,8 @@ namespace VTX {
         void SendAll(const std::string& data) { SendAll(data.data(), data.size()); }
 
         std::string CompressIfBeneficial(std::string payload) {
-            if (!config_.b_use_compression || payload.size() < 512)
-                return payload;
-
-            size_t max_size = ZSTD_compressBound(payload.size());
-            std::string compressed(max_size, '\0');
-            size_t compressed_size =
-                ZSTD_compress(compressed.data(), max_size, payload.data(), payload.size(), config_.compression_level);
-
-            if (ZSTD_isError(compressed_size) || compressed_size >= payload.size())
-                return payload;
-
-            compressed.resize(compressed_size);
-            return compressed;
+            return Framing::CompressIfBeneficial(std::move(payload), config_.b_use_compression,
+                                                 config_.compression_level);
         }
 
 #ifdef _WIN32

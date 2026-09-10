@@ -151,6 +151,7 @@ VTX::FileFooter VTX::ProtobufReaderPolicy::GetVTXFooter(const FooterType& pb_foo
         entry.end_frame = pb_chunk.end_frame();
         entry.file_offset = pb_chunk.file_offset();
         entry.chunk_size_bytes = pb_chunk.chunk_size_bytes();
+        entry.checksum = pb_chunk.checksum();
 
         out.chunk_index.push_back(entry);
     }

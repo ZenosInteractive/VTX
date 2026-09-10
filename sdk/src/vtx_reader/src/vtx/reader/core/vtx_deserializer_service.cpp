@@ -3,20 +3,14 @@
 #include <string>
 #include <zstd.h>
 
+#include "vtx/common/vtx_replay_framing.h"
 #include "vtx_schema.pb.h"
 using namespace VTX;
 
 std::string VTX::ReplayUnpacker::Decompress(const std::string& compressed_data) {
-    //zstd includes a magic number of 4 bytes, if is smaller than that is not a valid zstd buffer
-    if (compressed_data.size() < 4) {
-        return compressed_data;
-    }
-
-    //get magic number
-    const uint8_t* bytes = reinterpret_cast<const uint8_t*>(compressed_data.data());
-    bool is_zstd = (bytes[0] == 0x28 && bytes[1] == 0xB5 && bytes[2] == 0x2F && bytes[3] == 0xFD);
-
-    if (!is_zstd) {
+    // Blobs are stored raw when zstd would not help; the zstd magic decides (one
+    // definition for every producer and consumer in vtx_replay_framing.h).
+    if (!Framing::LooksLikeZstd(compressed_data)) {
         return compressed_data;
     }
 

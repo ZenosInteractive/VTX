@@ -1216,6 +1216,7 @@ namespace VTX {
         const std::vector<int64_t>* created_utc = nullptr;
         const std::vector<int32_t>* gaps = nullptr;
         const std::vector<int32_t>* segments = nullptr;
+        const std::vector<TimelineEvent>* events = nullptr; ///< Optional timeline events; null or empty writes none.
     };
 
     struct ChunkIndexData {

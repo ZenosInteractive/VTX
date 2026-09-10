@@ -140,16 +140,18 @@ The reader's chunk cache is the single sharpest performance edge in the SDK. A w
 ## Architecture
 
 ```
-vtx_common          Core types, schemas, serialization adapters, compression (zstd)
+vtx_common             Core types, schemas, serialization adapters, compression (zstd), on-disk framing
    |
-   +--- vtx_writer  Record live frame data into .vtx replay files
+   +--- vtx_writer     Record live frame data into .vtx replay files
    |
-   +--- vtx_reader  Stream and random-access .vtx replay files with chunk-based caching
+   +--- vtx_reader     Stream and random-access .vtx replay files with chunk-based caching
    |
-   +--- vtx_differ  Compute structural diffs between frames or replay trees
+   +--- vtx_differ     Compute structural diffs between frames or replay trees
+   |
+   +--- vtx_transform  Modify existing replays: repair a crashed one, cut a frame range, filter entities (uses reader + writer)
 ```
 
-Four static libraries. Enable or disable each with a CMake option. Full module breakdown and extension model in [SDK Architecture](https://github.com/ZenosInteractive/VTX/wiki/SDK-Architecture).
+Five static libraries. Enable or disable each with a CMake option. Full module breakdown and extension model in [SDK Architecture](https://github.com/ZenosInteractive/VTX/wiki/SDK-Architecture).
 
 ## Tools
 

@@ -19,6 +19,12 @@
  *   }
  *   auto ctx = VTX::OpenReplayFile(path);
  *
+ * Part of vtx_transform (VTX_BUILD_TRANSFORM), next to CutReplayFile() and
+ * FilterReplayFile(): every tool that modifies an existing .vtx lives there, while the
+ * writer only produces new recordings. Repair needs no reader -- it works from the
+ * journal and the raw bytes through the writer's RecoveryJournal and the shared
+ * framing.
+ *
  * @author Zenos Interactive
  */
 #pragma once

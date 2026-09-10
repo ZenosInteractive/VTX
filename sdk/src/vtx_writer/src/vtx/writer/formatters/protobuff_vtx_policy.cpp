@@ -126,6 +126,21 @@ std::string VTX::ProtobufVtxPolicy::SerializeFooter(const std::vector<ChunkIndex
         }
     }
 
+    if (footerData.events) {
+        footer_msg.mutable_events()->Reserve(static_cast<int>(footerData.events->size()));
+        for (const auto& ev : *footerData.events) {
+            auto* pb_ev = footer_msg.add_events();
+            pb_ev->set_game_time(ev.game_time);
+            pb_ev->set_event_type(ev.event_type);
+            pb_ev->set_label(ev.label);
+            auto* location = pb_ev->mutable_location();
+            location->set_x(ev.location.x);
+            location->set_y(ev.location.y);
+            location->set_z(ev.location.z);
+            pb_ev->set_entity_unique_id(ev.entity_unique_id);
+        }
+    }
+
     footer_msg.mutable_chunk_index()->Reserve(static_cast<int>(seekTable.size()));
 
     for (const auto& entry : seekTable) {

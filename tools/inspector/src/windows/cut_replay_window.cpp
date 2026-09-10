@@ -184,15 +184,17 @@ bool CutReplayWindow::ResolveRequestedFrames(int& start_frame, int& end_frame, s
 }
 
 CutReplayWindow::Outcome CutReplayWindow::RunCut(std::string source_path, VTX::FileFooter footer,
-                                                 VtxServices::ReplayCutPlan plan, std::string dest_path) {
+                                                 VTX::ReplayCutPlan plan, std::string dest_path) {
     // Touches only its by-value arguments -- safe to run detached from the window.
     Outcome out;
     out.dest_path = dest_path;
-    out.ok = VtxServices::ReplayCutService::ExecuteCut(source_path, footer, plan, dest_path, out.error);
+    const VTX::ReplayCutResult result = VTX::CutReplayFile(source_path, footer, plan, dest_path);
+    out.ok = result.ok();
+    out.error = result.error;
     return out;
 }
 
-void CutReplayWindow::StartCut(const VtxServices::ReplayCutPlan& plan, const std::string& dest_path) {
+void CutReplayWindow::StartCut(const VTX::ReplayCutPlan& plan, const std::string& dest_path) {
     phase_ = Phase::Running;
     spinner_tick_ = 0;
     outcome_ = Outcome {};
@@ -210,10 +212,6 @@ void CutReplayWindow::DrawContent() {
     if (!session_->HasLoadedReplay()) {
         ImGui::TextDisabled("Load a replay first; Cut works on the currently loaded .vtx.");
         range_initialized_ = false;
-        return;
-    }
-    if (session_->GetFormat() != VTX::VtxFormat::FlatBuffers) {
-        ImGui::TextColored(kWarn, "Cut currently supports flatbuffers (.vtx \"VTXF\") replays only.");
         return;
     }
     if (!range_initialized_) {
@@ -273,15 +271,15 @@ void CutReplayWindow::DrawContent() {
     ImGui::Separator();
 
     // Live plan preview.
-    VtxServices::ReplayCutPlan plan;
+    VTX::ReplayCutPlan plan;
     if (range_mode_ == 3) {
-        plan = VtxServices::ReplayCutService::PlanCutChunks(footer, chunk_start_, chunk_end_);
+        plan = VTX::PlanCutChunks(footer, chunk_start_, chunk_end_);
     } else {
         int requested_start = 0;
         int requested_end = 0;
         std::string input_error;
         if (ResolveRequestedFrames(requested_start, requested_end, input_error)) {
-            plan = VtxServices::ReplayCutService::PlanCutFrames(footer, requested_start, requested_end);
+            plan = VTX::PlanCutFrames(footer, requested_start, requested_end);
         } else {
             plan.error = input_error;
         }

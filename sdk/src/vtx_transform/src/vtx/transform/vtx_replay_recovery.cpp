@@ -1,16 +1,14 @@
-#include "vtx/writer/core/vtx_replay_recovery.h"
+#include "vtx/transform/vtx_replay_recovery.h"
 
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
-#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <string>
 #include <vector>
-#include <xxh3.h>
-#include <zstd.h>
 
+#include "vtx/common/vtx_replay_framing.h"
 #include "vtx/common/vtx_types.h"
 #include "vtx/writer/policies/formatters/flatbuffers_vtx_policy.h"
 #include "vtx/writer/policies/formatters/protobuff_vtx_policy.h"
@@ -31,63 +29,33 @@ namespace VTX {
         // crash-truncated (footerless) file almost never does. Used to detect a
         // complete file with only a leftover journal, so we DON'T rewrite its footer.
         bool HasValidTrailingFooter(const std::string& path, const std::string& magic, int64_t file_size) {
-            if (file_size < 8)
+            if (file_size < static_cast<int64_t>(Framing::kFooterTrailerSize))
                 return false;
             std::ifstream in(path, std::ios::binary);
             if (!in.is_open())
                 return false;
-            in.seekg(file_size - 8);
-            char buf[8];
-            in.read(buf, 8);
-            if (in.gcount() != 8)
-                return false;
+            uint64_t footer_offset = 0;
             uint32_t footer_size = 0;
-            std::memcpy(&footer_size, buf, sizeof(footer_size)); // host-native, matches the sink
-            if (std::string(buf + 4, 4) != magic)
-                return false;
-            return footer_size > 0 && static_cast<int64_t>(footer_size) + 8 <= file_size;
+            std::string ignored;
+            return Framing::ProbeFooterTrailer(in, magic, static_cast<uint64_t>(file_size), footer_offset, footer_size,
+                                               ignored);
         }
 
-        // Mirror of ChunkedFileSink::CompressIfBeneficial, so a footer synthesized by
-        // repair is byte-identical to one written by a clean Close() under the same
-        // (journaled) compression settings.
-        std::string CompressIfBeneficial(std::string payload, bool use_compression, int8_t level) {
-            if (!use_compression || payload.size() < 512)
-                return payload;
-            const size_t max_size = ZSTD_compressBound(payload.size());
-            std::string compressed(max_size, '\0');
-            const size_t compressed_size =
-                ZSTD_compress(compressed.data(), max_size, payload.data(), payload.size(), level);
-            if (ZSTD_isError(compressed_size) || compressed_size >= payload.size())
-                return payload;
-            compressed.resize(compressed_size);
-            return compressed;
-        }
-
-        // Byte offset where chunks begin (magic(4) + u32 header_size + header), or -1 if
-        // the header framing is not intact.
+        // Byte offset where chunks begin (magic + u32 header_size + header), or -1 if the
+        // header framing is not intact.
         int64_t ReadHeaderEnd(std::ifstream& in, const std::string& expect_magic, int64_t file_size) {
-            in.clear();
-            in.seekg(0);
-            char magic[4];
-            in.read(magic, 4);
-            if (in.gcount() != 4 || std::string(magic, 4) != expect_magic)
+            uint64_t header_end = 0;
+            std::string ignored;
+            if (!Framing::ProbeHeader(in, expect_magic, static_cast<uint64_t>(file_size), header_end, ignored))
                 return -1;
-            uint32_t header_size = 0;
-            in.read(reinterpret_cast<char*>(&header_size), sizeof(header_size));
-            if (in.gcount() != static_cast<std::streamsize>(sizeof(header_size)))
-                return -1;
-            const int64_t header_end = 8 + static_cast<int64_t>(header_size);
-            if (header_size == 0 || header_end > file_size)
-                return -1;
-            return header_end;
+            return static_cast<int64_t>(header_end);
         }
 
         template <typename Policy>
         RepairResult RepairImpl(const std::string& path, const RecoveryJournal::Parsed& journal) {
             RepairResult r;
             const int64_t file_size = FileSizeOf(path);
-            if (file_size < 8) {
+            if (file_size < static_cast<int64_t>(Framing::kMagicSize + Framing::kSizePrefixSize)) {
                 r.error = "main file too small or missing";
                 return r;
             }
@@ -110,7 +78,7 @@ namespace VTX {
             for (const auto& c : journal.chunks) {
                 const int64_t off = c.file_offset;
                 const int64_t end = off + static_cast<int64_t>(c.chunk_size_bytes);
-                if (off < header_end || c.chunk_size_bytes <= sizeof(uint32_t) || end > file_size)
+                if (off < header_end || c.chunk_size_bytes <= Framing::kSizePrefixSize || end > file_size)
                     break; // torn tail / beyond EOF
 
                 std::string bytes;
@@ -121,9 +89,9 @@ namespace VTX {
                 if (in.gcount() != static_cast<std::streamsize>(c.chunk_size_bytes))
                     break;
 
-                // The stored checksum covers the payload after the 4-byte length prefix.
-                const uint64_t hash =
-                    XXH3_64bits(bytes.data() + sizeof(uint32_t), c.chunk_size_bytes - sizeof(uint32_t));
+                // The stored checksum covers the payload after the size prefix.
+                const uint64_t hash = Framing::PayloadChecksum(bytes.data() + Framing::kSizePrefixSize,
+                                                               c.chunk_size_bytes - Framing::kSizePrefixSize);
                 if (c.checksum != 0 && hash != c.checksum)
                     break; // corrupt chunk -> stop, drop it and everything after
 
@@ -166,8 +134,8 @@ namespace VTX {
                 if (f->index != expected || f->payload.empty())
                     break; // gap / duplicate / empty -> stop at the first hole
                 const uint64_t offset = out.Tell();
-                const uint32_t size = static_cast<uint32_t>(f->payload.size());
-                out.Write(&size, sizeof(size));
+                const Framing::SizePrefix prefix = Framing::EncodeSizePrefix(static_cast<uint32_t>(f->payload.size()));
+                out.Write(prefix.data(), prefix.size());
                 out.Write(f->payload.data(), f->payload.size());
 
                 ChunkIndexData e;
@@ -175,8 +143,8 @@ namespace VTX {
                 e.file_offset = static_cast<int64_t>(offset);
                 e.start_frame = f->index;
                 e.end_frame = f->index;
-                e.chunk_size_bytes = size + static_cast<uint32_t>(sizeof(uint32_t));
-                e.checksum = XXH3_64bits(f->payload.data(), f->payload.size());
+                e.chunk_size_bytes = Framing::ChunkSizeOnDisk(f->payload.size());
+                e.checksum = Framing::PayloadChecksum(f->payload);
                 good.push_back(e);
 
                 last_frame = f->index;
@@ -239,14 +207,13 @@ namespace VTX {
             footer_data.segments = &segments;
             // Compress exactly as the sink's Close() would have (settings journaled in
             // the 'S' record), so large recovered footers also match byte-for-byte.
-            const std::string footer_payload = CompressIfBeneficial(Policy::SerializeFooter(good, footer_data),
-                                                                    journal.use_compression, journal.compression_level);
+            const std::string footer_payload = Framing::CompressIfBeneficial(
+                Policy::SerializeFooter(good, footer_data), journal.use_compression, journal.compression_level);
 
             bool footer_ok = out.Write(footer_payload.data(), footer_payload.size());
-            const uint32_t footer_size = static_cast<uint32_t>(footer_payload.size());
-            footer_ok = out.Write(&footer_size, sizeof(footer_size)) && footer_ok;
-            const std::string magic = Policy::GetMagicBytes();
-            footer_ok = out.Write(magic.data(), magic.size()) && footer_ok;
+            const std::string trailer =
+                Framing::FooterTrailer(static_cast<uint32_t>(footer_payload.size()), Policy::GetMagicBytes());
+            footer_ok = out.Write(trailer.data(), trailer.size()) && footer_ok;
             footer_ok = out.Sync() && footer_ok;
             // Good() also catches any failure in the pending-frame append writes above.
             const bool all_ok = footer_ok && out.Good();
@@ -296,10 +263,10 @@ namespace VTX {
             r.error = "cannot open main file: " + path;
             return r;
         }
-        char magic[4] = {0, 0, 0, 0};
-        in.read(magic, 4);
+        char magic[Framing::kMagicSize] = {};
+        in.read(magic, Framing::kMagicSize);
         in.close();
-        const std::string m(magic, 4);
+        const std::string m(magic, Framing::kMagicSize);
 
         const int64_t file_size = FileSizeOf(path);
 

@@ -4,7 +4,7 @@
 #include <string>
 
 #include "gui/gui_layer.h"
-#include "vtx/writer/core/vtx_replay_recovery.h"
+#include "vtx/transform/vtx_replay_recovery.h"
 
 // Floating window that repairs a crashed .vtx from its ".recovery" sidecar via
 // VTX::RepairReplayFile. The user selects the .vtx (and, if it lives elsewhere, the

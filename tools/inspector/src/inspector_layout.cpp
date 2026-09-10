@@ -12,6 +12,7 @@
 #include "inspector_session.h"
 #include "windows/analysis_window_factory.h"
 #include "windows/cut_replay_window.h"
+#include "windows/filter_entities_window.h"
 #include "windows/repair_replay_window.h"
 
 namespace {
@@ -270,6 +271,15 @@ void InspectorLayout::OnRender() {
                 }
             }
 
+            // Rewrite the loaded replay into a new .vtx without the selected entities.
+            if (ImGui::MenuItem("Filter Entities...", nullptr, false, session_->HasLoadedReplay())) {
+                if (!filter_window_) {
+                    filter_window_ = std::make_shared<FilterEntitiesWindow>(session_);
+                } else {
+                    filter_window_->SetOpen(true);
+                }
+            }
+
             ImGui::Separator();
 
             if (ImGui::MenuItem("Exit")) {
@@ -348,6 +358,14 @@ void InspectorLayout::OnRender() {
         cut_window_->OnRender();
         if (!cut_window_->IsOpen()) {
             cut_window_.reset();
+        }
+    }
+
+    // Filter-entities window (floating, single instance), same lifecycle as cut.
+    if (filter_window_) {
+        filter_window_->OnRender();
+        if (!filter_window_->IsOpen()) {
+            filter_window_.reset();
         }
     }
 }

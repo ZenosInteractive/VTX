@@ -254,6 +254,7 @@ void VTX::Serialization::FromFlat(const fbsvtx::ChunkIndexEntry* src, VTX::Chunk
     dst.end_frame = src->end_frame();
     dst.file_offset = src->file_offset();
     dst.chunk_size_bytes = src->chunk_size_bytes();
+    dst.checksum = src->checksum();
 }
 
 void VTX::Serialization::FromFlat(const fbsvtx::ReplayTimeData* src, VTX::ReplayTimeData& dst) {

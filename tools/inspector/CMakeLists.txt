@@ -29,10 +29,19 @@ target_include_directories(vtx_inspector PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
+# File > Repair Replay / Cut Replay / Filter Entities run through vtx_transform, which
+# is only built when reader + writer are; fail at configure time rather than at link time.
+if(NOT TARGET vtx_transform)
+    message(FATAL_ERROR
+        "vtx_inspector requires the vtx_transform module (File > Repair Replay / Cut Replay / Filter Entities). "
+        "Enable VTX_BUILD_TRANSFORM together with VTX_BUILD_READER and VTX_BUILD_WRITER, "
+        "or configure with -DBUILD_VTX_INSPECTOR=OFF.")
+endif()
+
 target_link_libraries(vtx_inspector PRIVATE
     vtx_tool_shared
     vtx_reader
-    vtx_writer  # VTX::RepairReplayFile for File > Repair Replay
+    vtx_transform  # VTX::RepairReplayFile / VTX::CutReplayFile / VTX::FilterReplayFile
 )
 
 set_target_properties(vtx_inspector PROPERTIES
