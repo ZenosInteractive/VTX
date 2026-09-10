@@ -179,6 +179,7 @@ VTX::FileFooter VTX::FlatBuffersReaderPolicy::GetVTXFooter(const FooterType& fbs
             entry.end_frame = chunk->end_frame;
 
             entry.file_offset = chunk->file_offset;
+            entry.checksum = chunk->checksum;
             out.chunk_index.push_back(entry);
         }
     }
@@ -190,6 +191,12 @@ VTX::FileFooter VTX::FlatBuffersReaderPolicy::GetVTXFooter(const FooterType& fbs
             out_ev.game_time = ev->game_time;
             out_ev.event_type = ev->event_type;
             out_ev.label = ev->label;
+            out_ev.entity_unique_id = ev->entity_unique_id;
+            if (ev->location) {
+                out_ev.location.x = ev->location->x();
+                out_ev.location.y = ev->location->y();
+                out_ev.location.z = ev->location->z();
+            }
             out.events.push_back(out_ev);
         }
     }

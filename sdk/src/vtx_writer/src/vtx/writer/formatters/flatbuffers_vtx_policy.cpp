@@ -118,7 +118,20 @@ std::string VTX::FlatBuffersVtxPolicy::SerializeFooter(const std::vector<ChunkIn
     }
     auto index_vector = builder.CreateVector(index_offsets);
 
-    auto events_vec = builder.CreateVector(std::vector<flatbuffers::Offset<fbsvtx::TimelineEvent>> {});
+    std::vector<flatbuffers::Offset<fbsvtx::TimelineEvent>> event_offsets;
+    if (footer_data.events) {
+        event_offsets.reserve(footer_data.events->size());
+        for (const auto& ev : *footer_data.events) {
+            // Strings are always created (the reader dereferences them unconditionally).
+            const auto type_off = builder.CreateString(ev.event_type);
+            const auto label_off = builder.CreateString(ev.label);
+            const auto id_off = builder.CreateString(ev.entity_unique_id);
+            const fbsvtx::Vector location(ev.location.x, ev.location.y, ev.location.z);
+            event_offsets.push_back(
+                fbsvtx::CreateTimelineEvent(builder, ev.game_time, type_off, label_off, &location, id_off));
+        }
+    }
+    auto events_vec = builder.CreateVector(event_offsets);
 
     auto footer_offset =
         fbsvtx::CreateFileFooter(builder, footer_data.total_frames, static_cast<float>(footer_data.duration_seconds),
