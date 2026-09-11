@@ -5,6 +5,7 @@
 #include <imgui.h>
 #include <imgui_internal.h>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "gui/gui_scale_controller.h"
@@ -143,8 +144,89 @@ InspectorLayout::InspectorLayout(const std::shared_ptr<InspectorSession>& sessio
     : session_(session)
     , scale_controller_(scale_controller) {}
 
-// Inspector layout has no per-frame update state today.
-void InspectorLayout::OnUpdate() {}
+// Consumes a queued open request (startup argument / drag & drop) on the UI thread.
+// With a replay already loaded the request is parked for DrawReplaceReplayPopup() to
+// ask first; otherwise the file opens right away.
+void InspectorLayout::OnUpdate() {
+    if (pending_open_paths_.empty()) {
+        return;
+    }
+
+    const std::vector<std::string> paths = std::exchange(pending_open_paths_, {});
+    if (paths.size() > 1) {
+        session_->AddGuiWarningLog(std::to_string(paths.size()) +
+                                   " files received; opening only the first: " + paths.front());
+    }
+
+    if (session_->HasLoadedReplay()) {
+        replace_candidate_ = paths.front();
+        replace_popup_open_ = false;
+        return;
+    }
+    OpenReplay(paths.front());
+}
+
+// Queues paths handed over by the shell or dropped onto the window; empty entries are
+// ignored and a newer request replaces one that has not been consumed yet.
+void InspectorLayout::RequestOpenReplay(std::vector<std::string> paths) {
+    std::erase_if(paths, [](const std::string& path) { return path.empty(); });
+    if (paths.empty()) {
+        return;
+    }
+    pending_open_paths_ = std::move(paths);
+}
+
+// Opens a replay and routes the outcome to the GUI log.
+void InspectorLayout::OpenReplay(const std::string& path) {
+    const auto result = BuildOpenReplayResult(path, session_->LoadReplay(path));
+    LogCommandResult(*session_, result);
+}
+
+// Asks whether the dropped replay should replace the loaded one. "Close and open"
+// closes the current replay first; "Keep current" (or closing the modal with Escape)
+// leaves it untouched and only logs the ignored file.
+void InspectorLayout::DrawReplaceReplayPopup() {
+    if (replace_candidate_.empty()) {
+        return;
+    }
+
+    constexpr const char* kPopupId = "Replace loaded replay?##replace_replay";
+    if (!replace_popup_open_) {
+        ImGui::OpenPopup(kPopupId);
+        replace_popup_open_ = true;
+    }
+
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(viewport->GetCenter(), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    if (ImGui::BeginPopupModal(kPopupId, nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::TextUnformatted("A replay is already open:");
+        ImGui::TextDisabled("%s", session_->current_file_path_.c_str());
+        ImGui::Spacing();
+        ImGui::TextUnformatted("Close it and open the dropped file?");
+        ImGui::TextDisabled("%s", replace_candidate_.c_str());
+        ImGui::Separator();
+
+        if (ImGui::Button("Close and open")) {
+            const std::string candidate = std::exchange(replace_candidate_, {});
+            replace_popup_open_ = false;
+            session_->CloseReplay();
+            OpenReplay(candidate);
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Keep current")) {
+            session_->AddGuiInfoLog("Kept the loaded replay; ignored dropped file: " + replace_candidate_);
+            replace_candidate_.clear();
+            replace_popup_open_ = false;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    } else if (replace_popup_open_) {
+        session_->AddGuiInfoLog("Kept the loaded replay; ignored dropped file: " + replace_candidate_);
+        replace_candidate_.clear();
+        replace_popup_open_ = false;
+    }
+}
 
 // Renders dockspace host, menu bar, and file/window actions.
 void InspectorLayout::OnRender() {
@@ -220,10 +302,11 @@ void InspectorLayout::OnRender() {
 
                 const std::string selected_path = f.result().empty() ? std::string {} : f.result()[0];
                 const auto selection = ValidateOpenReplaySelection(selected_path);
-                const auto result = selection.success
-                                        ? BuildOpenReplayResult(selected_path, session_->LoadReplay(selected_path))
-                                        : selection;
-                LogCommandResult(*session_, result);
+                if (selection.success) {
+                    OpenReplay(selected_path);
+                } else {
+                    LogCommandResult(*session_, selection);
+                }
             }
 
             if (ImGui::BeginMenu("Open Recent")) {
@@ -233,8 +316,7 @@ void InspectorLayout::OnRender() {
                 } else {
                     for (const auto& recent_path : recent_files) {
                         if (ImGui::MenuItem(recent_path.c_str())) {
-                            const auto result = BuildOpenReplayResult(recent_path, session_->LoadReplay(recent_path));
-                            LogCommandResult(*session_, result);
+                            OpenReplay(recent_path);
                         }
                     }
                 }
@@ -332,6 +414,9 @@ void InspectorLayout::OnRender() {
     }
 
     ImGui::End();
+
+    // Drag & drop onto a loaded replay: confirm before replacing it.
+    DrawReplaceReplayPopup();
 
     // Render analysis windows (floating, outside dockspace).
     // OnRender() on each window internally skips if the window is closed.

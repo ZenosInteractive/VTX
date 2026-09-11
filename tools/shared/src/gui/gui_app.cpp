@@ -120,6 +120,12 @@ bool GuiApplication::InitWindow(const std::string& title, int width, int height)
     ApplyWindowIcon(window_);
 #endif
 
+    // The application owns the window user pointer (GLFW allows one per window) and
+    // forwards the events other components care about.
+    glfwSetWindowUserPointer(window_, this);
+    glfwSetWindowContentScaleCallback(window_, &GuiApplication::OnGlfwContentScale);
+    glfwSetDropCallback(window_, &GuiApplication::OnGlfwDrop);
+
     if (scale_controller_) {
         scale_controller_->BindWindow(window_);
     }
@@ -151,6 +157,38 @@ void GuiApplication::Run() {
 // Adds a GUI layer to the frame update/render pipeline.
 void GuiApplication::AddLayer(std::shared_ptr<IGuiLayer> layer) {
     gui_manager_->AddLayer(layer);
+}
+
+// Registers the receiver for files dragged onto the main window (none = drops ignored).
+void GuiApplication::SetDropHandler(DropHandler handler) {
+    drop_handler_ = std::move(handler);
+}
+
+// Forwards live DPI changes to the scale controller.
+void GuiApplication::OnGlfwContentScale(GLFWwindow* window, float x_scale, float y_scale) {
+    auto* app = static_cast<GuiApplication*>(glfwGetWindowUserPointer(window));
+    if (app && app->scale_controller_) {
+        app->scale_controller_->OnWindowContentScaleChanged(x_scale, y_scale);
+    }
+}
+
+// Collects the dropped paths (UTF-8, per GLFW) and hands them to the registered handler.
+void GuiApplication::OnGlfwDrop(GLFWwindow* window, int count, const char** paths) {
+    auto* app = static_cast<GuiApplication*>(glfwGetWindowUserPointer(window));
+    if (!app || !app->drop_handler_ || count <= 0 || !paths) {
+        return;
+    }
+
+    std::vector<std::string> dropped;
+    dropped.reserve(static_cast<size_t>(count));
+    for (int i = 0; i < count; ++i) {
+        if (paths[i] && paths[i][0] != '\0') {
+            dropped.emplace_back(paths[i]);
+        }
+    }
+    if (!dropped.empty()) {
+        app->drop_handler_(dropped);
+    }
 }
 
 // Reports whether app window has been closed or destroyed.

@@ -1,5 +1,6 @@
 #pragma once
 #include <memory>
+#include <string>
 #include <vector>
 #include "gui/gui_layer.h"
 
@@ -17,7 +18,22 @@ public:
     void OnUpdate() override;
     void OnRender() override;
 
+    // Opens a replay from outside the File menu: the path the shell hands over at
+    // startup ("Open with...", a .vtx file association) or files dragged onto the
+    // window. Queued and consumed on the next OnUpdate() so the open runs inside the
+    // UI frame through the same validation, logging and recent-files path as
+    // File > Open. Only the first path is opened; any others are reported. When a
+    // replay is already loaded, a modal asks whether to close it and open the new
+    // file or keep the current one.
+    void RequestOpenReplay(std::vector<std::string> paths);
+
 protected:
+    // Shared open path for the File menu, Open Recent, startup argument and drops.
+    void OpenReplay(const std::string& path);
+
+    // Modal asking whether a dropped file replaces the loaded replay.
+    void DrawReplaceReplayPopup();
+
     std::shared_ptr<InspectorSession> session_;
     std::shared_ptr<GuiScaleController> scale_controller_;
     bool force_layout_reset_ = true;
@@ -36,4 +52,13 @@ protected:
 
     // File > Filter Entities: floating, operates on the loaded replay. At most one.
     std::shared_ptr<FilterEntitiesWindow> filter_window_;
+
+    // Paths queued by RequestOpenReplay(), consumed by the next OnUpdate().
+    std::vector<std::string> pending_open_paths_;
+
+    // Dropped file waiting for the user's decision while a replay is loaded; empty when
+    // nothing is pending. replace_popup_open_ records that the modal was shown, so a
+    // dismissal without a choice (Escape) counts as "keep current".
+    std::string replace_candidate_;
+    bool replace_popup_open_ = false;
 };
