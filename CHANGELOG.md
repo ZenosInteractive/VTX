@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-05
+
 ### Added
 
 - **transform**: new module **`vtx_transform`** (`VTX_BUILD_TRANSFORM`, on by default) -- the home for every tool that modifies an existing replay (repair, cut, entity filter).  Cut and filter read the source through `vtx_reader` and re-serialize through `vtx_writer`'s formatter policies, so it is the one module that links both; `vtx_reader`, `vtx_writer` and `vtx_differ` stay independent siblings on `vtx_common` (the writer does **not** link the reader).  Skipped automatically when reader or writer is off; `vtx_inspector` requires it.  Public headers under `vtx/transform/`, exported as `VTX::vtx_transform`
