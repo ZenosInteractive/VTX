@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-10-06
+
 ### Added
 
 - **tools**: Windows version information on `vtx_cli.exe`, `vtx_inspector.exe` and `vtx_schema_creator.exe` -- CompanyName "Zenos Interactive Limited", ProductName "VTX SDK", FileDescription, FileVersion / ProductVersion, copyright and original file name, shown under Properties > Details and as the process name in Task Manager.  Generated from one template (`cmake/vtx_version.rc.in`) by `vtx_add_version_resource()` (`cmake/VtxVersionResource.cmake`); the version comes from `project(VTX_SDK VERSION ...)`, so it always matches the release tag.  Unversioned executables are one of the signals antivirus heuristics flag
