@@ -10,7 +10,7 @@ file(GLOB_RECURSE VTX_CLI_HEADERS CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/include/*.hpp"
 )
 
-# Windows resource file (version info / icon) -- only consumed by the Windows RC compiler.
+# Windows icon resource -- only consumed by the Windows RC compiler.
 set(VTX_CLI_RC_SOURCES "")
 if(WIN32)
     set(VTX_CLI_RC_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/cli.rc")
@@ -21,6 +21,7 @@ add_executable(vtx_cli
     ${VTX_CLI_HEADERS}
     ${VTX_CLI_RC_SOURCES}
 )
+vtx_add_version_resource(vtx_cli DESCRIPTION "VTX CLI")
 
 # Third-party headers flow in through vtx_reader / vtx_differ -> vtx_common.
 # Only add the private paths that aren't already exposed publicly.
