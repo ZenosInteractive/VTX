@@ -24,6 +24,7 @@ else()
         ${VTX_INSPECTOR_HEADERS}
     )
 endif()
+vtx_add_version_resource(vtx_inspector DESCRIPTION "VTX Inspector")
 
 target_include_directories(vtx_inspector PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include

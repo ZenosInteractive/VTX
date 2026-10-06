@@ -22,6 +22,7 @@ else()
         ${VTX_SCHEMA_CREATOR_HEADERS}
     )
 endif()
+vtx_add_version_resource(vtx_schema_creator DESCRIPTION "VTX Schema Creator")
 
 target_include_directories(vtx_schema_creator PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include

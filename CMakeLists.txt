@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.15)
-project(VTX_SDK VERSION 0.6.0 LANGUAGES CXX)
+project(VTX_SDK VERSION 0.6.1 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -8,6 +8,15 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 if(MSVC)
     # Match the dynamic CRT that protobuf and FlatBuffers ship against.
     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
+
+    # Control Flow Guard: the compiler instruments indirect calls and the
+    # linker marks the image so Windows validates their targets at runtime.
+    # Set here, before VtxDependencies, so the FetchContent-built dependencies
+    # are instrumented too.  C/C++ only (rc.exe rejects the flag).  Not in
+    # Debug: /GUARD:CF disables incremental linking, which would turn every
+    # Debug link into an LNK4075 warning.
+    add_compile_options($<$<AND:$<COMPILE_LANGUAGE:C,CXX>,$<NOT:$<CONFIG:Debug>>>:/guard:cf>)
+    add_link_options($<$<NOT:$<CONFIG:Debug>>:/GUARD:CF>)
 else()
     # Build position-independent code so static libs can be linked into .so's.
     set(CMAKE_POSITION_INDEPENDENT_CODE ON)

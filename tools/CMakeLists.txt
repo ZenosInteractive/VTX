@@ -3,6 +3,7 @@
 # ==============================================================================
 project(vtx_tools)
 include(FetchContent)
+include(VtxVersionResource) # vtx_add_version_resource() for the Windows executables
 
 # ------------------------------------------------------------------------------
 # Tool enable / disable flags
