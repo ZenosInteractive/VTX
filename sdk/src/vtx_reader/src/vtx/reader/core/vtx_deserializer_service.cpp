@@ -59,7 +59,9 @@ std::vector<std::unique_ptr<cppvtx::Frame>> VTX::ReplayUnpacker::Unpack(const cp
 
     cppvtx::FrameChunk innerContainer;
     if (!uncompressed_data.empty()) {
-        innerContainer.ParseFromString(uncompressed_data);
+        if (!innerContainer.ParseFromString(uncompressed_data)) {
+            throw std::runtime_error("VTX Reader: Failed to parse FrameChunk");
+        }
     } else {
         innerContainer = chunk;
     }

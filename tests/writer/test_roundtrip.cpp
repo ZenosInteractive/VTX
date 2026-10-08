@@ -704,6 +704,90 @@ TEST_P(RoundtripTest, PerfObserverReceivesSinkTimings) {
 }
 
 // ---------------------------------------------------------------------------
+// Text is stored byte-for-byte, not as UTF-8. Game text can be any bytes (a
+// Latin-1 player name, a string cut mid-character by a fixed-size buffer); with
+// proto3 `string` fields the Protobuf reader rejected it, silently truncating the
+// chunk or -- in the header -- failing to open the file. Every text slot that
+// hits the wire carries invalid UTF-8 here, across several chunks.
+// ---------------------------------------------------------------------------
+
+TEST_P(RoundtripTest, NonUtf8TextRoundtripsByteForByte) {
+    const std::string latin1 = "Jos\xE9";      // Latin-1 e-acute: not valid UTF-8
+    const std::string truncated = "name_\xC3"; // UTF-8 lead byte with its continuation cut off
+
+    auto cfg = MakeConfig("non_utf8", "uuid-" + truncated);
+    cfg.replay_name = "Replay " + latin1;
+    {
+        auto writer = CreateWriter(cfg);
+        ASSERT_TRUE(writer);
+        for (int i = 0; i < kTotalFrames; ++i) {
+            VTX::Frame f;
+            auto& bucket = f.CreateBucket("entity");
+
+            VTX::PropertyContainer e;
+            e.entity_type_id = 0;
+            e.string_properties = {truncated, latin1};
+            e.int32_properties = {1, i, 0};
+            e.string_arrays.AppendSubArray({latin1, truncated});
+
+            VTX::MapContainer m;
+            m.keys = {latin1};
+            VTX::PropertyContainer v;
+            v.entity_type_id = 0;
+            v.int32_properties = {i};
+            m.values.push_back(std::move(v));
+            e.map_properties.push_back(std::move(m));
+
+            bucket.unique_ids.push_back(truncated);
+            bucket.entities.push_back(std::move(e));
+
+            VTX::GameTime::GameTimeRegister t;
+            t.game_time = float(i) / kFps;
+            writer->RecordFrame(f, t);
+        }
+        writer->Stop();
+    }
+
+    auto ctx = VTX::OpenReplayFile(cfg.output_filepath);
+    ASSERT_TRUE(ctx) << ctx.error;
+
+    const auto header = ctx.reader->GetHeader();
+    EXPECT_EQ(header.replay_name, cfg.replay_name);
+    EXPECT_EQ(header.replay_uuid, cfg.replay_uuid);
+
+    // First and last frame of every chunk: a rejected field used to drop the
+    // rest of its chunk, so the later frames are the ones that went missing.
+    for (int frame_index = 0; frame_index < kTotalFrames; frame_index += kChunkMaxFrames) {
+        for (int idx : {frame_index, frame_index + kChunkMaxFrames - 1}) {
+            const VTX::Frame* f = ctx.reader->GetFrameSync(idx);
+            ASSERT_NE(f, nullptr) << "frame " << idx;
+            ASSERT_EQ(f->GetBuckets().size(), 1u) << "frame " << idx;
+            const auto& bucket = f->GetBuckets()[0];
+            ASSERT_EQ(bucket.unique_ids.size(), 1u) << "frame " << idx;
+            EXPECT_EQ(bucket.unique_ids[0], truncated) << "frame " << idx;
+            ASSERT_EQ(bucket.entities.size(), 1u) << "frame " << idx;
+            const auto& e = bucket.entities[0];
+
+            ASSERT_EQ(e.string_properties.size(), 2u) << "frame " << idx;
+            EXPECT_EQ(e.string_properties[0], truncated) << "frame " << idx;
+            EXPECT_EQ(e.string_properties[1], latin1) << "frame " << idx;
+            ASSERT_GE(e.int32_properties.size(), 2u) << "frame " << idx;
+            EXPECT_EQ(e.int32_properties[1], idx);
+
+            ASSERT_EQ(e.string_arrays.SubArrayCount(), 1u) << "frame " << idx;
+            const auto sa = e.string_arrays.GetSubArray(0);
+            ASSERT_EQ(sa.size(), 2u) << "frame " << idx;
+            EXPECT_EQ(sa[0], latin1) << "frame " << idx;
+            EXPECT_EQ(sa[1], truncated) << "frame " << idx;
+
+            ASSERT_EQ(e.map_properties.size(), 1u) << "frame " << idx;
+            ASSERT_EQ(e.map_properties[0].keys.size(), 1u) << "frame " << idx;
+            EXPECT_EQ(e.map_properties[0].keys[0], latin1) << "frame " << idx;
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Backend instantiation -- produces:
 //   BothBackends/RoundtripTest.PreservesFrameData/FlatBuffers
 //   BothBackends/RoundtripTest.PreservesFrameData/Protobuf
