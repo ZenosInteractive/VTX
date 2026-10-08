@@ -33,7 +33,9 @@ void VTX::ProtobufReaderPolicy::ProcessChunkData(int chunk_index, const std::str
     std::string decompressed = VTX::ReplayUnpacker::Decompress(compressed);
 
     cppvtx::FrameChunk proto;
-    proto.ParseFromString(decompressed);
+    if (!proto.ParseFromString(decompressed)) {
+        throw std::runtime_error("VTX Reader [Proto]: Failed to parse FrameChunk " + std::to_string(chunk_index) + ".");
+    }
 
     size_t num_frames = proto.frames_size();
     out_native_frames.resize(num_frames);

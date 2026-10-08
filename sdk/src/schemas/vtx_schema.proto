@@ -5,6 +5,14 @@ package cppvtx;
 
 option optimize_for = SPEED;
 
+// Every text field (ids, names, map keys, string values, the schema JSON, metadata)
+// is `bytes`, not `string`. proto3 rejects a `string` holding invalid UTF-8 when
+// parsing (the writer only logs it), which dropped the rest of the chunk -- or left
+// the file unopenable when the text was in the header. Game text is now stored
+// byte-for-byte, as in the FlatBuffers backend. `string` and `bytes` are encoded
+// identically on the wire, so files written before and after this change read
+// the same.
+
 // ==========================================================
 // 1. BASIC MATH TYPES
 // ==========================================================
@@ -46,7 +54,7 @@ message FlatIntArray { repeated sint32 data = 1; repeated uint32 offsets = 2; }
 message FlatInt64Array { repeated sint64 data = 1; repeated uint32 offsets = 2; }
 message FlatFloatArray { repeated float data = 1; repeated uint32 offsets = 2; }
 message FlatDoubleArray { repeated double data = 1; repeated uint32 offsets = 2; }
-message FlatStringArray { repeated string data = 1; repeated uint32 offsets = 2; }
+message FlatStringArray { repeated bytes data = 1; repeated uint32 offsets = 2; }
 message FlatVectorArray { repeated Vector data = 1; repeated uint32 offsets = 2; }
 message FlatQuatArray { repeated Quat data = 1; repeated uint32 offsets = 2; }
 message FlatTransformArray { repeated Transform data = 1; repeated uint32 offsets = 2; }
@@ -57,7 +65,7 @@ message FlatPropertyContainerArray { repeated PropertyContainer data = 1; repeat
 message FlatMapArray { repeated MapContainer data = 1; repeated uint32 offsets = 2; }
 
 message MapContainer {
-  repeated string keys = 1;
+  repeated bytes keys = 1;
   repeated PropertyContainer values = 2;
 }
 
@@ -88,7 +96,7 @@ message PropertyContainer {
   // Cost: 8 bytes per value.
   repeated double double_properties = 6;
 
-  repeated string string_properties = 7;
+  repeated bytes string_properties = 7;
 
   // --- Math Properties ---
   repeated Transform transform_properties = 8;
@@ -150,7 +158,7 @@ message EntityRange {
 }
 // Standard Gameplay Data
 message Bucket {
-  repeated string unique_ids = 1;
+  repeated bytes unique_ids = 1;
   repeated PropertyContainer entities = 2;
   repeated EntityRange type_ranges = 3;
 }
@@ -177,10 +185,10 @@ message VersionInfo {
 
 // 
 message ContextualSchema {
-  string data_indentifier = 1;
+  bytes data_indentifier = 1;
   int32 data_version = 2;
-  string data_version_string = 3;
-  string schema  = 4;
+  bytes data_version_string = 3;
+  bytes schema  = 4;
 }
 
 // ==========================================================
@@ -190,10 +198,10 @@ message ContextualSchema {
 
 message TimelineEvent {
   float game_time = 1;          // When it happened
-  string event_type = 2;        // "Kill", "Goal", "Error", "Checkpoint"
-  string label = 3;             // Readable description: "Player1 killed Player2"
+  bytes event_type = 2;         // "Kill", "Goal", "Error", "Checkpoint"
+  bytes label = 3;              // Readable description: "Player1 killed Player2"
   Vector location = 4;          // 3D World position (for camera jumps)
-  string entity_unique_id = 5; // ID of the actor involved
+  bytes entity_unique_id = 5;  // ID of the actor involved
 }
 
 // ==========================================================
@@ -206,12 +214,12 @@ message FileHeader {
   ContextualSchema prop_schema = 3;
 
   // Replay Identification
-  string replay_uuid = 4;
-  string replay_name = 5;
+  bytes replay_uuid = 4;
+  bytes replay_name = 5;
   int64 recorded_utc_timestamp = 6;
 
   // Game Context
-  string custom_json_metadata = 7; // Unstructured extra data
+  bytes custom_json_metadata = 7;  // Unstructured extra data
 }
 
 // [CHUNK] Written REPEATEDLY during the recording stream.

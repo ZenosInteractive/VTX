@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **build**: zstd is fetched with `FetchContent_MakeAvailable` (`SOURCE_SUBDIR build/cmake`, `EXCLUDE_FROM_ALL`) on CMake 3.28+, like every other dependency, instead of `FetchContent_Populate` + `add_subdirectory`.  It was the one dependency a FetchContent dependency provider (`CMAKE_PROJECT_TOP_LEVEL_INCLUDES`) never saw: a consuming project that redirects every fetched source to one shared copy still got a zstd tree inside each build directory, and with it -- on MSVC -- a per-build `-external:I` path on every compile that sees zstd's headers, which sccache keys on, so those objects were never reused across build trees.  Also drops the `CMP0169 OLD` override the manual populate needed on CMake 3.30+.  CMake 3.15 - 3.27 keep the manual populate
 
+### Fixed
+
+- **schema/proto**: Protobuf replays silently lost data when any text was not valid UTF-8 (a Latin-1 player name, a string cut mid-character by a fixed-size buffer).  Every text field in `vtx_schema.proto` was a proto3 `string`, which the parser rejects unless it is valid UTF-8: the writer only logged a libprotobuf error and wrote the frame anyway, then the reader's chunk parse stopped at that field -- the frame came back cut short and every later frame of the chunk as nullptr, and the same text in `replay_name` or `custom_json_metadata` made the whole file fail to open.  All 13 text fields (string values and string arrays, unique ids, map keys, the contextual schema strings, timeline event text, header uuid / name / metadata) are now `bytes`, stored byte-for-byte like the FlatBuffers backend already did.  Not a format change: `string` and `bytes` share the same wire encoding, so chunks written before and after are byte-identical for valid UTF-8 text, old readers read new files and new readers read old ones.  The generated C++ API stays source-compatible (`std::string` accessors; the pointer + size overloads take `const void*`)
+
 ## [0.6.1] - 2026-10-06
 
 ### Added
