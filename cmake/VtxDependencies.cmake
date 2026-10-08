@@ -99,16 +99,30 @@ set(VTX_FLATC_EXE $<TARGET_FILE:flatc>)
 # it into the VTX modules, and ship nothing at runtime.  No DLLs to copy, no
 # bundled binaries in the repo, no `libzstd-dev` apt requirement.
 #
-# zstd's CMakeLists.txt lives under build/cmake/ rather than the repo root,
-# so we do the Populate + add_subdirectory dance manually (works on CMake
-# 3.15+ without needing SOURCE_SUBDIR which was added in 3.18).
+# zstd's CMakeLists.txt lives under build/cmake/ rather than the repo root.
+# On CMake 3.28+ that is SOURCE_SUBDIR + EXCLUDE_FROM_ALL on the declaration
+# and FetchContent_MakeAvailable, like every other dependency in this file --
+# so a dependency provider (CMAKE_PROJECT_TOP_LEVEL_INCLUDES) sees zstd too.
+# Older CMake has no EXCLUDE_FROM_ALL on FetchContent_Declare, so it keeps
+# the manual Populate + add_subdirectory dance (works on 3.15+).
 # ==============================================================================
-FetchContent_Declare(
-    zstd_src
-    GIT_REPOSITORY https://github.com/facebook/zstd.git
-    GIT_TAG        v1.5.6
-    GIT_SHALLOW    TRUE
-)
+if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.28)
+    FetchContent_Declare(
+        zstd_src
+        GIT_REPOSITORY https://github.com/facebook/zstd.git
+        GIT_TAG        v1.5.6
+        GIT_SHALLOW    TRUE
+        SOURCE_SUBDIR  build/cmake
+        EXCLUDE_FROM_ALL
+    )
+else()
+    FetchContent_Declare(
+        zstd_src
+        GIT_REPOSITORY https://github.com/facebook/zstd.git
+        GIT_TAG        v1.5.6
+        GIT_SHALLOW    TRUE
+    )
+endif()
 
 set(ZSTD_BUILD_PROGRAMS      OFF CACHE BOOL "" FORCE)
 set(ZSTD_BUILD_TESTS         OFF CACHE BOOL "" FORCE)
@@ -120,27 +134,21 @@ set(ZSTD_MULTITHREAD_SUPPORT OFF CACHE BOOL "" FORCE)
 
 set(_vtx_prev_shared_zstd ${BUILD_SHARED_LIBS})
 set(BUILD_SHARED_LIBS OFF)
-# CMake 3.30+ deprecates manual FetchContent_Populate; the replacement --
-# FetchContent_MakeAvailable with SOURCE_SUBDIR -- requires CMake 3.18.
-# Since we still declare a minimum of 3.15 (CMakeLists.txt), we keep the
-# manual dance behind CMP0169=OLD to suppress the deprecation warning.
-# When the minimum is bumped, this block collapses to SOURCE_SUBDIR +
-# FetchContent_MakeAvailable.
-if(POLICY CMP0169)
-    cmake_policy(PUSH)
-    cmake_policy(SET CMP0169 OLD)
-endif()
-FetchContent_GetProperties(zstd_src)
-if(NOT zstd_src_POPULATED)
-    FetchContent_Populate(zstd_src)
-    add_subdirectory(
-        ${zstd_src_SOURCE_DIR}/build/cmake
-        ${zstd_src_BINARY_DIR}
-        EXCLUDE_FROM_ALL
-    )
-endif()
-if(POLICY CMP0169)
-    cmake_policy(POP)
+if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.28)
+    FetchContent_MakeAvailable(zstd_src)
+else()
+    # CMake 3.15 - 3.27: populate and add the subdirectory by hand.  The
+    # FetchContent_Populate deprecation (CMP0169) only starts at 3.30, so it
+    # never applies here.  When the minimum reaches 3.28, this branch goes.
+    FetchContent_GetProperties(zstd_src)
+    if(NOT zstd_src_POPULATED)
+        FetchContent_Populate(zstd_src)
+        add_subdirectory(
+            ${zstd_src_SOURCE_DIR}/build/cmake
+            ${zstd_src_BINARY_DIR}
+            EXCLUDE_FROM_ALL
+        )
+    endif()
 endif()
 set(BUILD_SHARED_LIBS ${_vtx_prev_shared_zstd})
 
