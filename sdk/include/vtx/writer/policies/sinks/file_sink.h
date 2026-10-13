@@ -73,6 +73,11 @@ namespace VTX {
             int8_t compression_level = 10;
             bool durable_writes = true;          ///< fsync each chunk to physical disk (crash/power-loss safe).
             bool enable_recovery_journal = true; ///< maintain a ".recovery" sidecar for crash recovery.
+            /// Journal every recorded frame (`F` record) before its chunk is flushed. false = only
+            /// chunk commits are journaled (`C`/`T`): a crash still recovers every flushed chunk and
+            /// loses the frames of the open one, and recording skips the per-frame copy, serialize,
+            /// compress and append (plus its fsync with durable_writes).
+            bool journal_pending_frames = true;
             uint64_t journal_compact_threshold_bytes = 0;   ///< journal compaction trigger; 0 = journal default.
             IFileSinkPerfObserver* perf_observer = nullptr; ///< optional perf timings; null = no-op.
         };
@@ -169,11 +174,14 @@ namespace VTX {
         void JournalFrame(const FrameType& frame, int32_t frame_index, int64_t game_time, int64_t created_utc) {
             if (!journal_.IsOpen())
                 return;
-            std::vector<std::unique_ptr<FrameType>> one;
-            one.push_back(std::make_unique<FrameType>(frame));
-            std::string payload = SerializerPolicy::SerializeChunk(one, /*chunk_idx*/ 0, config_.b_use_compression);
-            payload = CompressIfBeneficial(std::move(payload));
-            journal_.AppendFrame(frame_index, game_time, created_utc, payload);
+            if (config_.journal_pending_frames) {
+                std::vector<std::unique_ptr<FrameType>> one;
+                one.push_back(std::make_unique<FrameType>(frame));
+                std::string payload = SerializerPolicy::SerializeChunk(one, /*chunk_idx*/ 0, config_.b_use_compression);
+                payload = CompressIfBeneficial(std::move(payload));
+                journal_.AppendFrame(frame_index, game_time, created_utc, payload);
+            }
+            // The frame's times are committed with its chunk (`T` records) either way.
             batch_times_.push_back({frame_index, game_time, created_utc});
         }
 

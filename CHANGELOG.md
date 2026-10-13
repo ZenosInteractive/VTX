@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **writer**: `ChunkedFileSink::Config::journal_pending_frames` (default `true`). `false` journals only chunk commits (`C`/`T` records): repair still recovers every flushed chunk and a crash loses the frames of the open chunk, and recording skips the per-frame copy, serialize, compress and append (and its fsync with `durable_writes`) that otherwise runs for every frame.
+
 ### Changed
 
 - **build**: zstd is fetched with `FetchContent_MakeAvailable` (`SOURCE_SUBDIR build/cmake`, `EXCLUDE_FROM_ALL`) on CMake 3.28+, like every other dependency, instead of `FetchContent_Populate` + `add_subdirectory`.  It was the one dependency a FetchContent dependency provider (`CMAKE_PROJECT_TOP_LEVEL_INCLUDES`) never saw: a consuming project that redirects every fetched source to one shared copy still got a zstd tree inside each build directory, and with it -- on MSVC -- a per-build `-external:I` path on every compile that sees zstd's headers, which sccache keys on, so those objects were never reused across build trees.  Also drops the `CMP0169 OLD` override the manual populate needed on CMake 3.30+.  CMake 3.15 - 3.27 keep the manual populate

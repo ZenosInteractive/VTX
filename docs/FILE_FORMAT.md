@@ -146,7 +146,7 @@ While a recording is in progress, the file sink maintains a write-ahead sidecar 
 | `S` | `float fps`, `uint8 is_increasing`, `uint8 use_compression`, `int8 compression_level` | Written once after the header; lets repair reconstruct the footer's derived time data and compression byte-exactly |
 | `C` | chunk index entry (32 bytes: index, start/end frame, offset, size, checksum) | Commits a chunk **after** its bytes are durable in the `.vtx` (data-before-journal) |
 | `T` | `int32 frame_index`, `int64 game_time`, `int64 created_utc` | Exact per-frame times of a committed chunk's frames |
-| `F` | `int32 frame_index`, `int64 game_time`, `int64 created_utc`, serialized 1-frame chunk payload | An in-flight (not yet flushed) frame — recoverable even if its chunk never lands |
+| `F` | `int32 frame_index`, `int64 game_time`, `int64 created_utc`, serialized 1-frame chunk payload | An in-flight (not yet flushed) frame — recoverable even if its chunk never lands. Written only with `journal_pending_frames` (on by default); without it a crash recovers every committed chunk and loses the frames of the open one |
 
 A torn or corrupt record fails its per-record checksum and terminates the parse at that point; superseded `F` records are reclaimed by periodic compaction (rewrite into a temp file + atomic rename). Byte order is little-endian host, matching the rest of the format.
 
