@@ -1202,6 +1202,13 @@ namespace VTX {
         std::string replay_uuid;
         std::string custom_json_metadata = "{}";
         int32_t schema_version = 0;
+
+        // The file's identity in the header's prop_schema and its recording time. Left at these
+        // values, the writer's policy fills its own defaults.
+        std::string data_identifier;        ///< Empty: the policy's default identifier.
+        int32_t data_version = -1;          ///< Negative: the policy's default version.
+        std::string data_version_string;    ///< Empty: the policy's default version text.
+        int64_t recorded_utc_timestamp = 0; ///< Unix seconds of the recording start; 0: when the header is written.
     };
 
     struct SessionFooter {

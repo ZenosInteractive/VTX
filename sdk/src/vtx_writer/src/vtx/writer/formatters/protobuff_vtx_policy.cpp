@@ -51,9 +51,18 @@ std::string VTX::ProtobufVtxPolicy::SerializeHeader(const VTX::SessionConfig& co
 
     auto now = std::chrono::system_clock::now();
     proto_header.set_recorded_utc_timestamp(
-        std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count());
+        config.recorded_utc_timestamp != 0
+            ? config.recorded_utc_timestamp
+            : std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count());
 
-    proto_header.mutable_prop_schema()->CopyFrom(schema);
+    auto* prop_schema = proto_header.mutable_prop_schema();
+    prop_schema->CopyFrom(schema);
+    if (!config.data_identifier.empty())
+        prop_schema->set_data_indentifier(config.data_identifier);
+    if (config.data_version >= 0)
+        prop_schema->set_data_version(config.data_version);
+    if (!config.data_version_string.empty())
+        prop_schema->set_data_version_string(config.data_version_string);
 
     std::string payload;
     proto_header.SerializeToString(&payload);

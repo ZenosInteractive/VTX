@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **writer**: `ChunkedFileSink::Config::journal_pending_frames` (default `true`). `false` journals only chunk commits (`C`/`T` records): repair still recovers every flushed chunk and a crash loses the frames of the open chunk, and recording skips the per-frame copy, serialize, compress and append (and its fsync with `durable_writes`) that otherwise runs for every frame.
+- **writer**: `SessionConfig` sets the header's data identity and recording time: `data_identifier`, `data_version` and `data_version_string` (the header's property schema) and `recorded_utc_timestamp`. Each one left unset (empty, negative, `0`) keeps today's value -- the policy's default identity, and the time the header is written -- so a writer that sets none of them writes the same header as before.
 
 ### Changed
 

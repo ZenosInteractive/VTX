@@ -54,12 +54,12 @@ The header is stored immediately after the magic bytes.
 |---|---|---|
 | `replay_name` | `string` | Human-readable replay name |
 | `replay_uuid` | `string` | Unique identifier (UUID v4) |
-| `recorded_utc_timestamp` | `int64_t` | Unix timestamp (seconds) of recording start |
+| `recorded_utc_timestamp` | `int64_t` | Unix timestamp (seconds) of recording start; the writer's `SessionConfig::recorded_utc_timestamp`, or the time the header is written when that is `0` |
 | `version.format_major` | `uint32_t` | File format major version |
 | `version.format_minor` | `uint32_t` | File format minor version |
 | `version.schema_version` | `uint32_t` | Schema version for the property layout |
 | `custom_json_metadata` | `string` | Arbitrary JSON blob for user metadata |
-| Property schema | Embedded | Maps property names to typed indices (int, float, vector, etc.) |
+| Property schema | Embedded | Maps property names to typed indices (int, float, vector, etc.), with the data's `data_identifier`, `data_version` and `data_version_string`: the writer's `SessionConfig` values, or the policy's defaults when unset |
 
 The **property schema** embedded in the header defines the layout of `PropertyContainer` fields. It maps human-readable names (e.g., "Health", "Position") to specific typed arrays and indices within each entity.
 
