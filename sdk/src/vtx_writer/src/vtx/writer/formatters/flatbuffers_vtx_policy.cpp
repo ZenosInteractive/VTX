@@ -58,9 +58,17 @@ std::string VTX::FlatBuffersVtxPolicy::SerializeHeader(const VTX::SessionConfig&
                                              config.schema_version);
 
     auto now = std::chrono::system_clock::now();
-    int64_t timestamp = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
+    int64_t timestamp = config.recorded_utc_timestamp != 0
+                            ? config.recorded_utc_timestamp
+                            : std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
 
-    auto schema_off = fbsvtx::ContextualSchema::Pack(builder, schema.get());
+    fbsvtx::ContextualSchemaT prop_schema;
+    prop_schema.data_identifier = config.data_identifier.empty() ? schema->data_identifier : config.data_identifier;
+    prop_schema.data_version = config.data_version >= 0 ? config.data_version : schema->data_version;
+    prop_schema.data_version_string =
+        config.data_version_string.empty() ? schema->data_version_string : config.data_version_string;
+    prop_schema.schema = schema->schema;
+    auto schema_off = fbsvtx::ContextualSchema::Pack(builder, &prop_schema);
 
     auto header_off = fbsvtx::CreateFileHeader(builder, version, schema_off, uuid, replay_name, timestamp, meta);
 
