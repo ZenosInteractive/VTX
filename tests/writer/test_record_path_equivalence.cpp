@@ -323,3 +323,43 @@ TEST(RecordPathEquivalence, EveryDefaultPropertyIsInTheBytes) {
     EXPECT_EQ(entity.quat_properties_size(), 1);
     EXPECT_EQ(entity.transform_properties_size(), 1);
 }
+
+TEST(RecordPathEquivalence, ResetToPreparedMatchesAFreshPreparedContainer) {
+    // A struct declaring some of every kind, arrays and maps included.
+    VTX::SchemaStruct schema;
+    const size_t kinds = static_cast<size_t>(VTX::FieldType::Enum) + 1;
+    schema.type_max_indices.assign(kinds, 0);
+    schema.array_max_indices.assign(kinds, 0);
+    for (VTX::FieldType t : {VTX::FieldType::Bool, VTX::FieldType::Int32, VTX::FieldType::Int64, VTX::FieldType::Float,
+                             VTX::FieldType::Double, VTX::FieldType::String, VTX::FieldType::Vector,
+                             VTX::FieldType::Quat, VTX::FieldType::Transform, VTX::FieldType::FloatRange}) {
+        schema.type_max_indices[static_cast<size_t>(t)] = 3;
+        schema.array_max_indices[static_cast<size_t>(t)] = 2;
+    }
+    schema.array_max_indices[static_cast<size_t>(VTX::FieldType::Struct)] = 1;
+    schema.map_max_index = 2;
+
+    VTX::PropertyContainer fresh;
+    fresh.entity_type_id = 4;
+    VTX::Helpers::PreparePropertyContainer(fresh, schema);
+
+    // The previous frame's container: every member holding something, more of it than the schema declares.
+    VTX::PropertyContainer reused = RichContainer(11, 1);
+    reused.int32_arrays.offsets = {0, 1, 2, 3, 4};
+    reused.map_arrays.data.resize(2);
+    reused.map_arrays.offsets = {0};
+    reused.byte_array_properties.data = {9, 9};
+    reused.content_hash = 1234;
+    VTX::Helpers::ResetToPrepared(reused, schema, 4);
+
+    VTX::Frame a, b;
+    a.CreateBucket("x").entities.push_back(fresh);
+    b.CreateBucket("x").entities.push_back(reused);
+    a.GetBucket("x").unique_ids = b.GetBucket("x").unique_ids = {"id"};
+    VTX::Serialization::ProtoFrameEncoder encoder;
+    std::string fresh_bytes, reused_bytes;
+    encoder.EncodeFrame(a, fresh_bytes);
+    encoder.EncodeFrame(b, reused_bytes);
+    EXPECT_EQ(reused_bytes, fresh_bytes);
+    EXPECT_EQ(b.GetBucket("x").entities[0].content_hash, a.GetBucket("x").entities[0].content_hash);
+}

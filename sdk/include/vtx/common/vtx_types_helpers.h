@@ -103,6 +103,58 @@ namespace VTX {
                                         schema.map_max_index);
         }
 
+        /// @brief Makes @p container what PreparePropertyContainer makes of a default one for @p schema -- every
+        ///        declared slot present, holding its default value or an empty subarray, nothing else -- while
+        ///        keeping the memory it holds, so a writer can refill one container frame after frame. Its type
+        ///        id is @p type_id and its content hash 0. Nested containers in struct slots are KEPT (only the
+        ///        slot count is the schema's), so the caller must refill every struct slot, as a writer setting
+        ///        every field does; a slot it left alone would keep the previous frame's container.
+        inline void ResetToPrepared(PropertyContainer& container, const SchemaStruct& schema, int32_t type_id) {
+            auto needed = [](const std::vector<int32_t>& max, FieldType type) -> size_t {
+                const size_t index = static_cast<size_t>(type);
+                return index < max.size() && max[index] > 0 ? static_cast<size_t>(max[index]) : 0;
+            };
+            const auto& scalars = schema.type_max_indices;
+            container.entity_type_id = type_id;
+            container.content_hash = 0;
+            container.bool_properties.assign(needed(scalars, FieldType::Bool), false);
+            container.int32_properties.assign(needed(scalars, FieldType::Int32), 0);
+            container.int64_properties.assign(needed(scalars, FieldType::Int64), 0);
+            container.float_properties.assign(needed(scalars, FieldType::Float), 0.0f);
+            container.double_properties.assign(needed(scalars, FieldType::Double), 0.0);
+            container.string_properties.resize(needed(scalars, FieldType::String));
+            for (auto& text : container.string_properties)
+                text.clear();
+            container.vector_properties.assign(needed(scalars, FieldType::Vector), Vector {});
+            container.quat_properties.assign(needed(scalars, FieldType::Quat), Quat {});
+            container.transform_properties.assign(needed(scalars, FieldType::Transform), Transform {});
+            container.range_properties.assign(needed(scalars, FieldType::FloatRange), FloatRange {});
+            container.any_struct_properties.resize(needed(scalars, FieldType::Struct));
+
+            // Every array field an empty subarray; the arrays no field declares, empty.
+            const auto& arrays = schema.array_max_indices;
+            auto reset = [&](auto& flat, FieldType type) {
+                flat.data.clear();
+                flat.offsets.assign(needed(arrays, type), 0u);
+            };
+            reset(container.bool_arrays, FieldType::Bool);
+            reset(container.int32_arrays, FieldType::Int32);
+            reset(container.int64_arrays, FieldType::Int64);
+            reset(container.float_arrays, FieldType::Float);
+            reset(container.double_arrays, FieldType::Double);
+            reset(container.string_arrays, FieldType::String);
+            reset(container.vector_arrays, FieldType::Vector);
+            reset(container.quat_arrays, FieldType::Quat);
+            reset(container.transform_arrays, FieldType::Transform);
+            reset(container.range_arrays, FieldType::FloatRange);
+            reset(container.any_struct_arrays, FieldType::Struct);
+            container.byte_array_properties.Clear();
+            container.map_arrays.Clear();
+            container.map_properties.clear();
+            if (schema.map_max_index > 0)
+                container.map_properties.resize(static_cast<size_t>(schema.map_max_index));
+        }
+
         inline uint64_t CalculateContainerHash(const PropertyContainer& container);
 
         namespace detail {
