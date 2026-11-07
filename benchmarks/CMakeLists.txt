@@ -133,3 +133,16 @@ set_target_properties(vtx_bench_fixtures PROPERTIES FOLDER "Benchmarks")
 add_dependencies(vtx_benchmarks vtx_bench_fixtures)
 
 source_group("Benchmarks" REGULAR_EXPRESSION "bench_.*\\.cpp")
+
+# ==============================================================================
+# vtx_record_bench -- the record path over a real replay (bench_record_replay.cpp).
+# A plain executable, not google/benchmark: it reports per-frame percentiles of
+# TryRecordFrame on a production-shaped capture, which an ns/iter mean hides.
+# ==============================================================================
+add_executable(vtx_record_bench bench_record_replay.cpp)
+target_link_libraries(vtx_record_bench PRIVATE vtx_common vtx_reader vtx_writer)
+target_include_directories(vtx_record_bench PRIVATE
+    "${PROJECT_SOURCE_DIR}/thirdparty/protobuf/include"
+    "${VTX_COMMON_GENERATED_DIR}"
+)
+set_target_properties(vtx_record_bench PROPERTIES FOLDER "Benchmarks")

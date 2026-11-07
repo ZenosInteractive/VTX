@@ -142,31 +142,25 @@ namespace VTX {
             const auto serialize_start = std::chrono::steady_clock::now();
             std::string payload = SerializerPolicy::SerializeChunk(frames, chunkIndex_, config_.b_use_compression);
             NotifySerialize(serialize_start);
-            payload = CompressIfBeneficial(std::move(payload));
+            CommitChunkPayload(std::move(payload), start_frame, total_frames);
+        }
 
-            uint64_t current_offset = file_.Tell();
-            const Framing::SizePrefix prefix = Framing::EncodeSizePrefix(static_cast<uint32_t>(payload.size()));
+        /// @brief SaveChunk for frames the writer serialized as it recorded them
+        ///        (SerializerPolicy::SerializeFrame): the chunk is assembled from their bytes.
+        void SaveSerializedChunk(const std::vector<std::string>& frames, const std::vector<int64_t>& /*created_utc*/,
+                                 int32_t start_frame, int32_t total_frames)
+            requires requires(const std::vector<std::string>& serialized, int32_t index, bool compressed) {
+                         SerializerPolicy::SerializeChunkFromFrames(serialized, index, compressed);
+                     }
+        {
+            if (frames.empty())
+                return;
 
-            TimedWrite(prefix.data(), prefix.size());
-            TimedWrite(payload.data(), payload.size());
-            TimedSyncOrFlush();
-
-            ChunkIndexData indexEntry;
-            indexEntry.chunk_index = chunkIndex_++;
-            indexEntry.file_offset = current_offset;
-            indexEntry.start_frame = start_frame;
-            indexEntry.end_frame = total_frames - 1;
-            indexEntry.chunk_size_bytes = Framing::ChunkSizeOnDisk(payload.size());
-            indexEntry.checksum = Framing::PayloadChecksum(payload);
-            seek_table_.push_back(indexEntry);
-
-            // Commit the chunk to the journal AFTER its bytes are durable on disk
-            // (data-before-journal): drop the now-redundant pending-frame tail and
-            // record the chunk (C) plus its frames' times (T).
-            if (journal_.IsOpen()) {
-                journal_.CommitChunk(indexEntry, batch_times_);
-                batch_times_.clear();
-            }
+            const auto serialize_start = std::chrono::steady_clock::now();
+            std::string payload =
+                SerializerPolicy::SerializeChunkFromFrames(frames, chunkIndex_, config_.b_use_compression);
+            NotifySerialize(serialize_start);
+            CommitChunkPayload(std::move(payload), start_frame, total_frames);
         }
 
         // Journal a single recorded frame BEFORE it is flushed as part of a chunk, so
@@ -207,6 +201,36 @@ namespace VTX {
         }
 
     private:
+        // Compresses a chunk's payload, writes it durably, then indexes and journals it.
+        void CommitChunkPayload(std::string payload, int32_t start_frame, int32_t total_frames) {
+            payload = CompressIfBeneficial(std::move(payload));
+
+            uint64_t current_offset = file_.Tell();
+            const Framing::SizePrefix prefix = Framing::EncodeSizePrefix(static_cast<uint32_t>(payload.size()));
+
+            TimedWrite(prefix.data(), prefix.size());
+            TimedWrite(payload.data(), payload.size());
+            TimedSyncOrFlush();
+
+            ChunkIndexData indexEntry;
+            indexEntry.chunk_index = chunkIndex_++;
+            indexEntry.file_offset = current_offset;
+            indexEntry.start_frame = start_frame;
+            indexEntry.end_frame = total_frames - 1;
+            indexEntry.chunk_size_bytes = Framing::ChunkSizeOnDisk(payload.size());
+            indexEntry.checksum = Framing::PayloadChecksum(payload);
+            seek_table_.push_back(indexEntry);
+
+            // Commit the chunk to the journal AFTER its bytes are durable on disk
+            // (data-before-journal): drop the now-redundant pending-frame tail and
+            // record the chunk (C) plus its frames' times (T).
+            if (journal_.IsOpen()) {
+                journal_.CommitChunk(indexEntry, batch_times_);
+                batch_times_.clear();
+            }
+        }
+
+
         void NotifySerialize(std::chrono::steady_clock::time_point start) const {
             if (config_.perf_observer)
                 config_.perf_observer->OnSerialize(

@@ -7,6 +7,7 @@
 #pragma once
 #include "vtx/common/vtx_types.h"
 #include "vtx/common/readers/schema_reader/game_schema_types.h"
+#include <cstring>
 #include <string>
 #include <chrono>
 #include <ctime>
@@ -102,159 +103,228 @@ namespace VTX {
                                         schema.map_max_index);
         }
 
-        inline uint64_t CalculateContainerHash(const PropertyContainer& container) {
-            // Per-call state: this function recurses (nested structs / maps); a shared state would be corrupted.
-            alignas(64) XXH_INLINE_XXH3_state_t state;
-            XXH3_64bits_reset(&state);
+        inline uint64_t CalculateContainerHash(const PropertyContainer& container);
 
-            auto hash_update = [&](const void* data, size_t size) {
-                if (size > 0 && data != nullptr) {
-                    XXH3_64bits_update(&state, data, size);
+        namespace detail {
+            // XXH3's streaming digest depends only on the bytes fed to it, never on how they are split
+            // across updates. A container is mostly small fields (one byte per bool, one update per
+            // string), so they are gathered in a buffer and fed in large updates: the same hash, far
+            // fewer calls into XXH3.
+            struct BufferedXxh3 {
+                alignas(64) XXH_INLINE_XXH3_state_t state;
+                unsigned char buffer[512];
+                size_t used = 0;
+
+                BufferedXxh3() { XXH3_64bits_reset(&state); }
+
+                void Flush() {
+                    if (used > 0) {
+                        XXH3_64bits_update(&state, buffer, used);
+                        used = 0;
+                    }
+                }
+
+                void Update(const void* data, size_t size) {
+                    if (size == 0 || data == nullptr)
+                        return;
+                    if (size > sizeof(buffer) - used) {
+                        Flush();
+                        if (size >= sizeof(buffer)) {
+                            XXH3_64bits_update(&state, data, size);
+                            return;
+                        }
+                    }
+                    std::memcpy(buffer + used, data, size);
+                    used += size;
+                }
+
+                uint64_t Digest() {
+                    Flush();
+                    return XXH3_64bits_digest(&state);
                 }
             };
 
-            hash_update(&container.entity_type_id, sizeof(container.entity_type_id));
+            // The one definition of a container's hash. sub_hash gives a nested container's hash: computed
+            // (CalculateContainerHash) or already stored in its content_hash (StoreContainerHashes).
+            template <typename SubHash>
+            uint64_t HashContainer(const PropertyContainer& container, SubHash&& sub_hash) {
+                // Per-call state: nested containers are hashed by their own call.
+                BufferedXxh3 hasher;
+                auto hash_update = [&](const void* data, size_t size) {
+                    hasher.Update(data, size);
+                };
 
-            //special case, std::vector<bool> does not have .data(), fast loop instead
-            for (const bool& b : container.bool_properties) {
-                uint8_t val = b ? 1 : 0;
-                hash_update(&val, sizeof(val));
-            }
+                hash_update(&container.entity_type_id, sizeof(container.entity_type_id));
 
-            hash_update(container.int32_properties.data(), container.int32_properties.size() * sizeof(int32_t));
-            hash_update(container.int64_properties.data(), container.int64_properties.size() * sizeof(int64_t));
-            hash_update(container.float_properties.data(), container.float_properties.size() * sizeof(float));
-            hash_update(container.double_properties.data(), container.double_properties.size() * sizeof(double));
+                //special case, std::vector<bool> does not have .data(), fast loop instead
+                for (const bool& b : container.bool_properties) {
+                    uint8_t val = b ? 1 : 0;
+                    hash_update(&val, sizeof(val));
+                }
 
-            for (const auto& str : container.string_properties) {
-                hash_update(str.data(), str.size());
-            }
+                hash_update(container.int32_properties.data(), container.int32_properties.size() * sizeof(int32_t));
+                hash_update(container.int64_properties.data(), container.int64_properties.size() * sizeof(int64_t));
+                hash_update(container.float_properties.data(), container.float_properties.size() * sizeof(float));
+                hash_update(container.double_properties.data(), container.double_properties.size() * sizeof(double));
 
-            hash_update(container.transform_properties.data(),
-                        container.transform_properties.size() * sizeof(Transform));
-            hash_update(container.vector_properties.data(), container.vector_properties.size() * sizeof(Vector));
-            hash_update(container.quat_properties.data(), container.quat_properties.size() * sizeof(Quat));
-            hash_update(container.range_properties.data(), container.range_properties.size() * sizeof(FloatRange));
+                for (const auto& str : container.string_properties) {
+                    hash_update(str.data(), str.size());
+                }
+
+                hash_update(container.transform_properties.data(),
+                            container.transform_properties.size() * sizeof(Transform));
+                hash_update(container.vector_properties.data(), container.vector_properties.size() * sizeof(Vector));
+                hash_update(container.quat_properties.data(), container.quat_properties.size() * sizeof(Quat));
+                hash_update(container.range_properties.data(), container.range_properties.size() * sizeof(FloatRange));
 
 
-            //arrays
+                //arrays
 
-            if (!container.byte_array_properties.data.empty()) {
-                hash_update(container.byte_array_properties.data.data(),
-                            container.byte_array_properties.data.size() * sizeof(uint8_t));
-                hash_update(container.byte_array_properties.offsets.data(),
-                            container.byte_array_properties.offsets.size() * sizeof(uint32_t));
-            }
+                if (!container.byte_array_properties.data.empty()) {
+                    hash_update(container.byte_array_properties.data.data(),
+                                container.byte_array_properties.data.size() * sizeof(uint8_t));
+                    hash_update(container.byte_array_properties.offsets.data(),
+                                container.byte_array_properties.offsets.size() * sizeof(uint32_t));
+                }
 
-            if (!container.int32_arrays.data.empty()) {
-                hash_update(container.int32_arrays.data.data(), container.int32_arrays.data.size() * sizeof(int32_t));
-                hash_update(container.int32_arrays.offsets.data(),
-                            container.int32_arrays.offsets.size() * sizeof(uint32_t));
-            }
+                if (!container.int32_arrays.data.empty()) {
+                    hash_update(container.int32_arrays.data.data(),
+                                container.int32_arrays.data.size() * sizeof(int32_t));
+                    hash_update(container.int32_arrays.offsets.data(),
+                                container.int32_arrays.offsets.size() * sizeof(uint32_t));
+                }
 
-            if (!container.int64_arrays.data.empty()) {
-                hash_update(container.int64_arrays.data.data(), container.int64_arrays.data.size() * sizeof(int64_t));
-                hash_update(container.int64_arrays.offsets.data(),
-                            container.int64_arrays.offsets.size() * sizeof(uint32_t));
-            }
+                if (!container.int64_arrays.data.empty()) {
+                    hash_update(container.int64_arrays.data.data(),
+                                container.int64_arrays.data.size() * sizeof(int64_t));
+                    hash_update(container.int64_arrays.offsets.data(),
+                                container.int64_arrays.offsets.size() * sizeof(uint32_t));
+                }
 
-            if (!container.float_arrays.data.empty()) {
-                hash_update(container.float_arrays.data.data(), container.float_arrays.data.size() * sizeof(float));
-                hash_update(container.float_arrays.offsets.data(),
-                            container.float_arrays.offsets.size() * sizeof(uint32_t));
-            }
+                if (!container.float_arrays.data.empty()) {
+                    hash_update(container.float_arrays.data.data(), container.float_arrays.data.size() * sizeof(float));
+                    hash_update(container.float_arrays.offsets.data(),
+                                container.float_arrays.offsets.size() * sizeof(uint32_t));
+                }
 
-            if (!container.double_arrays.data.empty()) {
-                hash_update(container.double_arrays.data.data(), container.double_arrays.data.size() * sizeof(double));
-                hash_update(container.double_arrays.offsets.data(),
-                            container.double_arrays.offsets.size() * sizeof(uint32_t));
-            }
+                if (!container.double_arrays.data.empty()) {
+                    hash_update(container.double_arrays.data.data(),
+                                container.double_arrays.data.size() * sizeof(double));
+                    hash_update(container.double_arrays.offsets.data(),
+                                container.double_arrays.offsets.size() * sizeof(uint32_t));
+                }
 
-            // Nested structs (scalar)
-            for (const auto& sc : container.any_struct_properties) {
-                uint64_t sub = CalculateContainerHash(sc);
-                hash_update(&sub, sizeof(sub));
-            }
-
-            // Nested struct arrays
-            if (!container.any_struct_arrays.data.empty()) {
-                for (const auto& sc : container.any_struct_arrays.data) {
-                    uint64_t sub = CalculateContainerHash(sc);
+                // Nested structs (scalar)
+                for (const auto& sc : container.any_struct_properties) {
+                    uint64_t sub = sub_hash(sc);
                     hash_update(&sub, sizeof(sub));
                 }
-                hash_update(container.any_struct_arrays.offsets.data(),
-                            container.any_struct_arrays.offsets.size() * sizeof(uint32_t));
-            }
 
-            // Maps (scalar)
-            for (const auto& mc : container.map_properties) {
-                for (const auto& key : mc.keys) {
-                    hash_update(key.data(), key.size());
+                // Nested struct arrays
+                if (!container.any_struct_arrays.data.empty()) {
+                    for (const auto& sc : container.any_struct_arrays.data) {
+                        uint64_t sub = sub_hash(sc);
+                        hash_update(&sub, sizeof(sub));
+                    }
+                    hash_update(container.any_struct_arrays.offsets.data(),
+                                container.any_struct_arrays.offsets.size() * sizeof(uint32_t));
                 }
-                for (const auto& val : mc.values) {
-                    uint64_t sub = CalculateContainerHash(val);
-                    hash_update(&sub, sizeof(sub));
-                }
-            }
 
-            // Map arrays
-            if (!container.map_arrays.data.empty()) {
-                for (const auto& mc : container.map_arrays.data) {
+                // Maps (scalar)
+                for (const auto& mc : container.map_properties) {
                     for (const auto& key : mc.keys) {
                         hash_update(key.data(), key.size());
                     }
                     for (const auto& val : mc.values) {
-                        uint64_t sub = CalculateContainerHash(val);
+                        uint64_t sub = sub_hash(val);
                         hash_update(&sub, sizeof(sub));
                     }
                 }
-                hash_update(container.map_arrays.offsets.data(),
-                            container.map_arrays.offsets.size() * sizeof(uint32_t));
-            }
 
-            if (!container.vector_arrays.data.empty()) {
-                hash_update(container.vector_arrays.data.data(),
-                            container.vector_arrays.data.size() * sizeof(VTX::Vector));
-                hash_update(container.vector_arrays.offsets.data(),
-                            container.vector_arrays.offsets.size() * sizeof(uint32_t));
-            }
-
-            if (!container.quat_arrays.data.empty()) {
-                hash_update(container.quat_arrays.data.data(), container.quat_arrays.data.size() * sizeof(VTX::Quat));
-                hash_update(container.quat_arrays.offsets.data(),
-                            container.quat_arrays.offsets.size() * sizeof(uint32_t));
-            }
-
-            if (!container.transform_arrays.data.empty()) {
-                hash_update(container.transform_arrays.data.data(),
-                            container.transform_arrays.data.size() * sizeof(VTX::Transform));
-                hash_update(container.transform_arrays.offsets.data(),
-                            container.transform_arrays.offsets.size() * sizeof(uint32_t));
-            }
-
-            if (!container.range_arrays.data.empty()) {
-                hash_update(container.range_arrays.data.data(),
-                            container.range_arrays.data.size() * sizeof(VTX::FloatRange));
-                hash_update(container.range_arrays.offsets.data(),
-                            container.range_arrays.offsets.size() * sizeof(uint32_t));
-            }
-
-            if (!container.bool_arrays.data.empty()) {
-                hash_update(container.bool_arrays.data.data(), container.bool_arrays.data.size() * sizeof(uint8_t));
-                hash_update(container.bool_arrays.offsets.data(),
-                            container.bool_arrays.offsets.size() * sizeof(uint32_t));
-            }
-
-            if (!container.string_arrays.data.empty()) {
-                for (const auto& str : container.string_arrays.data) {
-                    hash_update(str.data(), str.size());
+                // Map arrays
+                if (!container.map_arrays.data.empty()) {
+                    for (const auto& mc : container.map_arrays.data) {
+                        for (const auto& key : mc.keys) {
+                            hash_update(key.data(), key.size());
+                        }
+                        for (const auto& val : mc.values) {
+                            uint64_t sub = sub_hash(val);
+                            hash_update(&sub, sizeof(sub));
+                        }
+                    }
+                    hash_update(container.map_arrays.offsets.data(),
+                                container.map_arrays.offsets.size() * sizeof(uint32_t));
                 }
-                hash_update(container.string_arrays.offsets.data(),
-                            container.string_arrays.offsets.size() * sizeof(uint32_t));
+
+                if (!container.vector_arrays.data.empty()) {
+                    hash_update(container.vector_arrays.data.data(),
+                                container.vector_arrays.data.size() * sizeof(VTX::Vector));
+                    hash_update(container.vector_arrays.offsets.data(),
+                                container.vector_arrays.offsets.size() * sizeof(uint32_t));
+                }
+
+                if (!container.quat_arrays.data.empty()) {
+                    hash_update(container.quat_arrays.data.data(),
+                                container.quat_arrays.data.size() * sizeof(VTX::Quat));
+                    hash_update(container.quat_arrays.offsets.data(),
+                                container.quat_arrays.offsets.size() * sizeof(uint32_t));
+                }
+
+                if (!container.transform_arrays.data.empty()) {
+                    hash_update(container.transform_arrays.data.data(),
+                                container.transform_arrays.data.size() * sizeof(VTX::Transform));
+                    hash_update(container.transform_arrays.offsets.data(),
+                                container.transform_arrays.offsets.size() * sizeof(uint32_t));
+                }
+
+                if (!container.range_arrays.data.empty()) {
+                    hash_update(container.range_arrays.data.data(),
+                                container.range_arrays.data.size() * sizeof(VTX::FloatRange));
+                    hash_update(container.range_arrays.offsets.data(),
+                                container.range_arrays.offsets.size() * sizeof(uint32_t));
+                }
+
+                if (!container.bool_arrays.data.empty()) {
+                    hash_update(container.bool_arrays.data.data(), container.bool_arrays.data.size() * sizeof(uint8_t));
+                    hash_update(container.bool_arrays.offsets.data(),
+                                container.bool_arrays.offsets.size() * sizeof(uint32_t));
+                }
+
+                if (!container.string_arrays.data.empty()) {
+                    for (const auto& str : container.string_arrays.data) {
+                        hash_update(str.data(), str.size());
+                    }
+                    hash_update(container.string_arrays.offsets.data(),
+                                container.string_arrays.offsets.size() * sizeof(uint32_t));
+                }
+
+
+                return hasher.Digest();
             }
+        } // namespace detail
 
+        /// @brief The content hash of a container and, recursively, of everything nested in it.
+        inline uint64_t CalculateContainerHash(const PropertyContainer& container) {
+            return detail::HashContainer(
+                container, [](const PropertyContainer& nested) { return CalculateContainerHash(nested); });
+        }
 
-            return XXH3_64bits_digest(&state);
+        /// @brief Stores the content hash of every container in the tree, nested ones first, hashing each
+        ///        container exactly once; returns the root's. Equal to CalculateContainerHash(container).
+        inline uint64_t StoreContainerHashes(PropertyContainer& container) {
+            for (auto& nested : container.any_struct_properties)
+                StoreContainerHashes(nested);
+            for (auto& nested : container.any_struct_arrays.data)
+                StoreContainerHashes(nested);
+            for (auto& map : container.map_properties)
+                for (auto& nested : map.values)
+                    StoreContainerHashes(nested);
+            for (auto& map : container.map_arrays.data)
+                for (auto& nested : map.values)
+                    StoreContainerHashes(nested);
+            container.content_hash =
+                detail::HashContainer(container, [](const PropertyContainer& nested) { return nested.content_hash; });
+            return container.content_hash;
         }
     } // namespace Helpers
 

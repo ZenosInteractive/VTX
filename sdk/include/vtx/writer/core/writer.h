@@ -1,5 +1,7 @@
 #pragma once
+#include <concepts>
 #include <memory>
+#include <utility>
 #include <vector>
 #include <optional>
 #include "vtx/common/vtx_types.h"
@@ -99,7 +101,7 @@ namespace VTX {
                 FrameMutationView view(native_frame, frame_accessor_);
                 FramePostProcessContext ctx;
                 ctx.global_frame_index = total_frames_;
-                ctx.chunk_local_frame_index = static_cast<int32_t>(pending_frames_.size());
+                ctx.chunk_local_frame_index = static_cast<int32_t>(PendingFrameCount());
                 ctx.chunk_index = chunks_flushed_;
                 ctx.schema_version = 0;
                 ctx.frame_accessor = &frame_accessor_;
@@ -129,11 +131,20 @@ namespace VTX {
                 has_last_finalized_ = true;
             }
 
-            std::unique_ptr<FrameType> sink_frame = Serializer::FromNative(std::move(native_frame));
-            size_t frame_size = Serializer::GetFrameSize(*sink_frame);
+            std::unique_ptr<FrameType> sink_frame = MakeSinkFrame(std::move(native_frame));
+            // Serialized now, while the frame is at hand, so a flush only assembles the chunk; the size is
+            // the one GetFrameSize reports.
+            std::string frame_bytes;
+            size_t frame_size = 0;
+            if constexpr (kSerializesAsRecorded) {
+                frame_bytes = TakeByteBuffer();
+                frame_size = Serializer::SerializeFrame(*sink_frame, frame_bytes);
+            } else {
+                frame_size = Serializer::GetFrameSize(*sink_frame);
+            }
 
-            if (!pending_frames_.empty() &&
-                chunker_.ShouldFlush(pending_frames_.size(), current_chunk_bytes_, frame_size)) {
+            if (PendingFrameCount() > 0 &&
+                chunker_.ShouldFlush(PendingFrameCount(), current_chunk_bytes_, frame_size)) {
                 Flush();
             }
 
@@ -149,7 +160,13 @@ namespace VTX {
             const int64_t frame_created_utc = created_utc.empty() ? 0 : created_utc.back();
             sink_.JournalFrame(*sink_frame, assigned_index, frame_game_time, frame_created_utc);
 
-            pending_frames_.push_back(std::move(sink_frame));
+            if constexpr (kSerializesAsRecorded) {
+                pending_bytes_.push_back(std::move(frame_bytes));
+                recycled_frames_.push_back(
+                    std::move(sink_frame)); // its bytes are kept; the message fills the next frame
+            } else {
+                pending_frames_.push_back(std::move(sink_frame));
+            }
             return RecordResult::MadeWritten(assigned_index);
         }
 
@@ -158,14 +175,27 @@ namespace VTX {
         }
 
         void Flush() {
-            if (pending_frames_.empty())
+            if (PendingFrameCount() == 0)
                 return;
 
-            int32_t start_frame = total_frames_ - static_cast<int32_t>(pending_frames_.size());
+            int32_t start_frame = total_frames_ - static_cast<int32_t>(PendingFrameCount());
             auto time_chunk = timer_.GetLastChunkCreatedUtc();
-            sink_.SaveChunk(pending_frames_, time_chunk, start_frame, total_frames_);
-
-            pending_frames_.clear();
+            if constexpr (kSerializesAsRecorded) {
+                sink_.SaveSerializedChunk(pending_bytes_, time_chunk, start_frame, total_frames_);
+                // The chunk is written; its buffers hold the next chunk's frames.
+                for (auto& bytes : pending_bytes_)
+                    byte_buffers_.push_back(std::move(bytes));
+                pending_bytes_.clear();
+            } else {
+                sink_.SaveChunk(pending_frames_, time_chunk, start_frame, total_frames_);
+                if constexpr (kRecyclesFrames) {
+                    // The chunk is written; its frame messages fill the next chunk's frames.
+                    for (auto& frame : pending_frames_)
+                        if (frame)
+                            recycled_frames_.push_back(std::move(frame));
+                }
+                pending_frames_.clear();
+            }
             current_chunk_bytes_ = 0;
             ++chunks_flushed_;
             timer_.UpdateChunkStartIndex();
@@ -299,10 +329,66 @@ namespace VTX {
                         out_detail = "frame contains an entity whose type does not resolve to a schema struct";
                         return false;
                     }
-                    entity.content_hash = Helpers::CalculateContainerHash(entity);
                 }
             }
+            // The serializer hashes every container as it writes it (ToProto / ToFlat), so the hashes are
+            // stored here only for the retained snapshot, which is read before the serializer runs.
+            if (retain_snapshot_) {
+                for (auto& bucket : frame.GetMutableBuckets())
+                    for (auto& entity : bucket.entities)
+                        Helpers::StoreContainerHashes(entity);
+            }
             return true;
+        }
+
+        // A serializer that can refill a frame message a written chunk is done with (FromNative with a
+        // reuse argument) gets one back; the messages keep their nested allocations, so a steady recording
+        // allocates almost nothing per frame.
+        static constexpr bool kRecyclesFrames = requires(VTX::Frame && native, std::unique_ptr<FrameType> reuse) {
+                                                    {
+                                                        Serializer::FromNative(std::move(native), std::move(reuse))
+                                                        } -> std::same_as<std::unique_ptr<FrameType>>;
+                                                };
+
+        // A serializer and sink that can serialize each frame as it is recorded (SerializeFrame) and write a
+        // chunk from those bytes (SaveSerializedChunk): the chunk's serialization is spread over its frames
+        // instead of landing on the frame that flushes it, and each frame message is reused at once.
+        static constexpr bool kSerializesAsRecorded =
+            kRecyclesFrames &&
+            requires(const FrameType& frame, std::string& out, const std::vector<std::string>& frames, int32_t index,
+                     bool compressed) {
+                { Serializer::SerializeFrame(frame, out) } -> std::convertible_to<size_t>;
+                { Serializer::SerializeChunkFromFrames(frames, index, compressed) } -> std::convertible_to<std::string>;
+            } &&
+            requires(SinkPolicy & sink, const std::vector<std::string>& frames, const std::vector<int64_t>& times,
+                     int32_t start, int32_t total) { sink.SaveSerializedChunk(frames, times, start, total); };
+
+        size_t PendingFrameCount() const {
+            if constexpr (kSerializesAsRecorded)
+                return pending_bytes_.size();
+            else
+                return pending_frames_.size();
+        }
+
+        std::string TakeByteBuffer() {
+            if (byte_buffers_.empty())
+                return {};
+            std::string buffer = std::move(byte_buffers_.back());
+            byte_buffers_.pop_back();
+            return buffer;
+        }
+
+        std::unique_ptr<FrameType> MakeSinkFrame(VTX::Frame&& native_frame) {
+            if constexpr (kRecyclesFrames) {
+                std::unique_ptr<FrameType> reuse;
+                if (!recycled_frames_.empty()) {
+                    reuse = std::move(recycled_frames_.back());
+                    recycled_frames_.pop_back();
+                }
+                return Serializer::FromNative(std::move(native_frame), std::move(reuse));
+            } else {
+                return Serializer::FromNative(std::move(native_frame));
+            }
         }
 
         SinkPolicy sink_;
@@ -311,6 +397,9 @@ namespace VTX {
         VTX::SchemaRegistry registry_;
         const SchemaSanitizerRegistry* sanitizer_;
         std::vector<std::unique_ptr<FrameType>> pending_frames_;
+        std::vector<std::unique_ptr<FrameType>> recycled_frames_; ///< written frames, refilled by MakeSinkFrame
+        std::vector<std::string> pending_bytes_;                  ///< the open chunk's frames, serialized
+        std::vector<std::string> byte_buffers_;                   ///< a written chunk's buffers, refilled
         VTX::GameTime::VTXGameTimes timer_;
         size_t current_chunk_bytes_ = 0;
         int32_t total_frames_ = 0;
