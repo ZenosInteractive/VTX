@@ -146,7 +146,7 @@ namespace VTX {
         }
 
         /// @brief SaveChunk for frames the writer serialized as it recorded them
-        ///        (SerializerPolicy::SerializeFrame): the chunk is assembled from their bytes.
+        ///        (the writer's direct path): the chunk is assembled from their bytes.
         void SaveSerializedChunk(const std::vector<std::string>& frames, const std::vector<int64_t>& /*created_utc*/,
                                  int32_t start_frame, int32_t total_frames)
             requires requires(const std::vector<std::string>& serialized, int32_t index, bool compressed) {
@@ -176,6 +176,25 @@ namespace VTX {
                 journal_.AppendFrame(frame_index, game_time, created_utc, payload);
             }
             // The frame's times are committed with its chunk (`T` records) either way.
+            batch_times_.push_back({frame_index, game_time, created_utc});
+        }
+
+        /// @brief JournalFrame for a frame already serialized (the writer's direct path): the same journal
+        ///        record, from its bytes.
+        void JournalSerializedFrame(const std::string& frame_bytes, int32_t frame_index, int64_t game_time,
+                                    int64_t created_utc)
+            requires requires(const std::vector<std::string>& serialized, int32_t index, bool compressed) {
+                         SerializerPolicy::SerializeChunkFromFrames(serialized, index, compressed);
+                     }
+        {
+            if (!journal_.IsOpen())
+                return;
+            if (config_.journal_pending_frames) {
+                std::string payload = SerializerPolicy::SerializeChunkFromFrames({frame_bytes}, /*chunk_idx*/ 0,
+                                                                                 config_.b_use_compression);
+                payload = CompressIfBeneficial(std::move(payload));
+                journal_.AppendFrame(frame_index, game_time, created_utc, payload);
+            }
             batch_times_.push_back({frame_index, game_time, created_utc});
         }
 

@@ -177,8 +177,11 @@ int main(int argc, char** argv) {
             VTX::Frame frame = frames[i % frames.size()]; // the tick's fresh frame, outside the timer
             VTX::GameTime::GameTimeRegister time;
             time.game_time = static_cast<float>(i) / 30.0f;
+            // Timed with the frame's destruction: a writer that consumes the frame destroys it inside the
+            // call, one that reads it in place leaves that to its caller -- the cost is the record's either way.
             const auto t0 = Clock::now();
             const VTX::RecordResult result = writer.TryRecordFrame(frame, time);
+            frame = VTX::Frame {};
             const auto dt = Clock::now() - t0;
             if (!result.IsWritten()) {
                 std::fprintf(stderr, "frame %zu refused: %s\n", i, result.error.message.c_str());

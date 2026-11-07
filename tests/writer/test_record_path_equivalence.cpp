@@ -5,14 +5,16 @@
 //     XXH3 feed == Helpers::CalculateContainerHash and the plain per-field feed.
 //   * SortBucketByTypeId(Bucket&&) (moves; skips reordering a grouped bucket) ==
 //     SortBucketByTypeId(const Bucket&, Bucket&) (copies).
-//   * ProtobufVtxPolicy::SerializeFrame + SerializeChunkFromFrames == SerializeChunk, and
-//     SerializeChunk leaves its frames intact.
-//   * ProtobufVtxPolicy::FromNative into a recycled frame message == into a fresh one.
+//   * ProtobufVtxPolicy::SerializeChunkFromFrames == SerializeChunk, and SerializeChunk leaves its
+//     frames intact.
+//   * ProtoFrameEncoder::EncodeFrame (the writer's direct path) == FromNative + SerializeToString, the
+//     frame left as it was, and every property of every entity -- defaults included -- in the bytes.
 
 #include <gtest/gtest.h>
 
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <memory>
 #include <string>
 #include <vector>
@@ -200,11 +202,7 @@ TEST(RecordPathEquivalence, ChunkFromSerializedFramesMatchesSerializeChunk) {
 
     std::vector<std::string> serialized;
     for (const auto& frame : frames) {
-        std::string bytes = "stale contents a reused buffer may hold";
-        const size_t size = VTX::ProtobufVtxPolicy::SerializeFrame(*frame, bytes);
-        EXPECT_EQ(size, VTX::ProtobufVtxPolicy::GetFrameSize(*frame));
-        EXPECT_EQ(bytes, Serialized(*frame));
-        serialized.push_back(std::move(bytes));
+        serialized.push_back(Serialized(*frame));
     }
 
     for (int32_t chunk_index : {0, 1, 7, 300}) {
@@ -220,21 +218,108 @@ TEST(RecordPathEquivalence, ChunkFromSerializedFramesMatchesSerializeChunk) {
     EXPECT_TRUE(VTX::ProtobufVtxPolicy::SerializeChunkFromFrames({}, 3, true).empty());
 }
 
-TEST(RecordPathEquivalence, RecycledFrameMessageMatchesFreshOne) {
-    // A message that held a larger frame, refilled with a smaller, differently shaped one.
-    std::unique_ptr<cppvtx::Frame> recycled = VTX::ProtobufVtxPolicy::FromNative(RichFrame(1, true));
-    recycled = VTX::ProtobufVtxPolicy::FromNative(RichFrame(50, false), std::move(recycled));
+namespace {
+    // A frame of every shape the encoder must agree on: signed and -0.0 values, empty strings, an untyped
+    // entity, more ids than entities, an empty bucket, a bucket of untyped entities only.
+    VTX::Frame EdgeFrame(int seed) {
+        VTX::Frame frame = RichFrame(seed, (seed & 1) == 0);
+        frame.CreateBucket("edges");
+        frame.CreateBucket("empty");
+        frame.CreateBucket("untyped");
+        auto& edges = frame.GetBucket("edges");
+        VTX::PropertyContainer e = RichContainer(seed + 7, 1);
+        e.entity_type_id = 2;
+        e.int32_properties = {-1, std::numeric_limits<int32_t>::min(), 0};
+        e.int64_properties = {std::numeric_limits<int64_t>::min(), -5, 0};
+        e.float_properties = {-0.0f, 0.0f, -1.5f};
+        e.double_properties = {-0.0, 0.0};
+        e.vector_properties = {{0.0, -0.0, 0.0}};
+        e.quat_properties = {{0.0f, 0.0f, 0.0f, 0.0f}};
+        e.string_properties = {"", ""};
+        e.int32_arrays.data.clear(); // offsets without data: no sub-message, as ToProto
+        e.int32_arrays.offsets = {0, 0};
+        edges.entities.push_back(e);
+        VTX::PropertyContainer untyped;
+        untyped.entity_type_id = -1;
+        edges.entities.push_back(untyped);
+        VTX::PropertyContainer first;
+        first.entity_type_id = 0;
+        edges.entities.push_back(first);
+        edges.unique_ids = {"a", "b", "c", "d", "e"};
+        auto& only_untyped = frame.GetBucket("untyped");
+        only_untyped.entities.resize(2);
+        only_untyped.unique_ids = {"x"};
+        only_untyped.type_ranges = {{3, 4}};
+        return frame;
+    }
+} // namespace
 
-    VTX::Frame small;
-    auto& bucket = small.CreateBucket("players");
-    VTX::PropertyContainer e;
-    e.entity_type_id = 0;
-    e.float_properties = {1.0f};
-    bucket.entities.push_back(e);
+TEST(RecordPathEquivalence, DirectEncodingMatchesTheSerializer) {
+    VTX::Serialization::ProtoFrameEncoder encoder;
+    std::string bytes = "stale contents a reused buffer may hold";
+    for (int seed = 0; seed < 6; ++seed) {
+        VTX::Frame frame = EdgeFrame(seed);
+        VTX::Frame reference = frame;
+        const std::string expected = Serialized(*VTX::ProtobufVtxPolicy::FromNative(std::move(reference)));
+
+        const VTX::Frame before = frame;
+        const size_t size = encoder.EncodeFrame(frame, bytes);
+        EXPECT_EQ(size, bytes.size());
+        EXPECT_EQ(bytes, expected) << "seed " << seed;
+
+        // The frame is read in place: the same buckets, ids and entities, only the hashes of the entities
+        // it wrote stored (an untyped entity in a bucket with typed ones is dropped, as SortBucketByTypeId does).
+        ASSERT_EQ(frame.GetBuckets().size(), before.GetBuckets().size());
+        for (size_t b = 0; b < frame.GetBuckets().size(); ++b) {
+            bool any_typed = false;
+            for (const auto& e : before.GetBuckets()[b].entities)
+                any_typed = any_typed || e.entity_type_id >= 0;
+            EXPECT_EQ(frame.GetBuckets()[b].unique_ids, before.GetBuckets()[b].unique_ids);
+            ASSERT_EQ(frame.GetBuckets()[b].entities.size(), before.GetBuckets()[b].entities.size());
+            for (size_t e = 0; e < frame.GetBuckets()[b].entities.size(); ++e) {
+                const auto& now = frame.GetBuckets()[b].entities[e];
+                EXPECT_EQ(now.entity_type_id, before.GetBuckets()[b].entities[e].entity_type_id);
+                const bool written = !any_typed || now.entity_type_id >= 0;
+                EXPECT_EQ(now.content_hash,
+                          written ? VTX::Helpers::CalculateContainerHash(before.GetBuckets()[b].entities[e])
+                                  : before.GetBuckets()[b].entities[e].content_hash);
+            }
+        }
+    }
+}
+
+TEST(RecordPathEquivalence, EveryDefaultPropertyIsInTheBytes) {
+    // A schema-prepared entity holds a slot for every declared property, defaults included; the bytes must
+    // carry every slot back, so a reader (and the differ) sees the same properties.
+    VTX::PropertyContainer prepared;
+    prepared.entity_type_id = 0;
+    prepared.bool_properties.assign(3, false);
+    prepared.int32_properties.assign(4, 0);
+    prepared.int64_properties.assign(2, 0);
+    prepared.float_properties.assign(5, 0.0f);
+    prepared.double_properties.assign(2, 0.0);
+    prepared.string_properties.assign(3, std::string());
+    prepared.vector_properties.assign(2, VTX::Vector {});
+    prepared.quat_properties.assign(1, VTX::Quat {0.0f, 0.0f, 0.0f, 0.0f});
+    prepared.transform_properties.assign(1, VTX::Transform {});
+    VTX::Frame frame;
+    auto& bucket = frame.CreateBucket("defaults");
+    bucket.entities.push_back(prepared);
     bucket.unique_ids.push_back("only");
-    VTX::Frame small_copy = small;
 
-    recycled = VTX::ProtobufVtxPolicy::FromNative(std::move(small), std::move(recycled));
-    const std::unique_ptr<cppvtx::Frame> fresh = VTX::ProtobufVtxPolicy::FromNative(std::move(small_copy));
-    EXPECT_EQ(Serialized(*recycled), Serialized(*fresh));
+    VTX::Serialization::ProtoFrameEncoder encoder;
+    std::string bytes;
+    encoder.EncodeFrame(frame, bytes);
+    cppvtx::Frame decoded;
+    ASSERT_TRUE(decoded.ParseFromString(bytes));
+    const cppvtx::PropertyContainer& entity = decoded.data(0).entities(0);
+    EXPECT_EQ(entity.bool_properties_size(), 3);
+    EXPECT_EQ(entity.int32_properties_size(), 4);
+    EXPECT_EQ(entity.int64_properties_size(), 2);
+    EXPECT_EQ(entity.float_properties_size(), 5);
+    EXPECT_EQ(entity.double_properties_size(), 2);
+    EXPECT_EQ(entity.string_properties_size(), 3);
+    EXPECT_EQ(entity.vector_properties_size(), 2);
+    EXPECT_EQ(entity.quat_properties_size(), 1);
+    EXPECT_EQ(entity.transform_properties_size(), 1);
 }

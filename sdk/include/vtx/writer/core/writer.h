@@ -1,6 +1,7 @@
 #pragma once
 #include <concepts>
 #include <memory>
+#include <type_traits>
 #include <utility>
 #include <vector>
 #include <optional>
@@ -30,6 +31,16 @@ namespace VTX {
         };
     } // namespace ChunkingPolicy
 
+
+    // The serializer's direct encoder (Serializer::DirectEncoder), named only when it has one.
+    template <typename Serializer, typename = void>
+    struct DirectEncoderOf {
+        using type = void;
+    };
+    template <typename Serializer>
+    struct DirectEncoderOf<Serializer, std::void_t<typename Serializer::DirectEncoder>> {
+        using type = typename Serializer::DirectEncoder;
+    };
 
     template <typename SinkPolicy, typename ChunkingPolicy = ChunkingPolicy::ThresholdChunkPolicy>
     class ReplayWriter {
@@ -131,15 +142,17 @@ namespace VTX {
                 has_last_finalized_ = true;
             }
 
-            std::unique_ptr<FrameType> sink_frame = MakeSinkFrame(std::move(native_frame));
-            // Serialized now, while the frame is at hand, so a flush only assembles the chunk; the size is
-            // the one GetFrameSize reports.
+            // THE DIRECT PATH (kEncodesDirect): the frame is encoded straight to its bytes, read in place --
+            // no serializer message is built, and the caller's frame is left as it was but for its content
+            // hashes -- so a flush only assembles the chunk. Otherwise the serializer's own frame.
+            std::unique_ptr<FrameType> sink_frame;
             std::string frame_bytes;
             size_t frame_size = 0;
-            if constexpr (kSerializesAsRecorded) {
+            if constexpr (kEncodesDirect) {
                 frame_bytes = TakeByteBuffer();
-                frame_size = Serializer::SerializeFrame(*sink_frame, frame_bytes);
+                frame_size = encoder_.EncodeFrame(native_frame, frame_bytes);
             } else {
+                sink_frame = Serializer::FromNative(std::move(native_frame));
                 frame_size = Serializer::GetFrameSize(*sink_frame);
             }
 
@@ -158,13 +171,11 @@ namespace VTX {
             const auto& created_utc = timer_.GetCreatedUtc();
             const int64_t frame_game_time = game_times.empty() ? 0 : game_times.back();
             const int64_t frame_created_utc = created_utc.empty() ? 0 : created_utc.back();
-            sink_.JournalFrame(*sink_frame, assigned_index, frame_game_time, frame_created_utc);
-
-            if constexpr (kSerializesAsRecorded) {
+            if constexpr (kEncodesDirect) {
+                sink_.JournalSerializedFrame(frame_bytes, assigned_index, frame_game_time, frame_created_utc);
                 pending_bytes_.push_back(std::move(frame_bytes));
-                recycled_frames_.push_back(
-                    std::move(sink_frame)); // its bytes are kept; the message fills the next frame
             } else {
+                sink_.JournalFrame(*sink_frame, assigned_index, frame_game_time, frame_created_utc);
                 pending_frames_.push_back(std::move(sink_frame));
             }
             return RecordResult::MadeWritten(assigned_index);
@@ -180,7 +191,7 @@ namespace VTX {
 
             int32_t start_frame = total_frames_ - static_cast<int32_t>(PendingFrameCount());
             auto time_chunk = timer_.GetLastChunkCreatedUtc();
-            if constexpr (kSerializesAsRecorded) {
+            if constexpr (kEncodesDirect) {
                 sink_.SaveSerializedChunk(pending_bytes_, time_chunk, start_frame, total_frames_);
                 // The chunk is written; its buffers hold the next chunk's frames.
                 for (auto& bytes : pending_bytes_)
@@ -188,12 +199,6 @@ namespace VTX {
                 pending_bytes_.clear();
             } else {
                 sink_.SaveChunk(pending_frames_, time_chunk, start_frame, total_frames_);
-                if constexpr (kRecyclesFrames) {
-                    // The chunk is written; its frame messages fill the next chunk's frames.
-                    for (auto& frame : pending_frames_)
-                        if (frame)
-                            recycled_frames_.push_back(std::move(frame));
-                }
                 pending_frames_.clear();
             }
             current_chunk_bytes_ = 0;
@@ -341,30 +346,22 @@ namespace VTX {
             return true;
         }
 
-        // A serializer that can refill a frame message a written chunk is done with (FromNative with a
-        // reuse argument) gets one back; the messages keep their nested allocations, so a steady recording
-        // allocates almost nothing per frame.
-        static constexpr bool kRecyclesFrames = requires(VTX::Frame && native, std::unique_ptr<FrameType> reuse) {
-                                                    {
-                                                        Serializer::FromNative(std::move(native), std::move(reuse))
-                                                        } -> std::same_as<std::unique_ptr<FrameType>>;
-                                                };
+        // THE DIRECT PATH: a serializer with a direct encoder (Serializer::DirectEncoder, which encodes a native
+        // frame to exactly the bytes of its own frame message) and a sink that journals and writes those bytes
+        // (JournalSerializedFrame, SaveSerializedChunk).
+        static constexpr bool kEncodesDirect =
+            requires { typename Serializer::DirectEncoder; } &&
+            requires(SinkPolicy & sink, const std::string& bytes, const std::vector<std::string>& frames,
+                     const std::vector<int64_t>& times, int32_t index, int32_t start, int32_t total, int64_t t) {
+                sink.JournalSerializedFrame(bytes, index, t, t);
+                sink.SaveSerializedChunk(frames, times, start, total);
+            };
 
-        // A serializer and sink that can serialize each frame as it is recorded (SerializeFrame) and write a
-        // chunk from those bytes (SaveSerializedChunk): the chunk's serialization is spread over its frames
-        // instead of landing on the frame that flushes it, and each frame message is reused at once.
-        static constexpr bool kSerializesAsRecorded =
-            kRecyclesFrames &&
-            requires(const FrameType& frame, std::string& out, const std::vector<std::string>& frames, int32_t index,
-                     bool compressed) {
-                { Serializer::SerializeFrame(frame, out) } -> std::convertible_to<size_t>;
-                { Serializer::SerializeChunkFromFrames(frames, index, compressed) } -> std::convertible_to<std::string>;
-            } &&
-            requires(SinkPolicy & sink, const std::vector<std::string>& frames, const std::vector<int64_t>& times,
-                     int32_t start, int32_t total) { sink.SaveSerializedChunk(frames, times, start, total); };
+        struct NoEncoder {};
+        using Encoder = std::conditional_t<kEncodesDirect, typename DirectEncoderOf<Serializer>::type, NoEncoder>;
 
         size_t PendingFrameCount() const {
-            if constexpr (kSerializesAsRecorded)
+            if constexpr (kEncodesDirect)
                 return pending_bytes_.size();
             else
                 return pending_frames_.size();
@@ -378,28 +375,15 @@ namespace VTX {
             return buffer;
         }
 
-        std::unique_ptr<FrameType> MakeSinkFrame(VTX::Frame&& native_frame) {
-            if constexpr (kRecyclesFrames) {
-                std::unique_ptr<FrameType> reuse;
-                if (!recycled_frames_.empty()) {
-                    reuse = std::move(recycled_frames_.back());
-                    recycled_frames_.pop_back();
-                }
-                return Serializer::FromNative(std::move(native_frame), std::move(reuse));
-            } else {
-                return Serializer::FromNative(std::move(native_frame));
-            }
-        }
-
         SinkPolicy sink_;
         ChunkingPolicy chunker_;
 
         VTX::SchemaRegistry registry_;
         const SchemaSanitizerRegistry* sanitizer_;
         std::vector<std::unique_ptr<FrameType>> pending_frames_;
-        std::vector<std::unique_ptr<FrameType>> recycled_frames_; ///< written frames, refilled by MakeSinkFrame
-        std::vector<std::string> pending_bytes_;                  ///< the open chunk's frames, serialized
-        std::vector<std::string> byte_buffers_;                   ///< a written chunk's buffers, refilled
+        [[no_unique_address]] Encoder encoder_;  ///< the direct path's encoder and its buffers
+        std::vector<std::string> pending_bytes_; ///< the open chunk's frames, serialized
+        std::vector<std::string> byte_buffers_;  ///< a written chunk's buffers, refilled
         VTX::GameTime::VTXGameTimes timer_;
         size_t current_chunk_bytes_ = 0;
         int32_t total_frames_ = 0;

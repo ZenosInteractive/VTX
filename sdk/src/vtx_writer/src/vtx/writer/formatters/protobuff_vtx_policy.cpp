@@ -11,11 +11,6 @@ std::string VTX::ProtobufVtxPolicy::GetMagicBytes() {
 }
 
 std::unique_ptr<VTX::ProtobufVtxPolicy::FrameType> VTX::ProtobufVtxPolicy::FromNative(VTX::Frame&& native) {
-    return FromNative(std::move(native), nullptr);
-}
-
-std::unique_ptr<VTX::ProtobufVtxPolicy::FrameType>
-VTX::ProtobufVtxPolicy::FromNative(VTX::Frame&& native, std::unique_ptr<FrameType> reuse) {
     // The frame is ours: its buckets move into type order rather than being copied.
     auto& native_buckets = native.GetMutableBuckets();
     VTX::Frame sorted_native;
@@ -27,12 +22,7 @@ VTX::ProtobufVtxPolicy::FromNative(VTX::Frame&& native, std::unique_ptr<FrameTyp
                                           sorted_native.GetBucket(static_cast<int>(b_idx)));
     }
 
-    std::unique_ptr<FrameType> proto = std::move(reuse);
-    if (proto) {
-        proto->Clear(); // keeps the cleared nested messages and strings for the fill below
-    } else {
-        proto = std::make_unique<cppvtx::Frame>();
-    }
+    auto proto = std::make_unique<cppvtx::Frame>();
     VTX::Serialization::ToProto(sorted_native, proto.get());
     return proto;
 }
@@ -115,15 +105,6 @@ std::string VTX::ProtobufVtxPolicy::SerializeChunk(const std::vector<std::unique
     }
 
     return uncompressed_payload;
-}
-
-size_t VTX::ProtobufVtxPolicy::SerializeFrame(const FrameType& frame, std::string& out) {
-    const size_t size = frame.ByteSizeLong();
-    out.resize(size);
-    if (size > 0) {
-        frame.SerializeWithCachedSizesToArray(reinterpret_cast<uint8_t*>(out.data()));
-    }
-    return size;
 }
 
 namespace {
