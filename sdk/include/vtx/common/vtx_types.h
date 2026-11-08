@@ -348,6 +348,31 @@ namespace VTX {
         bool ReplaceSubArray(size_t SubIndex, std::initializer_list<T> Items) {
             return ReplaceSubArray(SubIndex, std::span<const T>(Items.begin(), Items.size()));
         }
+
+        /**
+         * Makes subarray SubIndex exactly Count elements long, in place, and returns it for the caller to fill:
+         * elements it keeps hold their values, new ones are value-initialized. Empty on out-of-bounds.
+         * Unlike ReplaceSubArray, no element is copied in -- a writer builds each one where it lands.
+         */
+        std::span<T> ResizeSubArray(size_t SubIndex, size_t Count) {
+            if (SubIndex >= offsets.size())
+                return {};
+            const size_t Start = offsets[SubIndex];
+            const size_t End = (SubIndex + 1 < offsets.size()) ? offsets[SubIndex + 1] : data.size();
+            const size_t OldCount = End - Start;
+            if (Count > OldCount)
+                data.insert(data.begin() + End, Count - OldCount, T {});
+            else if (Count < OldCount)
+                data.erase(data.begin() + (Start + Count), data.begin() + End);
+            const ptrdiff_t Delta = static_cast<ptrdiff_t>(Count) - static_cast<ptrdiff_t>(OldCount);
+            if (Delta != 0) {
+                for (size_t i = SubIndex + 1; i < offsets.size(); ++i)
+                    offsets[i] = static_cast<uint32_t>(static_cast<ptrdiff_t>(offsets[i]) + Delta);
+            }
+            if (Count == 0)
+                return {};
+            return std::span<T>(data.data() + Start, Count);
+        }
     };
 
     // --- Alias definitions for FlatArrays ---

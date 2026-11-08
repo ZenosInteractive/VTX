@@ -306,6 +306,17 @@ namespace VTX {
                 return false;
             }
 
+            // Already the schema's layout (a FrameBuilder frame): nothing to move.
+            if (buckets.size() == schema_buckets.size()) {
+                bool laid = true;
+                for (size_t i = 0; laid && i < schema_buckets.size(); ++i) {
+                    const auto it = frame.bucket_map.find(schema_buckets[i]);
+                    laid = it != frame.bucket_map.end() && it->second == i;
+                }
+                if (laid)
+                    return true;
+            }
+
             for (const auto& [name, idx] : frame.bucket_map) {
                 if (std::find(schema_buckets.begin(), schema_buckets.end(), name) == schema_buckets.end()) {
                     out_detail = "bucket '" + name + "' is not declared in the schema 'buckets' array";

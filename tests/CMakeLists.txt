@@ -79,6 +79,7 @@ add_executable(vtx_tests
     writer/test_frame_post_processor.cpp
     writer/test_frame_finalization.cpp
     writer/test_record_path_equivalence.cpp
+    writer/test_frame_builder.cpp
     writer/test_network_sink.cpp
     writer/test_pipe_source.cpp
     writer/test_websocket_source.cpp

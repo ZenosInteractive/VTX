@@ -155,6 +155,57 @@ namespace VTX {
                 container.map_properties.resize(static_cast<size_t>(schema.map_max_index));
         }
 
+        /// @brief ResetToPrepared for a writer that then sets EVERY scalar and struct slot of the container:
+        ///        the result after those sets is exactly what ResetToPrepared then the same sets make. A container
+        ///        already holding exactly the schema's scalar slots (the one this writer filled last frame) keeps
+        ///        their values for the sets to overwrite, instead of writing each default first; anything else is
+        ///        reset in full. Array slots always start empty, maps and byte arrays cleared, as ResetToPrepared.
+        inline void PrepareForOverwrite(PropertyContainer& container, const SchemaStruct& schema, int32_t type_id) {
+            auto needed = [](const std::vector<int32_t>& max, FieldType type) -> size_t {
+                const size_t index = static_cast<size_t>(type);
+                return index < max.size() && max[index] > 0 ? static_cast<size_t>(max[index]) : 0;
+            };
+            const auto& s = schema.type_max_indices;
+            const bool shaped = container.entity_type_id == type_id &&
+                container.bool_properties.size() == needed(s, FieldType::Bool) &&
+                container.int32_properties.size() == needed(s, FieldType::Int32) &&
+                container.int64_properties.size() == needed(s, FieldType::Int64) &&
+                container.float_properties.size() == needed(s, FieldType::Float) &&
+                container.double_properties.size() == needed(s, FieldType::Double) &&
+                container.string_properties.size() == needed(s, FieldType::String) &&
+                container.vector_properties.size() == needed(s, FieldType::Vector) &&
+                container.quat_properties.size() == needed(s, FieldType::Quat) &&
+                container.transform_properties.size() == needed(s, FieldType::Transform) &&
+                container.range_properties.size() == needed(s, FieldType::FloatRange) &&
+                container.any_struct_properties.size() == needed(s, FieldType::Struct);
+            if (!shaped) {
+                ResetToPrepared(container, schema, type_id);
+                return;
+            }
+            container.content_hash = 0;
+            const auto& arrays = schema.array_max_indices;
+            auto reset = [&](auto& flat, FieldType type) {
+                flat.data.clear();
+                flat.offsets.assign(needed(arrays, type), 0u);
+            };
+            reset(container.bool_arrays, FieldType::Bool);
+            reset(container.int32_arrays, FieldType::Int32);
+            reset(container.int64_arrays, FieldType::Int64);
+            reset(container.float_arrays, FieldType::Float);
+            reset(container.double_arrays, FieldType::Double);
+            reset(container.string_arrays, FieldType::String);
+            reset(container.vector_arrays, FieldType::Vector);
+            reset(container.quat_arrays, FieldType::Quat);
+            reset(container.transform_arrays, FieldType::Transform);
+            reset(container.range_arrays, FieldType::FloatRange);
+            reset(container.any_struct_arrays, FieldType::Struct);
+            container.byte_array_properties.Clear();
+            container.map_arrays.Clear();
+            container.map_properties.clear();
+            if (schema.map_max_index > 0)
+                container.map_properties.resize(static_cast<size_t>(schema.map_max_index));
+        }
+
         inline uint64_t CalculateContainerHash(const PropertyContainer& container);
 
         namespace detail {
