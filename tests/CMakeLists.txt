@@ -108,6 +108,17 @@ target_link_libraries(vtx_tests PRIVATE
     $<BUILD_INTERFACE:VTX::deps::ixwebsocket>
 )
 
+# test_record_path_equivalence.cpp decodes with the generated cppvtx parser
+# directly.  In VTX_BUILD_SHARED builds the DLLs cannot export protobuf's data
+# globals (the `_default_instance_` variables -- see the OBJECT-library note in
+# sdk/src/vtx_common/CMakeLists.txt), so a generated message must never be
+# half-served through a DLL's exports: the test executable compiles its own
+# copy of the generated objects and becomes a self-contained linking unit,
+# exactly like each SDK DLL.
+if(VTX_BUILD_SHARED)
+    target_link_libraries(vtx_tests PRIVATE $<BUILD_INTERFACE:vtx_generated_code>)
+endif()
+
 # The tools that modify an existing replay (repair / cut / filter) live in
 # vtx_transform, which only exists when reader + writer are built; their tests join
 # the executable only then.
