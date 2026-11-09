@@ -142,6 +142,86 @@ namespace VTX {
             const auto serialize_start = std::chrono::steady_clock::now();
             std::string payload = SerializerPolicy::SerializeChunk(frames, chunkIndex_, config_.b_use_compression);
             NotifySerialize(serialize_start);
+            CommitChunkPayload(std::move(payload), start_frame, total_frames);
+        }
+
+        /// @brief SaveChunk for frames the writer serialized as it recorded them
+        ///        (the writer's direct path): the chunk is assembled from their bytes.
+        void SaveSerializedChunk(const std::vector<std::string>& frames, const std::vector<int64_t>& /*created_utc*/,
+                                 int32_t start_frame, int32_t total_frames)
+            requires requires(const std::vector<std::string>& serialized, int32_t index, bool compressed) {
+                         SerializerPolicy::SerializeChunkFromFrames(serialized, index, compressed);
+                     }
+        {
+            if (frames.empty())
+                return;
+
+            const auto serialize_start = std::chrono::steady_clock::now();
+            std::string payload =
+                SerializerPolicy::SerializeChunkFromFrames(frames, chunkIndex_, config_.b_use_compression);
+            NotifySerialize(serialize_start);
+            CommitChunkPayload(std::move(payload), start_frame, total_frames);
+        }
+
+        // Journal a single recorded frame BEFORE it is flushed as part of a chunk, so
+        // a crash mid-batch can still recover the in-flight frames (and their times).
+        void JournalFrame(const FrameType& frame, int32_t frame_index, int64_t game_time, int64_t created_utc) {
+            if (!journal_.IsOpen())
+                return;
+            if (config_.journal_pending_frames) {
+                std::vector<std::unique_ptr<FrameType>> one;
+                one.push_back(std::make_unique<FrameType>(frame));
+                std::string payload = SerializerPolicy::SerializeChunk(one, /*chunk_idx*/ 0, config_.b_use_compression);
+                payload = CompressIfBeneficial(std::move(payload));
+                journal_.AppendFrame(frame_index, game_time, created_utc, payload);
+            }
+            // The frame's times are committed with its chunk (`T` records) either way.
+            batch_times_.push_back({frame_index, game_time, created_utc});
+        }
+
+        /// @brief JournalFrame for a frame already serialized (the writer's direct path): the same journal
+        ///        record, from its bytes.
+        void JournalSerializedFrame(const std::string& frame_bytes, int32_t frame_index, int64_t game_time,
+                                    int64_t created_utc)
+            requires requires(const std::vector<std::string>& serialized, int32_t index, bool compressed) {
+                         SerializerPolicy::SerializeChunkFromFrames(serialized, index, compressed);
+                     }
+        {
+            if (!journal_.IsOpen())
+                return;
+            if (config_.journal_pending_frames) {
+                std::string payload = SerializerPolicy::SerializeChunkFromFrames({frame_bytes}, /*chunk_idx*/ 0,
+                                                                                 config_.b_use_compression);
+                payload = CompressIfBeneficial(std::move(payload));
+                journal_.AppendFrame(frame_index, game_time, created_utc, payload);
+            }
+            batch_times_.push_back({frame_index, game_time, created_utc});
+        }
+
+        void Close(const SessionFooter& footerData) {
+            if (!file_.IsOpen())
+                return;
+            const auto serialize_start = std::chrono::steady_clock::now();
+            std::string footer_payload = SerializerPolicy::SerializeFooter(seek_table_, footerData);
+            NotifySerialize(serialize_start);
+            footer_payload = CompressIfBeneficial(std::move(footer_payload));
+
+            TimedWrite(footer_payload.data(), footer_payload.size());
+            WriteBlob(Framing::FooterTrailer(static_cast<uint32_t>(footer_payload.size()),
+                                             SerializerPolicy::GetMagicBytes()));
+            TimedSyncOrFlush();
+
+            // Clean shutdown: the footer is durable, so the recovery journal is no
+            // longer needed. Its absence signals a clean file to the repair path.
+            if (journal_.IsOpen()) {
+                journal_.Close();
+                std::remove(RecoveryJournal::PathFor(config_.filename).c_str());
+            }
+        }
+
+    private:
+        // Compresses a chunk's payload, writes it durably, then indexes and journals it.
+        void CommitChunkPayload(std::string payload, int32_t start_frame, int32_t total_frames) {
             payload = CompressIfBeneficial(std::move(payload));
 
             uint64_t current_offset = file_.Tell();
@@ -169,44 +249,7 @@ namespace VTX {
             }
         }
 
-        // Journal a single recorded frame BEFORE it is flushed as part of a chunk, so
-        // a crash mid-batch can still recover the in-flight frames (and their times).
-        void JournalFrame(const FrameType& frame, int32_t frame_index, int64_t game_time, int64_t created_utc) {
-            if (!journal_.IsOpen())
-                return;
-            if (config_.journal_pending_frames) {
-                std::vector<std::unique_ptr<FrameType>> one;
-                one.push_back(std::make_unique<FrameType>(frame));
-                std::string payload = SerializerPolicy::SerializeChunk(one, /*chunk_idx*/ 0, config_.b_use_compression);
-                payload = CompressIfBeneficial(std::move(payload));
-                journal_.AppendFrame(frame_index, game_time, created_utc, payload);
-            }
-            // The frame's times are committed with its chunk (`T` records) either way.
-            batch_times_.push_back({frame_index, game_time, created_utc});
-        }
 
-        void Close(const SessionFooter& footerData) {
-            if (!file_.IsOpen())
-                return;
-            const auto serialize_start = std::chrono::steady_clock::now();
-            std::string footer_payload = SerializerPolicy::SerializeFooter(seek_table_, footerData);
-            NotifySerialize(serialize_start);
-            footer_payload = CompressIfBeneficial(std::move(footer_payload));
-
-            TimedWrite(footer_payload.data(), footer_payload.size());
-            WriteBlob(Framing::FooterTrailer(static_cast<uint32_t>(footer_payload.size()),
-                                             SerializerPolicy::GetMagicBytes()));
-            TimedSyncOrFlush();
-
-            // Clean shutdown: the footer is durable, so the recovery journal is no
-            // longer needed. Its absence signals a clean file to the repair path.
-            if (journal_.IsOpen()) {
-                journal_.Close();
-                std::remove(RecoveryJournal::PathFor(config_.filename).c_str());
-            }
-        }
-
-    private:
         void NotifySerialize(std::chrono::steady_clock::time_point start) const {
             if (config_.perf_observer)
                 config_.perf_observer->OnSerialize(

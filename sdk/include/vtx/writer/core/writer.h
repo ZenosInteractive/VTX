@@ -1,5 +1,8 @@
 #pragma once
+#include <concepts>
 #include <memory>
+#include <type_traits>
+#include <utility>
 #include <vector>
 #include <optional>
 #include "vtx/common/vtx_types.h"
@@ -28,6 +31,16 @@ namespace VTX {
         };
     } // namespace ChunkingPolicy
 
+
+    // The serializer's direct encoder (Serializer::DirectEncoder), named only when it has one.
+    template <typename Serializer, typename = void>
+    struct DirectEncoderOf {
+        using type = void;
+    };
+    template <typename Serializer>
+    struct DirectEncoderOf<Serializer, std::void_t<typename Serializer::DirectEncoder>> {
+        using type = typename Serializer::DirectEncoder;
+    };
 
     template <typename SinkPolicy, typename ChunkingPolicy = ChunkingPolicy::ThresholdChunkPolicy>
     class ReplayWriter {
@@ -99,7 +112,7 @@ namespace VTX {
                 FrameMutationView view(native_frame, frame_accessor_);
                 FramePostProcessContext ctx;
                 ctx.global_frame_index = total_frames_;
-                ctx.chunk_local_frame_index = static_cast<int32_t>(pending_frames_.size());
+                ctx.chunk_local_frame_index = static_cast<int32_t>(PendingFrameCount());
                 ctx.chunk_index = chunks_flushed_;
                 ctx.schema_version = 0;
                 ctx.frame_accessor = &frame_accessor_;
@@ -129,11 +142,22 @@ namespace VTX {
                 has_last_finalized_ = true;
             }
 
-            std::unique_ptr<FrameType> sink_frame = Serializer::FromNative(std::move(native_frame));
-            size_t frame_size = Serializer::GetFrameSize(*sink_frame);
+            // THE DIRECT PATH (kEncodesDirect): the frame is encoded straight to its bytes, read in place --
+            // no serializer message is built, and the caller's frame is left as it was but for its content
+            // hashes -- so a flush only assembles the chunk. Otherwise the serializer's own frame.
+            std::unique_ptr<FrameType> sink_frame;
+            std::string frame_bytes;
+            size_t frame_size = 0;
+            if constexpr (kEncodesDirect) {
+                frame_bytes = TakeByteBuffer();
+                frame_size = encoder_.EncodeFrame(native_frame, frame_bytes);
+            } else {
+                sink_frame = Serializer::FromNative(std::move(native_frame));
+                frame_size = Serializer::GetFrameSize(*sink_frame);
+            }
 
-            if (!pending_frames_.empty() &&
-                chunker_.ShouldFlush(pending_frames_.size(), current_chunk_bytes_, frame_size)) {
+            if (PendingFrameCount() > 0 &&
+                chunker_.ShouldFlush(PendingFrameCount(), current_chunk_bytes_, frame_size)) {
                 Flush();
             }
 
@@ -147,9 +171,13 @@ namespace VTX {
             const auto& created_utc = timer_.GetCreatedUtc();
             const int64_t frame_game_time = game_times.empty() ? 0 : game_times.back();
             const int64_t frame_created_utc = created_utc.empty() ? 0 : created_utc.back();
-            sink_.JournalFrame(*sink_frame, assigned_index, frame_game_time, frame_created_utc);
-
-            pending_frames_.push_back(std::move(sink_frame));
+            if constexpr (kEncodesDirect) {
+                sink_.JournalSerializedFrame(frame_bytes, assigned_index, frame_game_time, frame_created_utc);
+                pending_bytes_.push_back(std::move(frame_bytes));
+            } else {
+                sink_.JournalFrame(*sink_frame, assigned_index, frame_game_time, frame_created_utc);
+                pending_frames_.push_back(std::move(sink_frame));
+            }
             return RecordResult::MadeWritten(assigned_index);
         }
 
@@ -158,14 +186,21 @@ namespace VTX {
         }
 
         void Flush() {
-            if (pending_frames_.empty())
+            if (PendingFrameCount() == 0)
                 return;
 
-            int32_t start_frame = total_frames_ - static_cast<int32_t>(pending_frames_.size());
+            int32_t start_frame = total_frames_ - static_cast<int32_t>(PendingFrameCount());
             auto time_chunk = timer_.GetLastChunkCreatedUtc();
-            sink_.SaveChunk(pending_frames_, time_chunk, start_frame, total_frames_);
-
-            pending_frames_.clear();
+            if constexpr (kEncodesDirect) {
+                sink_.SaveSerializedChunk(pending_bytes_, time_chunk, start_frame, total_frames_);
+                // The chunk is written; its buffers hold the next chunk's frames.
+                for (auto& bytes : pending_bytes_)
+                    byte_buffers_.push_back(std::move(bytes));
+                pending_bytes_.clear();
+            } else {
+                sink_.SaveChunk(pending_frames_, time_chunk, start_frame, total_frames_);
+                pending_frames_.clear();
+            }
             current_chunk_bytes_ = 0;
             ++chunks_flushed_;
             timer_.UpdateChunkStartIndex();
@@ -271,6 +306,17 @@ namespace VTX {
                 return false;
             }
 
+            // Already the schema's layout (a FrameBuilder frame): nothing to move.
+            if (buckets.size() == schema_buckets.size()) {
+                bool laid = true;
+                for (size_t i = 0; laid && i < schema_buckets.size(); ++i) {
+                    const auto it = frame.bucket_map.find(schema_buckets[i]);
+                    laid = it != frame.bucket_map.end() && it->second == i;
+                }
+                if (laid)
+                    return true;
+            }
+
             for (const auto& [name, idx] : frame.bucket_map) {
                 if (std::find(schema_buckets.begin(), schema_buckets.end(), name) == schema_buckets.end()) {
                     out_detail = "bucket '" + name + "' is not declared in the schema 'buckets' array";
@@ -299,10 +345,45 @@ namespace VTX {
                         out_detail = "frame contains an entity whose type does not resolve to a schema struct";
                         return false;
                     }
-                    entity.content_hash = Helpers::CalculateContainerHash(entity);
                 }
             }
+            // The serializer hashes every container as it writes it (ToProto / ToFlat), so the hashes are
+            // stored here only for the retained snapshot, which is read before the serializer runs.
+            if (retain_snapshot_) {
+                for (auto& bucket : frame.GetMutableBuckets())
+                    for (auto& entity : bucket.entities)
+                        Helpers::StoreContainerHashes(entity);
+            }
             return true;
+        }
+
+        // THE DIRECT PATH: a serializer with a direct encoder (Serializer::DirectEncoder, which encodes a native
+        // frame to exactly the bytes of its own frame message) and a sink that journals and writes those bytes
+        // (JournalSerializedFrame, SaveSerializedChunk).
+        static constexpr bool kEncodesDirect =
+            requires { typename Serializer::DirectEncoder; } &&
+            requires(SinkPolicy & sink, const std::string& bytes, const std::vector<std::string>& frames,
+                     const std::vector<int64_t>& times, int32_t index, int32_t start, int32_t total, int64_t t) {
+                sink.JournalSerializedFrame(bytes, index, t, t);
+                sink.SaveSerializedChunk(frames, times, start, total);
+            };
+
+        struct NoEncoder {};
+        using Encoder = std::conditional_t<kEncodesDirect, typename DirectEncoderOf<Serializer>::type, NoEncoder>;
+
+        size_t PendingFrameCount() const {
+            if constexpr (kEncodesDirect)
+                return pending_bytes_.size();
+            else
+                return pending_frames_.size();
+        }
+
+        std::string TakeByteBuffer() {
+            if (byte_buffers_.empty())
+                return {};
+            std::string buffer = std::move(byte_buffers_.back());
+            byte_buffers_.pop_back();
+            return buffer;
         }
 
         SinkPolicy sink_;
@@ -311,6 +392,9 @@ namespace VTX {
         VTX::SchemaRegistry registry_;
         const SchemaSanitizerRegistry* sanitizer_;
         std::vector<std::unique_ptr<FrameType>> pending_frames_;
+        [[no_unique_address]] Encoder encoder_;  ///< the direct path's encoder and its buffers
+        std::vector<std::string> pending_bytes_; ///< the open chunk's frames, serialized
+        std::vector<std::string> byte_buffers_;  ///< a written chunk's buffers, refilled
         VTX::GameTime::VTXGameTimes timer_;
         size_t current_chunk_bytes_ = 0;
         int32_t total_frames_ = 0;

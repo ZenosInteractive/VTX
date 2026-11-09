@@ -16,12 +16,14 @@ std::string VTX::FlatBuffersVtxPolicy::GetMagicBytes() {
 std::unique_ptr<VTX::FlatBuffersVtxPolicy::FrameType> VTX::FlatBuffersVtxPolicy::FromNative(VTX::Frame&& native) {
     auto sorted_frame = std::make_unique<VTX::Frame>();
 
-    const auto& native_buckets = native.GetBuckets();
-    sorted_frame->bucket_map = native.bucket_map;
+    // The frame is ours: its buckets move into type order rather than being copied.
+    auto& native_buckets = native.GetMutableBuckets();
+    sorted_frame->bucket_map = std::move(native.bucket_map);
     sorted_frame->GetMutableBuckets().resize(native_buckets.size());
 
     for (size_t b_idx = 0; b_idx < native_buckets.size(); ++b_idx) {
-        Serialization::SortBucketByTypeId(native_buckets[b_idx], sorted_frame->GetBucket(static_cast<int32_t>(b_idx)));
+        Serialization::SortBucketByTypeId(std::move(native_buckets[b_idx]),
+                                          sorted_frame->GetBucket(static_cast<int32_t>(b_idx)));
     }
 
     return sorted_frame;

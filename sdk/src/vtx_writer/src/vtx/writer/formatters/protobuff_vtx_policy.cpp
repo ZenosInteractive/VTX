@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <utility>
 
 #include "vtx/writer/policies/formatters/bucket_type_sort.h"
 #include "vtx/writer/policies/formatters/protobuff_vtx_policy.h"
@@ -10,13 +11,15 @@ std::string VTX::ProtobufVtxPolicy::GetMagicBytes() {
 }
 
 std::unique_ptr<VTX::ProtobufVtxPolicy::FrameType> VTX::ProtobufVtxPolicy::FromNative(VTX::Frame&& native) {
-    const auto& native_buckets = native.GetBuckets();
+    // The frame is ours: its buckets move into type order rather than being copied.
+    auto& native_buckets = native.GetMutableBuckets();
     VTX::Frame sorted_native;
-    sorted_native.bucket_map = native.bucket_map;
+    sorted_native.bucket_map = std::move(native.bucket_map);
     sorted_native.GetMutableBuckets().resize(native_buckets.size());
 
     for (size_t b_idx = 0; b_idx < native_buckets.size(); ++b_idx) {
-        Serialization::SortBucketByTypeId(native_buckets[b_idx], sorted_native.GetBucket(static_cast<int>(b_idx)));
+        Serialization::SortBucketByTypeId(std::move(native_buckets[b_idx]),
+                                          sorted_native.GetBucket(static_cast<int>(b_idx)));
     }
 
     auto proto = std::make_unique<cppvtx::Frame>();
@@ -78,9 +81,21 @@ std::string VTX::ProtobufVtxPolicy::SerializeChunk(const std::vector<std::unique
     chunk_msg.set_chunk_index(chunkIdx);
     chunk_msg.set_is_compressed(is_compressed);
 
+    // The chunk borrows the frames for the serialization and hands them back after it, even when it
+    // throws: the caller still owns them (a writer reuses them for the next chunk), and nothing is
+    // copied or destroyed here.
+    auto* chunk_frames = chunk_msg.mutable_frames();
+    chunk_frames->Reserve(static_cast<int>(frames.size()));
+    struct ReturnBorrowed {
+        google::protobuf::RepeatedPtrField<cppvtx::Frame>* field;
+        ~ReturnBorrowed() {
+            while (!field->empty())
+                (void)field->ReleaseLast();
+        }
+    } return_borrowed {chunk_frames};
     for (const auto& frame_ptr : frames) {
         if (frame_ptr) {
-            chunk_msg.add_frames()->Swap(frame_ptr.get());
+            chunk_frames->AddAllocated(frame_ptr.get());
         }
     }
 
@@ -90,6 +105,63 @@ std::string VTX::ProtobufVtxPolicy::SerializeChunk(const std::vector<std::unique
     }
 
     return uncompressed_payload;
+}
+
+namespace {
+    // Protobuf wire format (https://protobuf.dev/programming-guides/encoding/), the subset FrameChunk uses.
+    constexpr uint32_t kWireVarint = 0;
+    constexpr uint32_t kWireLengthDelimited = 2;
+
+    void AppendVarint(std::string& out, uint64_t value) {
+        while (value >= 0x80) {
+            out.push_back(static_cast<char>((value & 0x7F) | 0x80));
+            value >>= 7;
+        }
+        out.push_back(static_cast<char>(value));
+    }
+
+    void AppendTag(std::string& out, uint32_t field, uint32_t wire_type) {
+        AppendVarint(out, (field << 3) | wire_type);
+    }
+
+    size_t VarintSize(uint64_t value) {
+        size_t n = 1;
+        while (value >= 0x80) {
+            value >>= 7;
+            ++n;
+        }
+        return n;
+    }
+} // namespace
+
+std::string VTX::ProtobufVtxPolicy::SerializeChunkFromFrames(const std::vector<std::string>& frames, int32_t chunkIdx,
+                                                             bool is_compressed) {
+    if (frames.empty())
+        return "";
+
+    // FrameChunk as protobuf serializes it: fields in number order, proto3 defaults omitted --
+    // chunk_index (1), is_compressed (2), then every frame (4); compressed_data (3) and
+    // compressed_frames (5) are never set here, as SerializeChunk never sets them.
+    size_t total = 2 * 11;
+    for (const auto& frame : frames)
+        total += 1 + VarintSize(frame.size()) + frame.size();
+
+    std::string out;
+    out.reserve(total);
+    if (chunkIdx != 0) {
+        AppendTag(out, cppvtx::FrameChunk::kChunkIndexFieldNumber, kWireVarint);
+        AppendVarint(out, static_cast<uint64_t>(static_cast<int64_t>(chunkIdx))); // int32: sign-extended
+    }
+    if (is_compressed) {
+        AppendTag(out, cppvtx::FrameChunk::kIsCompressedFieldNumber, kWireVarint);
+        AppendVarint(out, 1);
+    }
+    for (const auto& frame : frames) {
+        AppendTag(out, cppvtx::FrameChunk::kFramesFieldNumber, kWireLengthDelimited);
+        AppendVarint(out, frame.size());
+        out.append(frame);
+    }
+    return out;
 }
 
 std::string VTX::ProtobufVtxPolicy::SerializeFooter(const std::vector<ChunkIndexData>& seekTable,

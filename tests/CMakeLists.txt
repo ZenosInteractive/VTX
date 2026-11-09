@@ -78,6 +78,8 @@ add_executable(vtx_tests
     writer/test_schema_in_memory.cpp
     writer/test_frame_post_processor.cpp
     writer/test_frame_finalization.cpp
+    writer/test_record_path_equivalence.cpp
+    writer/test_frame_builder.cpp
     writer/test_network_sink.cpp
     writer/test_pipe_source.cpp
     writer/test_websocket_source.cpp
@@ -105,6 +107,17 @@ target_link_libraries(vtx_tests PRIVATE
     # behind its PIMPL boundary, so the test target needs the dep directly.
     $<BUILD_INTERFACE:VTX::deps::ixwebsocket>
 )
+
+# test_record_path_equivalence.cpp decodes with the generated cppvtx parser
+# directly.  In VTX_BUILD_SHARED builds the DLLs cannot export protobuf's data
+# globals (the `_default_instance_` variables -- see the OBJECT-library note in
+# sdk/src/vtx_common/CMakeLists.txt), so a generated message must never be
+# half-served through a DLL's exports: the test executable compiles its own
+# copy of the generated objects and becomes a self-contained linking unit,
+# exactly like each SDK DLL.
+if(VTX_BUILD_SHARED)
+    target_link_libraries(vtx_tests PRIVATE $<BUILD_INTERFACE:vtx_generated_code>)
+endif()
 
 # The tools that modify an existing replay (repair / cut / filter) live in
 # vtx_transform, which only exists when reader + writer are built; their tests join
