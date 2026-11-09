@@ -167,17 +167,17 @@ namespace VTX {
             };
             const auto& s = schema.type_max_indices;
             const bool shaped = container.entity_type_id == type_id &&
-                container.bool_properties.size() == needed(s, FieldType::Bool) &&
-                container.int32_properties.size() == needed(s, FieldType::Int32) &&
-                container.int64_properties.size() == needed(s, FieldType::Int64) &&
-                container.float_properties.size() == needed(s, FieldType::Float) &&
-                container.double_properties.size() == needed(s, FieldType::Double) &&
-                container.string_properties.size() == needed(s, FieldType::String) &&
-                container.vector_properties.size() == needed(s, FieldType::Vector) &&
-                container.quat_properties.size() == needed(s, FieldType::Quat) &&
-                container.transform_properties.size() == needed(s, FieldType::Transform) &&
-                container.range_properties.size() == needed(s, FieldType::FloatRange) &&
-                container.any_struct_properties.size() == needed(s, FieldType::Struct);
+                                container.bool_properties.size() == needed(s, FieldType::Bool) &&
+                                container.int32_properties.size() == needed(s, FieldType::Int32) &&
+                                container.int64_properties.size() == needed(s, FieldType::Int64) &&
+                                container.float_properties.size() == needed(s, FieldType::Float) &&
+                                container.double_properties.size() == needed(s, FieldType::Double) &&
+                                container.string_properties.size() == needed(s, FieldType::String) &&
+                                container.vector_properties.size() == needed(s, FieldType::Vector) &&
+                                container.quat_properties.size() == needed(s, FieldType::Quat) &&
+                                container.transform_properties.size() == needed(s, FieldType::Transform) &&
+                                container.range_properties.size() == needed(s, FieldType::FloatRange) &&
+                                container.any_struct_properties.size() == needed(s, FieldType::Struct);
             if (!shaped) {
                 ResetToPrepared(container, schema, type_id);
                 return;

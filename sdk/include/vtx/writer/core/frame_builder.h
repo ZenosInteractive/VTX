@@ -30,7 +30,8 @@ namespace VTX {
     public:
         /// The buckets of the schema, in its order: SchemaRegistry::GetBucketNames, as ReplayWriter records them.
         explicit FrameBuilder(std::vector<std::string> bucket_names)
-            : names_(std::move(bucket_names)), counts_(names_.size(), 0) {}
+            : names_(std::move(bucket_names))
+            , counts_(names_.size(), 0) {}
 
         const std::vector<std::string>& BucketNames() const { return names_; }
 

@@ -45,10 +45,10 @@ namespace {
         s.outer.struct_name = "Outer";
         s.outer.type_max_indices.assign(kinds, 0);
         s.outer.array_max_indices.assign(kinds, 0);
-        for (VTX::FieldType t : {VTX::FieldType::Bool, VTX::FieldType::Int32, VTX::FieldType::Int64,
-                                 VTX::FieldType::Float, VTX::FieldType::Double, VTX::FieldType::String,
-                                 VTX::FieldType::Vector, VTX::FieldType::Quat, VTX::FieldType::Transform,
-                                 VTX::FieldType::FloatRange}) {
+        for (VTX::FieldType t :
+             {VTX::FieldType::Bool, VTX::FieldType::Int32, VTX::FieldType::Int64, VTX::FieldType::Float,
+              VTX::FieldType::Double, VTX::FieldType::String, VTX::FieldType::Vector, VTX::FieldType::Quat,
+              VTX::FieldType::Transform, VTX::FieldType::FloatRange}) {
             for (int32_t i = 0; i < 2; ++i) {
                 s.outer.fields.push_back(Field("f" + std::to_string(static_cast<int>(t)) + "_" + std::to_string(i), t,
                                                VTX::FieldContainerType::None, i));
@@ -92,11 +92,21 @@ namespace {
                 continue;
             }
             switch (f.type_id) {
-            case VTX::FieldType::Bool: VTX::Set(c, *VTX::ScalarSlotOf<bool>(f), seed % 2 == 0); break;
-            case VTX::FieldType::Int32: VTX::Set(c, *VTX::ScalarSlotOf<int32_t>(f), seed); break;
-            case VTX::FieldType::Int64: VTX::Set(c, *VTX::ScalarSlotOf<int64_t>(f), int64_t {seed} << 33); break;
-            case VTX::FieldType::Float: VTX::Set(c, *VTX::ScalarSlotOf<float>(f), static_cast<float>(v)); break;
-            case VTX::FieldType::Double: VTX::Set(c, *VTX::ScalarSlotOf<double>(f), seed % 3 == 0 ? 0.0 : v); break;
+            case VTX::FieldType::Bool:
+                VTX::Set(c, *VTX::ScalarSlotOf<bool>(f), seed % 2 == 0);
+                break;
+            case VTX::FieldType::Int32:
+                VTX::Set(c, *VTX::ScalarSlotOf<int32_t>(f), seed);
+                break;
+            case VTX::FieldType::Int64:
+                VTX::Set(c, *VTX::ScalarSlotOf<int64_t>(f), int64_t {seed} << 33);
+                break;
+            case VTX::FieldType::Float:
+                VTX::Set(c, *VTX::ScalarSlotOf<float>(f), static_cast<float>(v));
+                break;
+            case VTX::FieldType::Double:
+                VTX::Set(c, *VTX::ScalarSlotOf<double>(f), seed % 3 == 0 ? 0.0 : v);
+                break;
             case VTX::FieldType::String:
                 VTX::Set(c, *VTX::ScalarSlotOf<std::string>(f), seed % 2 ? std::string() : "s" + std::to_string(seed));
                 break;
@@ -106,12 +116,17 @@ namespace {
             case VTX::FieldType::Quat:
                 VTX::Set(c, *VTX::ScalarSlotOf<VTX::Quat>(f), VTX::Quat {0.0f, 0.0f, 0.0f, 1.0f});
                 break;
-            case VTX::FieldType::Transform: VTX::Set(c, *VTX::ScalarSlotOf<VTX::Transform>(f), VTX::Transform {}); break;
+            case VTX::FieldType::Transform:
+                VTX::Set(c, *VTX::ScalarSlotOf<VTX::Transform>(f), VTX::Transform {});
+                break;
             case VTX::FieldType::FloatRange:
                 VTX::Set(c, *VTX::ScalarSlotOf<VTX::FloatRange>(f), VTX::FloatRange {});
                 break;
-            case VTX::FieldType::Struct: FillInner(VTX::Child(c, *VTX::StructSlotOf(f)), s, v); break;
-            default: break;
+            case VTX::FieldType::Struct:
+                FillInner(VTX::Child(c, *VTX::StructSlotOf(f)), s, v);
+                break;
+            default:
+                break;
             }
         }
     }
@@ -184,8 +199,8 @@ TEST(FrameBuilder, RefilledFramesAreTheFreshFrames) {
     // Entities per bucket, frame after frame: counts grow and shrink, and positions change struct
     // (a negative seed is an inner entity).
     const std::vector<std::vector<std::vector<int>>> frames = {
-        {{1, 2, 3}, {4}},  {{5}, {6, 7, 8, 9}}, {{-1, 10}, {}},     {{11, -2, 12, 13}, {14}},
-        {{}, {15, -3}},    {{16, 17, 18}, {19}}, {{20, 21, 22}, {23}}};
+        {{1, 2, 3}, {4}}, {{5}, {6, 7, 8, 9}},  {{-1, 10}, {}},      {{11, -2, 12, 13}, {14}},
+        {{}, {15, -3}},   {{16, 17, 18}, {19}}, {{20, 21, 22}, {23}}};
     VTX::FrameBuilder builder(names);
     for (size_t f = 0; f < frames.size(); ++f) {
         builder.Begin();
