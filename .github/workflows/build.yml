@@ -67,9 +67,18 @@ jobs:
 
       - name: Install clang-format
         run: |
-          sudo apt-get update
-          sudo apt-get install -y clang-format-15
-          sudo ln -sf "$(command -v clang-format-15)" /usr/local/bin/clang-format
+          # ubuntu-latest (26.04+) no longer packages clang-format-15, and the
+          # diff gate must format with the same major version the local hook
+          # pins (.clang-format was written against 15).  The PyPI wheel
+          # carries the exact upstream 15.0.7 binary on any runner image, and
+          # clang-format-diff comes from the matching LLVM tag (it invokes
+          # plain `clang-format` from PATH, so both stay on 15.0.7).
+          pip install clang-format==15.0.7
+          sudo curl -fsSL -o /usr/local/share/clang-format-diff.py \
+            "https://raw.githubusercontent.com/llvm/llvm-project/llvmorg-15.0.7/clang/tools/clang-format/clang-format-diff.py"
+          printf '#!/bin/sh\nexec python3 /usr/local/share/clang-format-diff.py "$@"\n' \
+            | sudo tee /usr/local/bin/clang-format-diff >/dev/null
+          sudo chmod +x /usr/local/bin/clang-format-diff
           clang-format --version
 
       - name: clang-format (changed lines only)
@@ -215,7 +224,12 @@ jobs:
           -DBUILD_VTX_SCHEMA_CREATOR=OFF
 
       - name: Build
-        run: cmake --build build --config ${{ matrix.build_type }} --parallel
+        # Linux caps at 2 TUs in flight: the 16 GB runners get SIGTERM'd by the
+        # OOM daemon ("runner has received a shutdown signal", exit 143) when
+        # several generated-code + template-heavy test TUs compile at once
+        # under GCC -- reproduced twice per job on PR #57.  MSVC's per-TU
+        # memory profile is lighter, so Windows keeps the native width.
+        run: cmake --build build --config ${{ matrix.build_type }} --parallel ${{ runner.os == 'Linux' && '2' || '' }}
 
       - name: Test
         working-directory: build
